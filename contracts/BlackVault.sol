@@ -1,129 +1,493 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+/**
+ * @title BlackVault - USDT Staking Vault
+ * @dev A USDT staking vault where principal is permanently locked, only rewards can be withdrawn
+ * @notice PRINCIPAL DEPOSITS ARE PERMANENT - ONLY REWARDS CAN BE WITHDRAWN
+ * @notice This contract works with USDT (BEP-20) on Binance Smart Chain
+ */
+
+interface IERC20 {
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address account) external view returns (uint256);
+    function transfer(address recipient, uint256 amount) external returns (bool);
+    function allowance(address owner, address spender) external view returns (uint256);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+    function decimals() external view returns (uint8);
+}
+
 contract BlackVault {
-    address public owner;
+    // ============ IMMUTABLE CONSTANTS ============
+    uint256 public constant DAILY_RATE = 22; // 2.2% daily (22 per 1000)
+    uint256 public constant MAX_WITHDRAWAL_PER_CYCLE = 250 * 10**18; // 250 USDT (18 decimals)
+    uint256 public constant CYCLE_DURATION = 86400; // 24 hours in seconds
+    uint256 public constant CYCLE_START_TIME = 1718668800; // 7am Brisbane time 17 June 2024
+    uint256 public constant REFERRAL_REWARD_PERCENT = 10; // 10% referral bonus
+    uint256 public constant MIN_DEPOSIT = 50 * 10**18; // 50 USDT minimum
+    uint256 public constant MAX_DEPOSIT = 100000 * 10**18; // 100,000 USDT maximum
+    uint256 public constant MAX_PAUSE_DURATION = 7 days; // Maximum pause duration
+    
+    // ============ USDT CONTRACT ============
+    IERC20 public immutable USDT;
+    
+    // BSC Mainnet USDT: 0x55d398326f99059fF775485246999027B3197955
+    // BSC Testnet USDT: 0x337610d27c682E347C9cD60BD4b3b107C9d34dDd (or deploy your own)
+    
+    // ============ OWNER & EMERGENCY CONTROLS ============
+    address public immutable owner;
     bool public paused;
-
-    uint256 public constant DAILY_RATE = 22; // 2.2% (22 per 1000)
-    uint256 public constant MAX_WITHDRAWAL = 250 ether;
-    uint256 public constant CYCLE_DURATION = 86400; // 24 hours
-    uint256 public constant CYCLE_START_TIME = 1718619600; // 7am Brisbane time 17 June 2024 (Unix timestamp)
-    uint256 public constant REFERRAL_REWARD_PERCENT = 10; // 10%
-
-    struct Deposit {
-        uint256 amount;
-        uint256 lastCycle;
-        uint256 rewards;
+    uint256 public pausedUntil; // Timestamp when pause expires
+    uint256 public totalPauseTime; // Total time contract has been paused
+    
+    // ============ STRUCTS ============
+    struct UserVault {
+        uint256 totalDeposited;     // Total USDT ever deposited (PERMANENT)
+        uint256 activeAmount;       // Currently active USDT earning rewards (PERMANENT)
+        uint256 lastAccrualCycle;   // Last cycle when rewards were calculated
+        uint256 pendingRewards;     // Accumulated USDT rewards ready for withdrawal
+        uint256 totalRewardsWithdrawn; // Total USDT rewards withdrawn (for transparency)
+        uint256 joinedCycle;        // Cycle when user first deposited
     }
 
-    struct Referral {
-        uint256 rewards;
-        uint256 referredCount;
+    struct ReferralData {
+        uint256 totalRewards;       // Total USDT referral rewards earned
+        uint256 availableRewards;   // Available USDT referral rewards for withdrawal
+        uint256 referredCount;      // Number of users referred
+        uint256 totalReferredVolume; // Total USDT volume from referrals
+        uint256 totalWithdrawn;     // Total USDT referral rewards withdrawn
     }
 
-    mapping(address => Deposit) public vault;
-    mapping(address => uint256) public totalWithdrawn;
-    mapping(address => Referral) public referrals;
+    // ============ STATE VARIABLES ============
+    mapping(address => UserVault) public vaults;
+    mapping(address => ReferralData) public referrals;
+    
+    // Contract statistics (for transparency)
+    uint256 public totalDeposited;        // Total USDT deposited (PERMANENT)
+    uint256 public totalRewardsWithdrawn; // Total USDT rewards paid out
+    uint256 public totalReferralRewardsWithdrawn; // Total USDT referral rewards paid out
+    uint256 public totalActiveAmount;     // Total USDT earning rewards (PERMANENT)
+    uint256 public totalUsers;
+    uint256 public contractLaunchCycle;
 
-    event Deposited(address indexed user, uint256 amount, address indexed referrer);
-    event Withdrawn(address indexed user, uint256 amount);
-    event ReferralWithdrawn(address indexed user, uint256 amount);
-    event Paused(bool state);
+    // ============ EVENTS ============
+    event Deposited(
+        address indexed user, 
+        uint256 amount, 
+        address indexed referrer,
+        uint256 cycle
+    );
+    
+    event RewardsWithdrawn(
+        address indexed user, 
+        uint256 amount,
+        uint256 cycle
+    );
+    
+    event ReferralRewardsWithdrawn(
+        address indexed user, 
+        uint256 amount
+    );
 
+    event EmergencyPaused(
+        address indexed by,
+        uint256 pausedUntil,
+        string reason
+    );
+
+    event EmergencyUnpaused(
+        address indexed by
+    );
+
+    // ============ MODIFIERS ============
     modifier onlyOwner() {
-        require(msg.sender == owner, "Not owner");
+        require(msg.sender == owner, "Only owner can call this function");
         _;
     }
 
     modifier notPaused() {
-        require(!paused, "Vault is paused");
+        // Auto-unpause if pause period expired
+        if (paused && block.timestamp >= pausedUntil) {
+            paused = false;
+            emit EmergencyUnpaused(address(0)); // Auto-unpause
+        }
+        require(!paused, "Contract is temporarily paused for security");
         _;
     }
 
-    constructor() {
-        owner = msg.sender;
+    modifier validDeposit(uint256 amount) {
+        require(amount >= MIN_DEPOSIT, "Deposit below minimum (50 USDT)");
+        require(amount <= MAX_DEPOSIT, "Deposit exceeds maximum (100,000 USDT)");
+        _;
     }
 
-    function deposit(address referrer) external payable notPaused {
-        require(msg.value > 0, "Zero deposit");
+    modifier updateRewards() {
+        _updateUserRewards(msg.sender);
+        _;
+    }
 
-        Deposit storage dep = vault[msg.sender];
-        dep.amount += msg.value;
+    // ============ CONSTRUCTOR ============
+    constructor(address _usdtAddress) {
+        require(_usdtAddress != address(0), "Invalid USDT address");
+        owner = msg.sender;
+        USDT = IERC20(_usdtAddress);
+        contractLaunchCycle = getCurrentCycle();
+        
+        // Verify USDT contract
+        require(USDT.decimals() == 18, "USDT must have 18 decimals");
+    }
 
-        dep.lastCycle = (block.timestamp - CYCLE_START_TIME) / CYCLE_DURATION;
+    // ============ EMERGENCY FUNCTIONS (OWNER ONLY) ============
+    
+    /**
+     * @dev Emergency pause with automatic expiry
+     * @param duration Duration in seconds (max 7 days)
+     * @param reason Public reason for the pause
+     */
+    function emergencyPause(uint256 duration, string calldata reason) external onlyOwner {
+        require(!paused, "Already paused");
+        require(duration > 0 && duration <= MAX_PAUSE_DURATION, "Invalid pause duration");
+        require(bytes(reason).length > 0, "Reason required");
 
-        if (
-            referrer != address(0) &&
-            referrer != msg.sender &&
-            vault[referrer].amount > 0
-        ) {
-            uint256 reward = (msg.value * REFERRAL_REWARD_PERCENT) / 100;
-            referrals[referrer].rewards += reward;
-            referrals[referrer].referredCount += 1;
+        paused = true;
+        pausedUntil = block.timestamp + duration;
+        totalPauseTime += duration;
+
+        emit EmergencyPaused(msg.sender, pausedUntil, reason);
+    }
+
+    /**
+     * @dev Manually unpause before expiry
+     */
+    function emergencyUnpause() external onlyOwner {
+        require(paused, "Not paused");
+        
+        // Adjust total pause time if unpausing early
+        if (block.timestamp < pausedUntil) {
+            uint256 actualPauseTime = block.timestamp - (pausedUntil - totalPauseTime);
+            totalPauseTime = totalPauseTime - (pausedUntil - block.timestamp);
         }
 
-        emit Deposited(msg.sender, msg.value, referrer);
+        paused = false;
+        pausedUntil = 0;
+
+        emit EmergencyUnpaused(msg.sender);
     }
 
-    function withdraw() external notPaused {
-        _updateRewards(msg.sender);
-        uint256 reward = vault[msg.sender].rewards;
-        require(reward > 0, "No rewards");
-
-        uint256 withdrawAmount = reward > MAX_WITHDRAWAL ? MAX_WITHDRAWAL : reward;
-        vault[msg.sender].rewards -= withdrawAmount;
-        totalWithdrawn[msg.sender] += withdrawAmount;
-        payable(msg.sender).transfer(withdrawAmount);
-
-        emit Withdrawn(msg.sender, withdrawAmount);
+    /**
+     * @dev Get pause status and remaining time
+     */
+    function getPauseStatus() external view returns (
+        bool isPaused,
+        uint256 remainingTime,
+        uint256 totalPausedTime
+    ) {
+        if (paused && block.timestamp >= pausedUntil) {
+            return (false, 0, totalPauseTime);
+        }
+        
+        uint256 remaining = paused ? pausedUntil - block.timestamp : 0;
+        return (paused, remaining, totalPauseTime);
     }
 
-    function withdrawReferralEarnings() external notPaused {
-        uint256 amount = referrals[msg.sender].rewards;
-        require(amount > 0, "No referral rewards");
+    // ============ CORE FUNCTIONS ============
+    
+    /**
+     * @dev Deposit USDT into the vault (PERMANENT DEPOSIT)
+     * @notice ⚠️ DEPOSITS ARE PERMANENT - PRINCIPAL CANNOT BE WITHDRAWN
+     * @notice User must approve USDT spending before calling this function
+     * @param amount Amount of USDT to deposit (in wei, 18 decimals)
+     */
+    function deposit(uint256 amount) external validDeposit(amount) notPaused updateRewards {
+        require(USDT.balanceOf(msg.sender) >= amount, "Insufficient USDT balance");
+        require(USDT.allowance(msg.sender, address(this)) >= amount, "Insufficient USDT allowance");
 
-        referrals[msg.sender].rewards = 0;
-        payable(msg.sender).transfer(amount);
+        UserVault storage user = vaults[msg.sender];
+        
+        // First time depositor
+        if (user.totalDeposited == 0) {
+            totalUsers++;
+            user.joinedCycle = getCurrentCycle();
+        }
 
-        emit ReferralWithdrawn(msg.sender, amount);
+        uint256 currentCycle = getCurrentCycle();
+        
+        // Deposits made after cycle start earn from next cycle
+        uint256 effectiveCycle = currentCycle;
+        if (block.timestamp > getCycleStartTime(currentCycle)) {
+            effectiveCycle = currentCycle + 1;
+        }
+
+        // Transfer USDT from user to contract
+        require(USDT.transferFrom(msg.sender, address(this), amount), "USDT transfer failed");
+
+        user.totalDeposited += amount;
+        user.activeAmount += amount;
+        user.lastAccrualCycle = effectiveCycle;
+
+        totalDeposited += amount;
+        totalActiveAmount += amount;
+
+        emit Deposited(msg.sender, amount, address(0), effectiveCycle);
     }
 
-    function referralRewards(address user) external view returns (uint256) {
-        return referrals[user].rewards;
+    /**
+     * @dev Deposit USDT with referrer (PERMANENT DEPOSIT)
+     * @notice ⚠️ DEPOSITS ARE PERMANENT - PRINCIPAL CANNOT BE WITHDRAWN
+     * @param amount Amount of USDT to deposit (in wei, 18 decimals)
+     * @param referrer Address of the referrer
+     */
+    function depositWithReferrer(uint256 amount, address referrer) 
+        external 
+        validDeposit(amount) 
+        notPaused 
+        updateRewards 
+    {
+        require(referrer != msg.sender, "Cannot refer yourself");
+        require(referrer != address(0), "Invalid referrer");
+        require(vaults[referrer].totalDeposited > 0, "Referrer must be active user");
+        require(USDT.balanceOf(msg.sender) >= amount, "Insufficient USDT balance");
+        require(USDT.allowance(msg.sender, address(this)) >= amount, "Insufficient USDT allowance");
+
+        UserVault storage user = vaults[msg.sender];
+        
+        // First time depositor
+        if (user.totalDeposited == 0) {
+            totalUsers++;
+            user.joinedCycle = getCurrentCycle();
+        }
+
+        uint256 currentCycle = getCurrentCycle();
+        
+        // Deposits made after cycle start earn from next cycle
+        uint256 effectiveCycle = currentCycle;
+        if (block.timestamp > getCycleStartTime(currentCycle)) {
+            effectiveCycle = currentCycle + 1;
+        }
+
+        // Transfer USDT from user to contract
+        require(USDT.transferFrom(msg.sender, address(this), amount), "USDT transfer failed");
+
+        user.totalDeposited += amount;
+        user.activeAmount += amount;
+        user.lastAccrualCycle = effectiveCycle;
+
+        // Process referral reward
+        uint256 referralReward = (amount * REFERRAL_REWARD_PERCENT) / 100;
+        ReferralData storage refData = referrals[referrer];
+        refData.totalRewards += referralReward;
+        refData.availableRewards += referralReward;
+        refData.referredCount++;
+        refData.totalReferredVolume += amount;
+
+        totalDeposited += amount;
+        totalActiveAmount += amount;
+
+        emit Deposited(msg.sender, amount, referrer, effectiveCycle);
     }
 
-    function referredUsers(address user) external view returns (uint256) {
-        return referrals[user].referredCount;
+    /**
+     * @dev Withdraw accumulated USDT rewards ONLY
+     * @notice Only rewards can be withdrawn, never principal
+     */
+    function withdrawRewards() external notPaused updateRewards {
+        UserVault storage user = vaults[msg.sender];
+        require(user.pendingRewards > 0, "No rewards available");
+
+        uint256 withdrawAmount = user.pendingRewards;
+        if (withdrawAmount > MAX_WITHDRAWAL_PER_CYCLE) {
+            withdrawAmount = MAX_WITHDRAWAL_PER_CYCLE;
+        }
+
+        require(USDT.balanceOf(address(this)) >= withdrawAmount, "Insufficient contract USDT balance");
+
+        user.pendingRewards -= withdrawAmount;
+        user.totalRewardsWithdrawn += withdrawAmount;
+        totalRewardsWithdrawn += withdrawAmount;
+
+        require(USDT.transfer(msg.sender, withdrawAmount), "USDT transfer failed");
+
+        emit RewardsWithdrawn(msg.sender, withdrawAmount, getCurrentCycle());
     }
 
-    function _updateRewards(address user) internal {
-        Deposit storage dep = vault[user];
-        if (dep.amount == 0) return;
+    /**
+     * @dev Withdraw USDT referral earnings
+     */
+    function withdrawReferralRewards() external notPaused {
+        ReferralData storage refData = referrals[msg.sender];
+        require(refData.availableRewards > 0, "No referral rewards");
 
-        uint256 currentCycle = dep.lastCycle + 2; // Simulate 2 cycles passed for local test only
+        uint256 amount = refData.availableRewards;
+        require(USDT.balanceOf(address(this)) >= amount, "Insufficient contract USDT balance");
 
-        if (dep.lastCycle == 0) {
-            dep.lastCycle = currentCycle;
+        refData.availableRewards = 0;
+        refData.totalWithdrawn += amount;
+        totalReferralRewardsWithdrawn += amount;
+
+        require(USDT.transfer(msg.sender, amount), "USDT transfer failed");
+
+        emit ReferralRewardsWithdrawn(msg.sender, amount);
+    }
+
+    // ============ VIEW FUNCTIONS ============
+    
+    /**
+     * @dev Get current cycle number
+     */
+    function getCurrentCycle() public view returns (uint256) {
+        if (block.timestamp < CYCLE_START_TIME) {
+            return 0;
+        }
+        return (block.timestamp - CYCLE_START_TIME) / CYCLE_DURATION;
+    }
+
+    /**
+     * @dev Get cycle start time for a specific cycle
+     */
+    function getCycleStartTime(uint256 cycle) public pure returns (uint256) {
+        return CYCLE_START_TIME + (cycle * CYCLE_DURATION);
+    }
+
+    /**
+     * @dev Get time until next cycle
+     */
+    function getTimeUntilNextCycle() external view returns (uint256) {
+        uint256 currentCycle = getCurrentCycle();
+        uint256 nextCycleStart = getCycleStartTime(currentCycle + 1);
+        if (block.timestamp >= nextCycleStart) {
+            return 0;
+        }
+        return nextCycleStart - block.timestamp;
+    }
+
+    /**
+     * @dev Get user's vault information
+     */
+    function getUserVault(address user) external view returns (
+        uint256 totalDeposited,
+        uint256 activeAmount,
+        uint256 pendingRewards,
+        uint256 totalRewardsWithdrawn,
+        uint256 lastAccrualCycle,
+        uint256 joinedCycle
+    ) {
+        UserVault storage vault = vaults[user];
+        return (
+            vault.totalDeposited,
+            vault.activeAmount,
+            vault.pendingRewards,
+            vault.totalRewardsWithdrawn,
+            vault.lastAccrualCycle,
+            vault.joinedCycle
+        );
+    }
+
+    /**
+     * @dev Get user's referral information
+     */
+    function getUserReferralData(address user) external view returns (
+        uint256 totalRewards,
+        uint256 availableRewards,
+        uint256 referredCount,
+        uint256 totalReferredVolume,
+        uint256 totalWithdrawn
+    ) {
+        ReferralData storage refData = referrals[user];
+        return (
+            refData.totalRewards,
+            refData.availableRewards,
+            refData.referredCount,
+            refData.totalReferredVolume,
+            refData.totalWithdrawn
+        );
+    }
+
+    /**
+     * @dev Get contract statistics
+     */
+    function getContractStats() external view returns (
+        uint256 _totalDeposited,
+        uint256 _totalRewardsWithdrawn,
+        uint256 _totalReferralRewardsWithdrawn,
+        uint256 _totalActiveAmount,
+        uint256 _totalUsers,
+        uint256 _contractBalance,
+        uint256 _currentCycle
+    ) {
+        return (
+            totalDeposited,
+            totalRewardsWithdrawn,
+            totalReferralRewardsWithdrawn,
+            totalActiveAmount,
+            totalUsers,
+            USDT.balanceOf(address(this)),
+            getCurrentCycle()
+        );
+    }
+
+    /**
+     * @dev Calculate user's lifetime ROI
+     */
+    function getUserROI(address user) external view returns (
+        uint256 totalInvested,
+        uint256 totalEarned,
+        uint256 roiPercentage
+    ) {
+        UserVault storage vault = vaults[user];
+        ReferralData storage refData = referrals[user];
+        
+        totalInvested = vault.totalDeposited;
+        totalEarned = vault.totalRewardsWithdrawn + refData.totalWithdrawn + vault.pendingRewards + refData.availableRewards;
+        
+        if (totalInvested > 0) {
+            roiPercentage = (totalEarned * 10000) / totalInvested; // ROI in basis points (100 = 1%)
+        }
+        
+        return (totalInvested, totalEarned, roiPercentage);
+    }
+
+    /**
+     * @dev Get USDT contract address
+     */
+    function getUSDTAddress() external view returns (address) {
+        return address(USDT);
+    }
+
+    // ============ INTERNAL FUNCTIONS ============
+    
+    /**
+     * @dev Update user's pending rewards based on cycles passed
+     */
+    function _updateUserRewards(address userAddress) internal {
+        UserVault storage user = vaults[userAddress];
+        
+        if (user.activeAmount == 0) {
             return;
         }
 
-        if (currentCycle > dep.lastCycle) {
-            uint256 cycles = currentCycle - dep.lastCycle;
-            uint256 newRewards = (dep.amount * DAILY_RATE / 1000) * cycles;
-            dep.rewards += newRewards;
-            dep.lastCycle = currentCycle;
+        uint256 currentCycle = getCurrentCycle();
+        
+        if (currentCycle > user.lastAccrualCycle) {
+            uint256 cyclesPassed = currentCycle - user.lastAccrualCycle;
+            uint256 newRewards = (user.activeAmount * DAILY_RATE * cyclesPassed) / 1000;
+            
+            user.pendingRewards += newRewards;
+            user.lastAccrualCycle = currentCycle;
         }
     }
 
-    function togglePause() external onlyOwner {
-        paused = !paused;
-        emit Paused(paused);
+    // ============ OWNER FUNDING FUNCTIONS ============
+    
+    /**
+     * @dev Owner can fund the contract with USDT for rewards
+     * @notice This is how the contract gets USDT to pay rewards
+     */
+    function fundContract(uint256 amount) external onlyOwner {
+        require(amount > 0, "Amount must be greater than 0");
+        require(USDT.balanceOf(msg.sender) >= amount, "Insufficient USDT balance");
+        require(USDT.allowance(msg.sender, address(this)) >= amount, "Insufficient USDT allowance");
+        
+        require(USDT.transferFrom(msg.sender, address(this), amount), "USDT transfer failed");
     }
-
-    function emergencyWithdraw() external onlyOwner {
-        payable(owner).transfer(address(this).balance);
-    }
-
-    receive() external payable {}
 }
