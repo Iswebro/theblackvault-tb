@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "api/cron/weekly-leaderboard.js": {
+      "maxDuration": 300
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/weekly-leaderboard",
+      "schedule": "0 21 * * 0"
+    }
+  ]
+}
