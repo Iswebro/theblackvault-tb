@@ -3,12 +3,12 @@ import fs from "fs"
 import path from "path"
 
 // Load ABIs
-import BlackVaultABI from "../../src/contract/BlackVaultABI.json" with { type: "json" }
+import BlackVaultABI from "../src/contract/BlackVaultABI.json" with { type: "json" }
 
 // Configuration
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS || "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
 const RPC_URL = process.env.REACT_APP_RPC_URL || "https://bsc-dataseed.binance.org/"
-const LAUNCH_TIMESTAMP = 1718668800 // 7am Brisbane time 17 June 2024 (same as CYCLE_START_TIME)
+const LAUNCH_TIMESTAMP = 1735689600 // Jan 1, 2025 00:00:00 UTC - UPDATE THIS TO YOUR LAUNCH DATE
 const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
 const DATA_DIR = path.resolve("./leaderboard-data")
 

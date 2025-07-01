@@ -2,7 +2,13 @@
 
 import { useState, useEffect } from "react"
 import LifetimeLeaderboardModal from "./LifetimeLeaderboardModal"
-import { LAUNCH_CONFIG } from "../config/launch.js"
+
+// --- Central Launch Configuration ---
+// IMPORTANT: Update this timestamp to your actual launch date/time in UTC.
+// You can use https://www.epochconverter.com/ to get the timestamp.
+// Current placeholder is January 1, 2025 00:00:00 UTC
+const LAUNCH_TIMESTAMP = 1735689600
+const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
 
 export default function Leaderboard() {
   const [weeklyLeaderboard, setWeeklyLeaderboard] = useState([])
@@ -20,56 +26,51 @@ export default function Leaderboard() {
     setError(null)
 
     try {
-      // Try to fetch from API first, but fallback to local calculation if it fails
-      let data
-      try {
-        const response = await fetch("/api/leaderboard/weekly")
-        if (response.ok) {
-          data = await response.json()
-        } else {
-          throw new Error("API not available")
-        }
-      } catch (apiError) {
-        console.log("API not available, using local calculation")
-        // Fallback to local calculation
-        data = getLocalWeeklyData()
+      // In a production environment, you would fetch this from a reliable API.
+      // For local dev, we fall back to a local calculation.
+      const response = await fetch("/api/leaderboard/weekly")
+      if (!response.ok) {
+        // This will happen in local dev, which is expected.
+        console.warn("Weekly leaderboard API failed, using local fallback.")
+        throw new Error("API not available")
       }
-
+      const data = await response.json()
       setWeeklyLeaderboard(data.leaderboard || [])
       setWeekInfo({
         weekIndex: data.weekIndex,
-        isPreviousWeek: data.isPreviousWeek,
         message: data.message,
       })
     } catch (error) {
-      console.error("Error loading weekly leaderboard:", error)
-      setError(error.message)
+      // Fallback for local development or API failure
+      const localData = getLocalWeeklyData()
+      setWeeklyLeaderboard(localData.leaderboard)
+      setWeekInfo({
+        weekIndex: localData.weekIndex,
+        message: localData.message,
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  // Local fallback calculation
+  // Local fallback calculation for development
   const getLocalWeeklyData = () => {
-    const currentTime = Math.floor(Date.now() / 1000)
+    const nowTs = Math.floor(Date.now() / 1000)
+    const hasLaunched = nowTs >= LAUNCH_TIMESTAMP
 
-    // Check if platform has launched
-    if (!LAUNCH_CONFIG.hasLaunched()) {
+    if (!hasLaunched) {
       return {
         weekIndex: 0,
         leaderboard: [],
-        message: `Platform launches on ${new Date(LAUNCH_CONFIG.LAUNCH_TIMESTAMP * 1000).toLocaleDateString()}`,
-        generatedAt: currentTime,
+        message: `Leaderboard starts on ${new Date(LAUNCH_TIMESTAMP * 1000).toLocaleDateString()}`,
       }
     }
 
-    const weekIndex = LAUNCH_CONFIG.getCurrentWeekIndex()
-
+    const weekIndex = Math.floor((nowTs - LAUNCH_TIMESTAMP) / WEEK_DURATION)
     return {
       weekIndex: weekIndex,
       leaderboard: [],
       message: "No referral data yet - Leaderboard will populate as users make referrals",
-      generatedAt: currentTime,
     }
   }
 
@@ -79,7 +80,7 @@ export default function Leaderboard() {
   }
 
   const formatAmount = (amount) => {
-    const num = Number.parseFloat(amount) / 1e18 // Convert from wei to USDT
+    const num = Number.parseFloat(amount) / 1e18 // Convert from wei
     if (num === 0) return "0"
     if (num < 0.0001) return "< 0.0001"
     return num.toFixed(2)
@@ -87,9 +88,11 @@ export default function Leaderboard() {
 
   const getWeekDisplayText = () => {
     if (!weekInfo) return "Loading..."
+    const nowTs = Math.floor(Date.now() / 1000)
+    const hasLaunched = nowTs >= LAUNCH_TIMESTAMP
 
-    if (weekInfo.isPreviousWeek) {
-      return `Week ${weekInfo.weekIndex + 1} (Previous Week)`
+    if (!hasLaunched) {
+      return "Week 1 (Upcoming)"
     }
 
     return `Week ${weekInfo.weekIndex + 1} (Current)`
@@ -115,7 +118,7 @@ export default function Leaderboard() {
           </div>
         ) : error ? (
           <div className="leaderboard-error">
-            <p className="error-message">Leaderboard will be available after launch</p>
+            <p className="error-message">Could not load leaderboard data.</p>
             <button className="retry-button" onClick={loadWeeklyLeaderboard}>
               Retry
             </button>
@@ -123,9 +126,7 @@ export default function Leaderboard() {
         ) : weeklyLeaderboard.length === 0 ? (
           <div className="leaderboard-empty">
             <p className="empty-message">No weekly data yet</p>
-            <p className="empty-submessage">
-              {weekInfo?.message || "Weekly leaderboard will populate as users make referrals"}
-            </p>
+            <p className="empty-submessage">{weekInfo?.message || "Leaderboard will populate after launch."}</p>
           </div>
         ) : (
           <div className="leaderboard-list">

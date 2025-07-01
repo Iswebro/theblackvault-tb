@@ -18,29 +18,17 @@ export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddres
     setError(null)
 
     try {
-      // Try to fetch from API first, but fallback to local calculation if it fails
-      let data
-      try {
-        const response = await fetch("/api/leaderboard/lifetime")
-        if (response.ok) {
-          data = await response.json()
-        } else {
-          throw new Error("API not available")
-        }
-      } catch (apiError) {
-        console.log("API not available, using local calculation")
-        // Fallback to local calculation
-        data = {
-          leaderboard: [], // Empty until real data is available
-          message: "No referral data yet - Leaderboard will populate as users make referrals",
-          generatedAt: Math.floor(Date.now() / 1000),
-        }
+      const response = await fetch("/api/leaderboard/lifetime")
+      if (!response.ok) {
+        console.warn("Lifetime leaderboard API failed, showing empty state.")
+        throw new Error("API not available")
       }
-
+      const data = await response.json()
       setLeaderboard(data.leaderboard || [])
     } catch (error) {
-      console.error("Error loading lifetime leaderboard:", error)
-      setError(error.message)
+      // On failure, just show an empty state rather than an error.
+      setLeaderboard([])
+      setError("Could not load lifetime leaderboard data.")
     } finally {
       setLoading(false)
     }
@@ -67,17 +55,15 @@ export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddres
               <div className="loading-spinner"></div>
               <p>Loading lifetime leaderboard...</p>
             </div>
-          ) : error ? (
-            <div className="modal-error">
-              <p className="error-message">Leaderboard will be available after launch</p>
-              <button className="retry-button" onClick={loadLifetimeLeaderboard}>
-                Retry
-              </button>
-            </div>
           ) : leaderboard.length === 0 ? (
             <div className="modal-empty">
               <p className="empty-message">No lifetime data available yet</p>
-              <p className="empty-submessage">Leaderboard will populate as users make referrals</p>
+              <p className="empty-submessage">Leaderboard will populate as users make referrals.</p>
+              {error && (
+                <button className="retry-button" style={{ marginTop: "1rem" }} onClick={loadLifetimeLeaderboard}>
+                  Retry
+                </button>
+              )}
             </div>
           ) : (
             <div className="lifetime-leaderboard-list">
