@@ -1,14 +1,15 @@
 // Network configuration
 export const config = {
-  // Contract settings
-  contractAddress: process.env.REACT_APP_CONTRACT_ADDRESS || "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
-  usdtAddress: process.env.REACT_APP_USDT_ADDRESS || "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd", // BSC Testnet USDT
+  // Contract settings - UPDATED FOR TESTNET
+  contractAddress: process.env.REACT_APP_CONTRACT_ADDRESS || "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1",
+  // Testnet USDT address - UPDATED
+  usdtAddress: process.env.REACT_APP_USDT_ADDRESS || "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd",
 
-  // Network settings
-  chainId: Number.parseInt(process.env.REACT_APP_CHAIN_ID || "97"),
+  // Network settings for BSC Testnet - UPDATED
+  chainId: Number.parseInt(process.env.REACT_APP_CHAIN_ID || "97"), // BSC Testnet Chain ID
   chainName: process.env.REACT_APP_CHAIN_NAME || "BSC Testnet",
-  rpcUrl: process.env.REACT_APP_RPC_URL || "https://data-seed-prebsc-1-s1.binance.org:8545",
-  blockExplorer: process.env.REACT_APP_BLOCK_EXPLORER || "https://testnet.bscscan.com",
+  rpcUrl: process.env.REACT_APP_RPC_URL || "https://data-seed-prebsc-1-s1.binance.org:8545", // BSC Testnet RPC
+  blockExplorer: process.env.REACT_APP_BLOCK_EXPLORER || "https://testnet.bscscan.com", // BSC Testnet Explorer
 
   // WalletConnect
   walletConnectProjectId: process.env.REACT_APP_WALLETCONNECT_PROJECT_ID || "ec1a030594f38292648794d4587912f4",
