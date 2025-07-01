@@ -4,16 +4,9 @@
 const weeklyLeaderboardData = null
 
 function getCurrentWeekIndex() {
-  // Set this to your actual launch timestamp when you go live
-  const LAUNCH_TIMESTAMP = 1735689600 // Jan 1, 2025 00:00:00 UTC
+  const LAUNCH_TIMESTAMP = 1718668800
   const WEEK_DURATION = 7 * 24 * 60 * 60
   const nowTs = Math.floor(Date.now() / 1000)
-
-  // If current time is before launch, return 0
-  if (nowTs < LAUNCH_TIMESTAMP) {
-    return 0
-  }
-
   return Math.floor((nowTs - LAUNCH_TIMESTAMP) / WEEK_DURATION)
 }
 
