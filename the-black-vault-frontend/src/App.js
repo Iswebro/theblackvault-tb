@@ -158,83 +158,123 @@ export default function App() {
 
   const loadContractData = async (vault = contract, usdt = usdtContract) => {
     if (!vault || !provider || !account || !usdt) {
-      console.log("Skipping loadContractData: missing vault, provider, account, or usdt contract", {
-        vault,
-        provider,
-        account,
-        usdt,
+      console.log("Skipping loadContractData: missing dependencies", {
+        vault: !!vault,
+        provider: !!provider,
+        account: !!account,
+        usdt: !!usdt,
       })
       return
     }
 
     console.log("Loading contract data for account:", account)
+    console.log("Contract address:", CONTRACT_ADDRESS)
+    console.log("USDT address:", USDT_ADDRESS)
+    console.log("Network:", await provider.getNetwork())
+
     try {
+      // Test basic connectivity first
+      console.log("Testing provider connectivity...")
+      const blockNumber = await provider.getBlockNumber()
+      console.log("Current block number:", blockNumber)
+
+      // Test user balance
+      console.log("Fetching user BNB balance...")
       const userBalance = await provider.getBalance(account)
       console.log("Fetched user BNB balance:", formatEther(userBalance), "BNB for account:", account)
       setBalance(formatEther(userBalance))
 
-      const userUsdtBalance = await usdt.balanceOf(account)
-      console.log("Fetched user USDT balance:", formatEther(userUsdtBalance), "USDT for account:", account)
-      setUsdtBalance(formatEther(userUsdtBalance))
-
-      const allowance = await usdt.allowance(account, CONTRACT_ADDRESS)
-      setUsdtAllowance(formatEther(allowance))
-      console.log("Fetched USDT allowance:", formatEther(allowance), "USDT")
-
+      // Test USDT contract
+      console.log("Testing USDT contract...")
       try {
-        const vaultData = await vault.getUserVault(account)
-        setRewards(formatEther(vaultData.pendingRewards))
-        setVaultActiveAmount(formatEther(vaultData.activeAmount))
-        console.log("Fetched vault rewards:", formatEther(vaultData.pendingRewards))
-        console.log("Fetched vault active amount:", formatEther(vaultData.activeAmount))
-      } catch (error) {
-        console.log("No vault data found for user", error)
-        setRewards("0")
-        setVaultActiveAmount("0")
+        const usdtDecimals = await usdt.decimals()
+        console.log("USDT decimals:", usdtDecimals)
+
+        const userUsdtBalance = await usdt.balanceOf(account)
+        console.log("Fetched user USDT balance:", formatEther(userUsdtBalance), "USDT for account:", account)
+        setUsdtBalance(formatEther(userUsdtBalance))
+
+        const allowance = await usdt.allowance(account, CONTRACT_ADDRESS)
+        setUsdtAllowance(formatEther(allowance))
+        console.log("Fetched USDT allowance:", formatEther(allowance), "USDT")
+      } catch (usdtError) {
+        console.error("USDT contract error:", usdtError)
+        addToast("USDT contract error: " + usdtError.message, "error")
+        // Set defaults for USDT values
+        setUsdtBalance("0")
+        setUsdtAllowance("0")
       }
 
+      // Test BlackVault contract
+      console.log("Testing BlackVault contract...")
       try {
-        const refData = await vault.getUserReferralData(account)
-        setReferralRewards(formatEther(refData.availableRewards))
-        setReferralCount(refData.referredCount.toString())
-        console.log("Fetched referral data:", {
-          availableRewards: formatEther(refData.availableRewards),
-          referredCount: refData.referredCount.toString(),
-        })
-      } catch (error) {
-        console.log("No referral rewards found for user", error)
-        setReferralRewards("0")
-        setReferralCount("0")
-      }
-
-      // Get referral bonus info if there's a referral address
-      if (referralAddress && referralAddress !== "0x0000000000000000000000000000000000000000") {
-        try {
-          const bonusInfo = await vault.getReferralBonusInfo(referralAddress, account)
-          setReferralBonusesRemaining(bonusInfo.bonusesRemaining.toString())
-          console.log("Fetched referral bonus info:", {
-            bonusesUsed: bonusInfo.bonusesUsed.toString(),
-            bonusesRemaining: bonusInfo.bonusesRemaining.toString(),
-          })
-        } catch (error) {
-          console.log("No referral bonus info found", error)
-          setReferralBonusesRemaining("3")
-        }
-      }
-
-      try {
+        // Test basic contract functions first
         const minDepositValue = await vault.MIN_DEPOSIT()
         setMinDeposit(formatEther(minDepositValue))
         console.log("Fetched MIN_DEPOSIT:", formatEther(minDepositValue), "USDT")
-      } catch (error) {
-        console.error("Error fetching MIN_DEPOSIT:", error)
-        setMinDeposit("0")
+
+        const currentCycle = await vault.getCurrentCycle()
+        console.log("Current cycle:", currentCycle.toString())
+
+        // Test user-specific data
+        try {
+          const vaultData = await vault.getUserVault(account)
+          setRewards(formatEther(vaultData.pendingRewards))
+          setVaultActiveAmount(formatEther(vaultData.activeAmount))
+          console.log("Fetched vault rewards:", formatEther(vaultData.pendingRewards))
+          console.log("Fetched vault active amount:", formatEther(vaultData.activeAmount))
+        } catch (vaultError) {
+          console.log("No vault data found for user (this is normal for new users):", vaultError.message)
+          setRewards("0")
+          setVaultActiveAmount("0")
+        }
+
+        try {
+          const refData = await vault.getUserReferralData(account)
+          setReferralRewards(formatEther(refData.availableRewards))
+          setReferralCount(refData.referredCount.toString())
+          console.log("Fetched referral data:", {
+            availableRewards: formatEther(refData.availableRewards),
+            referredCount: refData.referredCount.toString(),
+          })
+        } catch (refError) {
+          console.log("No referral rewards found for user (this is normal for new users):", refError.message)
+          setReferralRewards("0")
+          setReferralCount("0")
+        }
+
+        // Get referral bonus info if there's a referral address
+        if (referralAddress && referralAddress !== "0x0000000000000000000000000000000000000000") {
+          try {
+            const bonusInfo = await vault.getReferralBonusInfo(referralAddress, account)
+            setReferralBonusesRemaining(bonusInfo.bonusesRemaining.toString())
+            console.log("Fetched referral bonus info:", {
+              bonusesUsed: bonusInfo.bonusesUsed.toString(),
+              bonusesRemaining: bonusInfo.bonusesRemaining.toString(),
+            })
+          } catch (bonusError) {
+            console.log("No referral bonus info found:", bonusError.message)
+            setReferralBonusesRemaining("3")
+          }
+        }
+      } catch (contractError) {
+        console.error("BlackVault contract error:", contractError)
+        addToast("Contract error: " + contractError.message, "error")
+        // Set defaults
+        setMinDeposit("50")
+        setRewards("0")
+        setVaultActiveAmount("0")
+        setReferralRewards("0")
+        setReferralCount("0")
+        setReferralBonusesRemaining("3")
       }
 
       await loadTransactionHistory(vault, usdt)
+
+      console.log("Contract data loading completed successfully")
     } catch (error) {
-      console.error("Error loading contract data:", error)
-      addToast("Error loading data from contract", "error")
+      console.error("Critical error loading contract data:", error)
+      addToast("Error loading data from contract: " + error.message, "error")
     }
   }
 
@@ -549,7 +589,7 @@ export default function App() {
                 <p className="disclaimer-title">IMPORTANT DISCLAIMER</p>
                 <p className="disclaimer-text">
                   This platform exclusively uses <strong>USDT (BEP-20)</strong> on the{" "}
-                  <strong>Binance Smart Chain (BSC)</strong>. Depositing any other token or using a different
+                  <strong>Binance Smart Chain (BSC) Mainnet</strong>. Depositing any other token or using a different
                   network will result in permanent loss of funds. Ensure your wallet is connected to the BSC Mainnet and
                   you are depositing BEP-20 USDT.
                 </p>

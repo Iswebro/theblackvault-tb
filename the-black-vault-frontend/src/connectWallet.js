@@ -1,93 +1,84 @@
-// src/connectWallet.js
 import { BrowserProvider } from "ethers"
+import { config } from "./lib/config.ts"
 
-// BSC Testnet configuration
-const BSC_TESTNET = {
-  chainId: "0x61", // 97 in hex
-  chainName: "BSC Testnet",
-  nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-  rpcUrls: ["https://data-seed-prebsc-1-s1.binance.org:8545"],
-  blockExplorerUrls: ["https://testnet.bscscan.com/"],
-}
-
-// BSC Mainnet configuration
-const BSC_MAINNET = {
-  chainId: "0x38", // 56 in hex
-  chainName: "Binance Smart Chain",
-  nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-  rpcUrls: ["https://bsc-dataseed.binance.org/"],
-  blockExplorerUrls: ["https://bscscan.com/"],
-}
+const CHAIN_ID = config.chainId.toString()
+const CHAIN_NAME = config.chainName
+const RPC_URL = config.rpcUrl
+const BLOCK_EXPLORER = config.blockExplorer
 
 export async function connectInjected() {
   if (!window.ethereum) {
-    throw new Error("No wallet found. Please install MetaMask or use a Web3 browser.")
+    throw new Error("No wallet found. Please open in MetaMask or Trust Wallet browser.")
   }
 
   try {
-    // Determine which network to use based on environment
-    const targetChainId = process.env.REACT_APP_CHAIN_ID || "97"
-    const isTestnet = targetChainId === "97"
-    const networkConfig = isTestnet ? BSC_TESTNET : BSC_MAINNET
+    // Switch to correct network first
+    const chainIdHex = `0x${Number.parseInt(CHAIN_ID).toString(16)}`
+    console.log("Attempting to switch to network:", {
+      chainId: CHAIN_ID,
+      chainIdHex,
+      chainName: CHAIN_NAME,
+      rpcUrl: RPC_URL,
+    })
 
-    console.log(`Connecting to ${networkConfig.chainName}...`)
-
-    // Try to switch to the target network
     try {
       await window.ethereum.request({
         method: "wallet_switchEthereumChain",
-        params: [{ chainId: networkConfig.chainId }],
+        params: [{ chainId: chainIdHex }],
       })
+      console.log("Successfully switched to network")
     } catch (switchError) {
+      console.log("Network switch error:", switchError)
       // If network is not added, add it
       if (switchError.code === 4902) {
-        console.log(`Adding ${networkConfig.chainName} to wallet...`)
+        console.log("Adding network to wallet...")
         await window.ethereum.request({
           method: "wallet_addEthereumChain",
-          params: [networkConfig],
+          params: [
+            {
+              chainId: chainIdHex,
+              chainName: CHAIN_NAME,
+              nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+              rpcUrls: [RPC_URL],
+              blockExplorerUrls: [BLOCK_EXPLORER],
+            },
+          ],
         })
+        console.log("Network added successfully")
       } else {
         throw switchError
       }
     }
 
     // Request account access
-    const [account] = await window.ethereum.request({
-      method: "eth_requestAccounts",
-    })
-
+    const [account] = await window.ethereum.request({ method: "eth_requestAccounts" })
     const provider = new BrowserProvider(window.ethereum)
     const signer = await provider.getSigner()
 
     // Verify we're on the correct network
     const network = await provider.getNetwork()
-    console.log(`Connected to ${networkConfig.chainName} (Chain ID: ${network.chainId})`)
+    console.log("Connected to network:", network)
+
+    if (network.chainId !== BigInt(CHAIN_ID)) {
+      throw new Error(`Wrong network! Expected chain ID ${CHAIN_ID}, got ${network.chainId}`)
+    }
+
+    console.log("Wallet connected successfully:", {
+      account,
+      chainId: network.chainId.toString(),
+      chainName: network.name,
+    })
 
     return { provider, signer, account }
-  } catch (error) {
-    console.error("Connection failed:", error)
-    throw new Error(error.message || "Failed to connect wallet")
+  } catch (err) {
+    console.error("Connection failed", err)
+    throw err
   }
 }
 
+// Get referral from URL
 export function getReferralFromURL() {
   const urlParams = new URLSearchParams(window.location.search)
   const ref = urlParams.get("ref")
-  return ref && ref.startsWith("0x") && ref.length === 42 ? ref : "0x0000000000000000000000000000000000000000"
-}
-
-// Helper function to add BSC Testnet to wallet manually
-export async function addBSCTestnet() {
-  if (!window.ethereum) return false
-
-  try {
-    await window.ethereum.request({
-      method: "wallet_addEthereumChain",
-      params: [BSC_TESTNET],
-    })
-    return true
-  } catch (error) {
-    console.error("Failed to add BSC Testnet:", error)
-    return false
-  }
+  return ref && ref.length === 42 && ref.startsWith("0x") ? ref : "0x0000000000000000000000000000000000000000"
 }
