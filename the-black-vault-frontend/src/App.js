@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react"
 import { Contract, formatEther, parseEther } from "ethers"
 import { connectInjected, getReferralFromURL } from "./connectWallet"
+import { config } from "./lib/config"
 import { useToast, ToastContainer } from "./components/Toast"
 import BlackVaultAbi from "./contract/BlackVaultABI.json"
 import ERC20Abi from "./contract/ERC20Abi.json"
@@ -10,11 +11,6 @@ import "./App.css"
 import HowItWorks from "./components/HowItWorks"
 import Leaderboard from "./components/Leaderboard"
 import ReferralsModal from "./components/ReferralsModal"
-
-// Configuration is now read directly from environment variables here
-const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS
-const USDT_ADDRESS = process.env.REACT_APP_USDT_ADDRESS
-const BLOCK_EXPLORER = process.env.REACT_APP_BLOCK_EXPLORER
 
 export default function App() {
   // Connection & Account State
@@ -27,7 +23,7 @@ export default function App() {
   const [usdtContract, setUsdtContract] = useState(null)
 
   // UI & Loading State
-  const [isInitializing, setIsInitializing] = useState(false)
+  const [connecting, setConnecting] = useState(false)
   const [txLoading, setTxLoading] = useState(false)
   const [showReferralsModal, setShowReferralsModal] = useState(false)
   const { toasts, addToast, removeToast } = useToast()
@@ -54,84 +50,98 @@ export default function App() {
     }
   }, [])
 
-  // Main initialization effect. Runs once when the wallet is connected and account is set.
+  // Initialize contracts and load data when wallet is connected
   useEffect(() => {
-    const initializeApp = async () => {
-      if (signer && account) {
-        setIsInitializing(true)
-        console.log("Initializing app for account:", account)
-
-        try {
-          // 1. Initialize contracts
-          const vaultContract = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
-          const tokenContract = new Contract(USDT_ADDRESS, ERC20Abi, signer)
-          setContract(vaultContract)
-          setUsdtContract(tokenContract)
-
-          // 2. Load all data from contracts
-          await loadAllContractData(provider, account, vaultContract, tokenContract)
-        } catch (error) {
-          console.error("Initialization failed:", error)
-          addToast("Could not initialize the app. Please refresh.", "error")
-        } finally {
-          setIsInitializing(false)
-        }
-      }
+    if (signer && account) {
+      initializeContracts()
     }
-    initializeApp()
-  }, [signer, account, provider, addToast]) // Dependency array is key here
+  }, [signer, account])
 
-  // Data loading function
-  const loadAllContractData = async (currentProvider, currentAccount, vault, usdt) => {
-    console.log("Loading all contract data...")
+  const initializeContracts = async () => {
     try {
-      const [userBnbBalance, userUsdtBalance, allowance, vaultData, refData, minDepositValue] = await Promise.all([
-        currentProvider.getBalance(currentAccount),
-        usdt.balanceOf(currentAccount),
-        usdt.allowance(currentAccount, CONTRACT_ADDRESS),
-        vault.getUserVault(currentAccount).catch(() => null),
-        vault.getUserReferralData(currentAccount).catch(() => null),
-        vault.MIN_DEPOSIT().catch(() => parseEther("50")),
-      ])
+      console.log("Initializing contracts...")
+      const vaultContract = new Contract(config.CONTRACT_ADDRESS, BlackVaultAbi, signer)
+      const tokenContract = new Contract(config.USDT_ADDRESS, ERC20Abi, signer)
+
+      setContract(vaultContract)
+      setUsdtContract(tokenContract)
+
+      // Load all data
+      await loadContractData(vaultContract, tokenContract)
+    } catch (error) {
+      console.error("Contract initialization failed:", error)
+      addToast("Failed to initialize contracts", "error")
+    }
+  }
+
+  const loadContractData = async (vaultContract, tokenContract) => {
+    try {
+      console.log("Loading contract data...")
+
+      // Load wallet balances
+      const userBnbBalance = await provider.getBalance(account)
+      const userUsdtBalance = await tokenContract.balanceOf(account)
+      const allowance = await tokenContract.allowance(account, config.CONTRACT_ADDRESS)
 
       setBalance(formatEther(userBnbBalance))
       setUsdtBalance(formatEther(userUsdtBalance))
       setUsdtAllowance(formatEther(allowance))
-      setMinDeposit(formatEther(minDepositValue))
 
-      if (vaultData) {
+      // Load contract constants
+      try {
+        const minDepositValue = await vaultContract.MIN_DEPOSIT()
+        setMinDeposit(formatEther(minDepositValue))
+      } catch (error) {
+        console.warn("Could not load min deposit:", error)
+        setMinDeposit("50")
+      }
+
+      // Load user vault data
+      try {
+        const vaultData = await vaultContract.getUserVault(account)
         setRewards(formatEther(vaultData.pendingRewards))
         setVaultActiveAmount(formatEther(vaultData.activeAmount))
+      } catch (error) {
+        console.warn("Could not load vault data:", error)
+        setRewards("0")
+        setVaultActiveAmount("0")
       }
 
-      if (refData) {
+      // Load referral data
+      try {
+        const refData = await vaultContract.getUserReferralData(account)
         setReferralRewards(formatEther(refData.availableRewards))
         setReferralCount(refData.referredCount.toString())
+      } catch (error) {
+        console.warn("Could not load referral data:", error)
+        setReferralRewards("0")
+        setReferralCount("0")
       }
 
-      // Load history separately
-      loadTransactionHistory(vault, currentProvider, currentAccount)
-      console.log("All contract data loaded successfully.")
+      // Load transaction history
+      loadTransactionHistory(vaultContract)
+
+      console.log("Contract data loaded successfully")
     } catch (error) {
-      console.error("A critical error occurred while loading contract data:", error)
-      addToast("Error loading data from contract", "error")
+      console.error("Error loading contract data:", error)
+      addToast("Error loading data", "error")
     }
   }
 
-  const loadTransactionHistory = async (vault, currentProvider, userAccount) => {
+  const loadTransactionHistory = async (vaultContract) => {
     try {
-      const depositFilter = vault.filters.Deposited(userAccount)
-      const rewardsWithdrawFilter = vault.filters.RewardsWithdrawn(userAccount)
-      const referralWithdrawFilter = vault.filters.ReferralRewardsWithdrawn(userAccount)
+      const depositFilter = vaultContract.filters.Deposited(account)
+      const rewardsWithdrawFilter = vaultContract.filters.RewardsWithdrawn(account)
+      const referralWithdrawFilter = vaultContract.filters.ReferralRewardsWithdrawn(account)
 
       const [depositEvents, rewardsWithdrawEvents, referralWithdrawEvents] = await Promise.all([
-        vault.queryFilter(depositFilter, -50000),
-        vault.queryFilter(rewardsWithdrawFilter, -50000),
-        vault.queryFilter(referralWithdrawFilter, -50000),
+        vaultContract.queryFilter(depositFilter, -50000),
+        vaultContract.queryFilter(rewardsWithdrawFilter, -50000),
+        vaultContract.queryFilter(referralWithdrawFilter, -50000),
       ])
 
       const processEvent = async (event, type) => {
-        const block = await currentProvider.getBlock(event.blockNumber)
+        const block = await provider.getBlock(event.blockNumber)
         return {
           type,
           amount: formatEther(event.args.amount),
@@ -154,7 +164,7 @@ export default function App() {
   }
 
   const connectWallet = async () => {
-    setIsInitializing(true)
+    setConnecting(true)
     try {
       isManuallyDisconnected.current = false
       const conn = await connectInjected()
@@ -165,7 +175,8 @@ export default function App() {
     } catch (error) {
       console.error("Connection failed:", error)
       addToast(error.message || "Failed to connect wallet", "error")
-      setIsInitializing(false)
+    } finally {
+      setConnecting(false)
     }
   }
 
@@ -214,8 +225,8 @@ export default function App() {
       const tx = await txFunction()
       await tx.wait()
       addToast(successMessage, "success")
-      // Reload all data after a successful transaction
-      await loadAllContractData(provider, account, contract, usdtContract)
+      // Reload data after successful transaction
+      await loadContractData(contract, usdtContract)
     } catch (error) {
       console.error(errorMessage, error)
       addToast(error.code === 4001 ? "Transaction cancelled" : errorMessage, "error")
@@ -227,7 +238,11 @@ export default function App() {
   const approveUsdt = () => {
     if (!usdtContract || !depositAmount || Number(depositAmount) <= 0) return
     const amountToApprove = parseEther(depositAmount)
-    handleTransaction(() => usdtContract.approve(CONTRACT_ADDRESS, amountToApprove), "USDT Approved", "Approval Failed")
+    handleTransaction(
+      () => usdtContract.approve(config.CONTRACT_ADDRESS, amountToApprove),
+      "USDT Approved",
+      "Approval Failed",
+    )
   }
 
   const deposit = () => {
@@ -279,8 +294,8 @@ export default function App() {
               <span className="title-vault">VAULT</span>
             </h1>
             <p className="app-subtitle">Premium USDT Staking Platform on Binance Smart Chain</p>
-            <button className="connect-button premium-button" onClick={connectWallet} disabled={isInitializing}>
-              {isInitializing ? (
+            <button className="connect-button premium-button" onClick={connectWallet} disabled={connecting}>
+              {connecting ? (
                 <>
                   <div className="loading-spinner"></div>Connecting...
                 </>
@@ -288,20 +303,6 @@ export default function App() {
                 "Connect Wallet"
               )}
             </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (isInitializing) {
-    return (
-      <div className="app-container">
-        <div className="connect-screen">
-          <div className="connect-content">
-            <div className="loading-spinner" style={{ width: "50px", height: "50px", margin: "0 auto 2rem" }}></div>
-            <h2 style={{ color: "#e0e0e0" }}>Initializing App...</h2>
-            <p style={{ color: "#a0a0a0" }}>Loading your vault data</p>
           </div>
         </div>
       </div>
@@ -454,7 +455,7 @@ export default function App() {
                     <div className="history-amount">
                       <span className="amount-value">{formatAmount(item.amount)} USDT</span>
                       <a
-                        href={`${BLOCK_EXPLORER}/tx/${item.txHash}`}
+                        href={`${config.BLOCK_EXPLORER}/tx/${item.txHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="view-tx"

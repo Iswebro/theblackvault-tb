@@ -1,40 +1,28 @@
 import { BrowserProvider } from "ethers"
+import { config } from "./lib/config"
 
-// This function now reads environment variables directly to avoid import issues.
 export async function connectInjected() {
   if (!window.ethereum) {
     throw new Error("No wallet found. Please install MetaMask or use a Web3 browser.")
   }
 
   try {
-    // Determine which network to use based on environment variables
-    const targetChainId = process.env.REACT_APP_CHAIN_ID || "97" // Default to BSC Testnet
-    const isTestnet = targetChainId === "97"
-
-    const networkConfig = {
-      chainId: isTestnet ? "0x61" : "0x38", // 97 for testnet, 56 for mainnet
-      chainName: isTestnet ? "BSC Testnet" : "Binance Smart Chain",
-      nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-      rpcUrls: [isTestnet ? "https://data-seed-prebsc-1-s1.binance.org:8545" : "https://bsc-dataseed.binance.org/"],
-      blockExplorerUrls: [isTestnet ? "https://testnet.bscscan.com/" : "https://bscscan.com/"],
-    }
-
-    console.log(`Attempting to connect to: ${networkConfig.chainName}`)
+    console.log(`Attempting to connect to: ${config.CHAIN_NAME}`)
 
     // Try to switch to the target network
     try {
       await window.ethereum.request({
         method: "wallet_switchEthereumChain",
-        params: [{ chainId: networkConfig.chainId }],
+        params: [{ chainId: config.NETWORK_CONFIG.chainId }],
       })
-      console.log(`Switched to ${networkConfig.chainName}`)
+      console.log(`Switched to ${config.CHAIN_NAME}`)
     } catch (switchError) {
       // If network is not added, prompt user to add it
       if (switchError.code === 4902) {
-        console.log(`Adding ${networkConfig.chainName} to wallet...`)
+        console.log(`Adding ${config.CHAIN_NAME} to wallet...`)
         await window.ethereum.request({
           method: "wallet_addEthereumChain",
-          params: [networkConfig],
+          params: [config.NETWORK_CONFIG],
         })
       } else {
         console.error("Failed to switch network:", switchError)
@@ -53,8 +41,8 @@ export async function connectInjected() {
 
     // Final verification
     const network = await provider.getNetwork()
-    if (network.chainId.toString() !== targetChainId) {
-      throw new Error(`Please switch to ${networkConfig.chainName} in your wallet.`)
+    if (network.chainId.toString() !== config.CHAIN_ID.toString()) {
+      throw new Error(`Please switch to ${config.CHAIN_NAME} in your wallet.`)
     }
     console.log(`Successfully connected to ${network.name} (Chain ID: ${network.chainId})`)
 
