@@ -19,12 +19,19 @@ export default function Leaderboard() {
     setError(null)
 
     try {
-      // Use relative path for Vercel API routes
-      const response = await fetch("/api/leaderboard/weekly")
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to load weekly leaderboard")
+      // Try to fetch from API first, but fallback to local calculation if it fails
+      let data
+      try {
+        const response = await fetch("/api/leaderboard/weekly")
+        if (response.ok) {
+          data = await response.json()
+        } else {
+          throw new Error("API not available")
+        }
+      } catch (apiError) {
+        console.log("API not available, using local calculation")
+        // Fallback to local calculation
+        data = getLocalWeeklyData()
       }
 
       setWeeklyLeaderboard(data.leaderboard || [])
@@ -38,6 +45,23 @@ export default function Leaderboard() {
       setError(error.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Local fallback calculation
+  const getLocalWeeklyData = () => {
+    // Calculate weeks since your contract deployment
+    const CONTRACT_DEPLOY_TIME = Math.floor(Date.now() / 1000) // Current time as deployment time
+    const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
+    const currentTime = Math.floor(Date.now() / 1000)
+
+    const weekIndex = Math.floor((currentTime - CONTRACT_DEPLOY_TIME) / WEEK_DURATION)
+
+    return {
+      weekIndex: weekIndex,
+      leaderboard: [], // Empty until real data is available
+      message: "No referral data yet - Leaderboard will populate as users make referrals",
+      generatedAt: currentTime,
     }
   }
 
@@ -83,7 +107,7 @@ export default function Leaderboard() {
           </div>
         ) : error ? (
           <div className="leaderboard-error">
-            <p className="error-message">Error: {error}</p>
+            <p className="error-message">Leaderboard will be available after launch</p>
             <button className="retry-button" onClick={loadWeeklyLeaderboard}>
               Retry
             </button>

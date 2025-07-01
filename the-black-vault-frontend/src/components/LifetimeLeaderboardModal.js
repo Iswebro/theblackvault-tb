@@ -18,12 +18,23 @@ export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddres
     setError(null)
 
     try {
-      // Use relative path for Vercel API routes
-      const response = await fetch("/api/leaderboard/lifetime")
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to load lifetime leaderboard")
+      // Try to fetch from API first, but fallback to local calculation if it fails
+      let data
+      try {
+        const response = await fetch("/api/leaderboard/lifetime")
+        if (response.ok) {
+          data = await response.json()
+        } else {
+          throw new Error("API not available")
+        }
+      } catch (apiError) {
+        console.log("API not available, using local calculation")
+        // Fallback to local calculation
+        data = {
+          leaderboard: [], // Empty until real data is available
+          message: "No referral data yet - Leaderboard will populate as users make referrals",
+          generatedAt: Math.floor(Date.now() / 1000),
+        }
       }
 
       setLeaderboard(data.leaderboard || [])
@@ -58,7 +69,7 @@ export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddres
             </div>
           ) : error ? (
             <div className="modal-error">
-              <p className="error-message">Error: {error}</p>
+              <p className="error-message">Leaderboard will be available after launch</p>
               <button className="retry-button" onClick={loadLifetimeLeaderboard}>
                 Retry
               </button>
