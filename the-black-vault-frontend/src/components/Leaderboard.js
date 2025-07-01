@@ -3,94 +3,130 @@
 import { useState, useEffect } from "react"
 import LifetimeLeaderboardModal from "./LifetimeLeaderboardModal"
 
-// Define LAUNCH_TIMESTAMP directly here
-const LAUNCH_TIMESTAMP = 1717804800000 // June 8, 2024 00:00:00 GMT
-
 export default function Leaderboard() {
   const [weeklyLeaderboard, setWeeklyLeaderboard] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [weekInfo, setWeekInfo] = useState(null)
   const [showLifetimeModal, setShowLifetimeModal] = useState(false)
 
   useEffect(() => {
-    const fetchLeaderboard = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const response = await fetch("/api/leaderboard/weekly")
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-        const data = await response.json()
-        setWeeklyLeaderboard(data.leaderboard || [])
-      } catch (e) {
-        console.error("Failed to fetch weekly leaderboard:", e)
-        setError("Failed to load weekly leaderboard. Please try again later.")
-        setWeeklyLeaderboard([]) // Set to empty array on error
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchLeaderboard()
-    const interval = setInterval(fetchLeaderboard, 60000) // Refresh every minute
-    return () => clearInterval(interval)
+    loadWeeklyLeaderboard()
   }, [])
 
-  const getCountdown = () => {
-    const now = Date.now()
-    const oneWeek = 7 * 24 * 60 * 60 * 1000
-    const timeSinceLaunch = now - LAUNCH_TIMESTAMP
-    const weeksSinceLaunch = Math.floor(timeSinceLaunch / oneWeek)
-    const nextResetTime = LAUNCH_TIMESTAMP + (weeksSinceLaunch + 1) * oneWeek
+  const loadWeeklyLeaderboard = async () => {
+    setLoading(true)
+    setError(null)
 
-    const timeLeft = nextResetTime - now
+    try {
+      // Use relative path for Vercel API routes
+      const response = await fetch("/api/leaderboard/weekly")
+      const data = await response.json()
 
-    if (timeLeft <= 0) {
-      return "Resetting soon..."
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load weekly leaderboard")
+      }
+
+      setWeeklyLeaderboard(data.leaderboard || [])
+      setWeekInfo({
+        weekIndex: data.weekIndex,
+        isPreviousWeek: data.isPreviousWeek,
+        message: data.message,
+      })
+    } catch (error) {
+      console.error("Error loading weekly leaderboard:", error)
+      setError(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatAddress = (addr) => {
+    if (!addr) return ""
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+  }
+
+  const formatAmount = (amount) => {
+    const num = Number.parseFloat(amount) / 1e18 // Convert from wei to USDT
+    if (num === 0) return "0"
+    if (num < 0.0001) return "< 0.0001"
+    return num.toFixed(2)
+  }
+
+  const getWeekDisplayText = () => {
+    if (!weekInfo) return "Loading..."
+
+    if (weekInfo.isPreviousWeek) {
+      return `Week ${weekInfo.weekIndex + 1} (Previous Week)`
     }
 
-    const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24))
-    const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-    const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60))
-    const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000)
-
-    return `${days}d ${hours}h ${minutes}m ${seconds}s`
+    return `Week ${weekInfo.weekIndex + 1} (Current)`
   }
 
   return (
-    <div className="vault-card premium-card">
-      <h3 className="card-title">
-        <span className="card-icon">🏆</span>
-        Weekly Leaderboard
-      </h3>
-      <div className="leaderboard-countdown">Next Reset: {getCountdown()}</div>
-      {loading ? (
-        <div className="loading-spinner" style={{ margin: "20px auto" }}></div>
-      ) : error ? (
-        <p className="text-red-500 text-center">{error}</p>
-      ) : weeklyLeaderboard.length === 0 ? (
-        <div className="empty-state">
-          <p className="empty-message">No participants yet</p>
-          <p className="empty-submessage">Be the first to make a deposit!</p>
+    <>
+      <div className="vault-card premium-card">
+        <h3 className="card-title">
+          <span className="card-icon">🏆</span>
+          Weekly Referral Leaderboard
+        </h3>
+
+        <div className="leaderboard-info">
+          <p className="week-display">{getWeekDisplayText()}</p>
+          <p className="reset-info">Resets every Monday @ 7 AM AEST</p>
         </div>
-      ) : (
-        <div className="leaderboard-list">
-          {weeklyLeaderboard.map((entry, index) => (
-            <div key={index} className="leaderboard-item">
-              <span className="leaderboard-rank">#{index + 1}</span>
-              <span className="leaderboard-address">
-                {entry.address.slice(0, 6)}...{entry.address.slice(-4)}
-              </span>
-              <span className="leaderboard-volume">{Number.parseFloat(entry.volume).toFixed(2)} USDT</span>
+
+        {loading ? (
+          <div className="leaderboard-loading">
+            <div className="loading-spinner"></div>
+            <p>Loading weekly leaderboard...</p>
+          </div>
+        ) : error ? (
+          <div className="leaderboard-error">
+            <p className="error-message">Error: {error}</p>
+            <button className="retry-button" onClick={loadWeeklyLeaderboard}>
+              Retry
+            </button>
+          </div>
+        ) : weeklyLeaderboard.length === 0 ? (
+          <div className="leaderboard-empty">
+            <p className="empty-message">No weekly data yet</p>
+            <p className="empty-submessage">
+              {weekInfo?.message || "Weekly leaderboard will populate as users make referrals"}
+            </p>
+          </div>
+        ) : (
+          <div className="leaderboard-list">
+            <div className="leaderboard-header">
+              <span className="leaderboard-rank">Rank</span>
+              <span className="leaderboard-address">Address</span>
+              <span className="leaderboard-metric">Weekly Rewards (USDT)</span>
             </div>
-          ))}
+            {weeklyLeaderboard.map((entry) => (
+              <div key={entry.rank} className="leaderboard-item">
+                <span className="leaderboard-rank">#{entry.rank}</span>
+                <span className="leaderboard-address">{formatAddress(entry.address)}</span>
+                <span className="leaderboard-metric">{formatAmount(entry.totalRewards)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="leaderboard-actions">
+          <button className="lifetime-leaderboard-button" onClick={() => setShowLifetimeModal(true)}>
+            See Lifetime Leaderboard
+          </button>
         </div>
-      )}
-      <button className="vault-button premium-button secondary mt-4" onClick={() => setShowLifetimeModal(true)}>
-        View Lifetime Leaderboard
-      </button>
-      <LifetimeLeaderboardModal isOpen={showLifetimeModal} onClose={() => setShowLifetimeModal(false)} />
-    </div>
+
+        <p className="leaderboard-note">Weekly leaderboard tracks referral rewards earned within each 7-day period.</p>
+      </div>
+
+      <LifetimeLeaderboardModal
+        isOpen={showLifetimeModal}
+        onClose={() => setShowLifetimeModal(false)}
+        formatAddress={formatAddress}
+        formatAmount={formatAmount}
+      />
+    </>
   )
 }

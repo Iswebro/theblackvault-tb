@@ -1,15 +1,74 @@
 import { ethers } from "ethers"
-import BlackVaultAbi from "../../src/contract/BlackVaultABI.json"
-import { kv } from "@vercel/kv"
 
 // Load ABI (we'll need to import this differently for Vercel)
-const BlackVaultABI = BlackVaultAbi
+const BlackVaultABI = [
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "referrer",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "cycle",
+        type: "uint256",
+      },
+    ],
+    name: "Deposited",
+    type: "event",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "referrer",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "referee",
+        type: "address",
+      },
+    ],
+    name: "getReferralBonusInfo",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "bonusesUsed",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "bonusesRemaining",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+]
 
 // Configuration
-const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS || "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1"
-const RPC_URL = process.env.REACT_APP_RPC_URL || "https://data-seed-prebsc-1-s1.binance.org:8545"
-const LAUNCH_TIMESTAMP = 1717804800000 // June 8, 2024 00:00:00 GMT
-const WEEK_DURATION = 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
+const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS
+const RPC_URL = process.env.REACT_APP_RPC_URL || "https://bsc-dataseed.binance.org/"
+const LAUNCH_TIMESTAMP = 1718668800 // 7am Brisbane time 17 June 2024
+const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
 
 // Vercel's /tmp directory for temporary storage
 const DATA_DIR = "/tmp/leaderboard-data"
@@ -19,10 +78,10 @@ const provider = new ethers.JsonRpcProvider(RPC_URL)
 const blackVaultContract = new ethers.Contract(CONTRACT_ADDRESS, BlackVaultABI, provider)
 
 /**
- * Get current week index based on GMT time
+ * Get current week index based on Brisbane time
  */
 function getCurrentWeekIndex() {
-  const nowTs = Date.now()
+  const nowTs = Math.floor(Date.now() / 1000)
   return Math.floor((nowTs - LAUNCH_TIMESTAMP) / WEEK_DURATION)
 }
 
@@ -42,10 +101,10 @@ async function getBlockByTimestamp(timestamp) {
   try {
     const currentBlock = await provider.getBlockNumber()
     const currentBlockData = await provider.getBlock(currentBlock)
-    const currentTimestamp = currentBlockData.timestamp * 1000 // Convert to milliseconds
+    const currentTimestamp = currentBlockData.timestamp
 
     // BSC has ~3 second block time
-    const avgBlockTime = 3000 // Convert to milliseconds
+    const avgBlockTime = 3
     const blockDiff = Math.floor((currentTimestamp - timestamp) / avgBlockTime)
     const estimatedBlock = Math.max(0, currentBlock - blockDiff)
 
@@ -61,7 +120,7 @@ async function getBlockByTimestamp(timestamp) {
  */
 function calculateReferralReward(depositAmount) {
   // 10% referral bonus
-  return (depositAmount * 10) / 100
+  return (BigInt(depositAmount) * BigInt(10)) / BigInt(100)
 }
 
 /**
@@ -74,7 +133,9 @@ async function aggregateWeeklyLeaderboard(weekIndex) {
   const fromBlock = await getBlockByTimestamp(weekStart)
   const toBlock = await getBlockByTimestamp(weekEnd)
 
-  console.log(`Week ${weekIndex}: ${new Date(weekStart).toISOString()} to ${new Date(weekEnd).toISOString()}`)
+  console.log(
+    `Week ${weekIndex}: ${new Date(weekStart * 1000).toISOString()} to ${new Date(weekEnd * 1000).toISOString()}`,
+  )
   console.log(`Scanning blocks ${fromBlock} to ${toBlock}`)
 
   try {
@@ -90,7 +151,7 @@ async function aggregateWeeklyLeaderboard(weekIndex) {
     for (const event of depositEvents) {
       const referrer = event.args.referrer.toLowerCase()
       const referee = event.args.user.toLowerCase()
-      const amount = Number.parseFloat(ethers.formatEther(event.args.amount))
+      const amount = event.args.amount.toString()
 
       // Skip if no referrer (zero address)
       if (referrer === ethers.ZeroAddress.toLowerCase()) {
@@ -107,7 +168,7 @@ async function aggregateWeeklyLeaderboard(weekIndex) {
           const rewardAmount = calculateReferralReward(amount)
 
           if (!referrerRewards[referrer]) {
-            referrerRewards[referrer] = 0
+            referrerRewards[referrer] = BigInt(0)
           }
 
           referrerRewards[referrer] += rewardAmount
@@ -121,9 +182,9 @@ async function aggregateWeeklyLeaderboard(weekIndex) {
     const leaderboard = Object.entries(referrerRewards)
       .map(([address, totalRewards]) => ({
         address,
-        totalRewards,
+        totalRewards: totalRewards.toString(),
       }))
-      .sort((a, b) => b.totalRewards - a.totalRewards)
+      .sort((a, b) => BigInt(b.totalRewards) - BigInt(a.totalRewards))
       .slice(0, 10) // Top 10
       .map((entry, index) => ({
         rank: index + 1,
@@ -138,7 +199,7 @@ async function aggregateWeeklyLeaderboard(weekIndex) {
       weekIndex,
       weekStart,
       weekEnd,
-      generatedAt: Date.now(),
+      generatedAt: Math.floor(Date.now() / 1000),
       leaderboard,
     }
 
@@ -168,7 +229,7 @@ async function aggregateLifetimeLeaderboard() {
     for (const event of depositEvents) {
       const referrer = event.args.referrer.toLowerCase()
       const referee = event.args.user.toLowerCase()
-      const amount = Number.parseFloat(ethers.formatEther(event.args.amount))
+      const amount = event.args.amount.toString()
 
       // Skip if no referrer (zero address)
       if (referrer === ethers.ZeroAddress.toLowerCase()) {
@@ -185,7 +246,7 @@ async function aggregateLifetimeLeaderboard() {
           const rewardAmount = calculateReferralReward(amount)
 
           if (!referrerRewards[referrer]) {
-            referrerRewards[referrer] = 0
+            referrerRewards[referrer] = BigInt(0)
           }
 
           referrerRewards[referrer] += rewardAmount
@@ -199,9 +260,9 @@ async function aggregateLifetimeLeaderboard() {
     const leaderboard = Object.entries(referrerRewards)
       .map(([address, totalRewards]) => ({
         address,
-        totalRewards,
+        totalRewards: totalRewards.toString(),
       }))
-      .sort((a, b) => b.totalRewards - a.totalRewards)
+      .sort((a, b) => BigInt(b.totalRewards) - BigInt(a.totalRewards))
       .slice(0, 10) // Top 10
       .map((entry, index) => ({
         rank: index + 1,
@@ -213,7 +274,7 @@ async function aggregateLifetimeLeaderboard() {
 
     // Create the lifetime data object
     const lifetimeData = {
-      generatedAt: Date.now(),
+      generatedAt: Math.floor(Date.now() / 1000),
       leaderboard,
     }
 
@@ -225,54 +286,45 @@ async function aggregateLifetimeLeaderboard() {
 }
 
 export default async function handler(req, res) {
-  // Ensure this endpoint is only accessible via a secure cron job
+  // Verify this is a cron request (optional security measure)
   if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ message: "Unauthorized" })
-  }
-
-  if (req.method !== "GET") {
-    return res.status(405).json({ message: "Method Not Allowed" })
+    return res.status(401).json({ error: "Unauthorized" })
   }
 
   try {
-    const now = Date.now()
-    const oneWeek = 7 * 24 * 60 * 60 * 1000
-    const timeSinceLaunch = now - LAUNCH_TIMESTAMP
-    const weeksSinceLaunch = Math.floor(timeSinceLaunch / oneWeek)
-    const currentWeekStartTime = LAUNCH_TIMESTAMP + weeksSinceLaunch * oneWeek
+    console.log("Starting weekly leaderboard cron job...")
 
-    // Fetch all Deposit events
-    const filter = blackVaultContract.filters.Deposited()
-    const events = await blackVaultContract.queryFilter(filter)
+    const currentWeekIndex = getCurrentWeekIndex()
+    console.log(`Current week index: ${currentWeekIndex}`)
 
-    const weeklyDeposits = {}
+    // Generate current week leaderboard
+    const weeklyData = await aggregateWeeklyLeaderboard(currentWeekIndex)
 
-    for (const event of events) {
-      const block = await provider.getBlock(event.blockNumber)
-      const eventTimestamp = block.timestamp * 1000 // Convert to milliseconds
+    // Generate lifetime leaderboard
+    const lifetimeData = await aggregateLifetimeLeaderboard()
 
-      if (eventTimestamp >= currentWeekStartTime && eventTimestamp < currentWeekStartTime + oneWeek) {
-        const userAddress = event.args.user
-        const amount = Number.parseFloat(ethers.formatEther(event.args.amount))
+    // In a real implementation, you'd save this to a database or persistent storage
+    // For now, we'll return the data and log it
+    console.log("Weekly leaderboard generated:", weeklyData.leaderboard.length, "entries")
+    console.log("Lifetime leaderboard generated:", lifetimeData.leaderboard.length, "entries")
 
-        if (!weeklyDeposits[userAddress]) {
-          weeklyDeposits[userAddress] = 0
-        }
-        weeklyDeposits[userAddress] += amount
-      }
-    }
+    // Store in Vercel KV or your preferred database here
+    // await storeLeaderboardData(weeklyData, lifetimeData)
 
-    const leaderboard = Object.entries(weeklyDeposits)
-      .map(([address, volume]) => ({ address, volume }))
-      .sort((a, b) => b.volume - a.volume)
-      .slice(0, 10) // Top 10 for weekly
-
-    // Store in Vercel KV
-    await kv.set("weeklyLeaderboard", JSON.stringify(leaderboard))
-
-    res.status(200).json({ message: "Weekly leaderboard updated successfully", leaderboard })
+    res.status(200).json({
+      success: true,
+      message: "Leaderboard data generated successfully",
+      weekIndex: currentWeekIndex,
+      weeklyEntries: weeklyData.leaderboard.length,
+      lifetimeEntries: lifetimeData.leaderboard.length,
+      generatedAt: new Date().toISOString(),
+    })
   } catch (error) {
-    console.error("Error updating weekly leaderboard:", error)
-    res.status(500).json({ message: "Internal Server Error", error: error.message })
+    console.error("Error in weekly leaderboard cron:", error)
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    })
   }
 }

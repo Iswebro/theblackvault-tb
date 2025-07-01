@@ -1,51 +1,46 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { Contract, formatEther, parseEther, formatUnits } from "ethers" // Import formatUnits
+import { Contract, formatEther, parseEther } from "ethers"
 import { connectInjected, getReferralFromURL } from "./connectWallet"
 import { useToast, ToastContainer } from "./components/Toast"
 import BlackVaultAbi from "./contract/BlackVaultABI.json"
 import ERC20Abi from "./contract/ERC20Abi.json"
 import "./App.css"
+import { config } from "./lib/config.ts"
 import HowItWorks from "./components/HowItWorks"
 import Leaderboard from "./components/Leaderboard"
 import ReferralsModal from "./components/ReferralsModal"
 
-// Configuration is now read directly from environment variables here
-const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS
-const USDT_ADDRESS = process.env.REACT_APP_USDT_ADDRESS // Using REACT_APP_USDT_ADDRESS as per .env
-const BLOCK_EXPLORER = process.env.REACT_APP_BLOCK_EXPLORER
+const CONTRACT_ADDRESS = config.contractAddress
+const USDT_ADDRESS = config.usdtAddress
 
 export default function App() {
-  // Connection & Account State
   const [provider, setProvider] = useState(null)
   const [signer, setSigner] = useState(null)
   const [account, setAccount] = useState("")
-
-  // Contract State
   const [contract, setContract] = useState(null)
   const [usdtContract, setUsdtContract] = useState(null)
 
-  // UI & Loading State
-  const [connecting, setConnecting] = useState(false)
-  const [txLoading, setTxLoading] = useState(false)
-  const [showReferralsModal, setShowReferralsModal] = useState(false)
-  const { toasts, addToast, removeToast } = useToast()
-  const isManuallyDisconnected = useRef(false)
-
-  // Data State
-  const [balance, setBalance] = useState("0") // BNB balance (still kept for display if needed)
+  const [balance, setBalance] = useState("0") // BNB balance
   const [usdtBalance, setUsdtBalance] = useState("0") // USDT balance
   const [depositAmount, setDepositAmount] = useState("")
   const [rewards, setRewards] = useState("0")
   const [referralRewards, setReferralRewards] = useState("0")
   const [referralAddress, setReferralAddress] = useState("")
   const [history, setHistory] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [txLoading, setTxLoading] = useState(false)
   const [referralCount, setReferralCount] = useState(0)
   const [minDeposit, setMinDeposit] = useState("0")
   const [usdtAllowance, setUsdtAllowance] = useState("0")
   const [vaultActiveAmount, setVaultActiveAmount] = useState("0")
   const [referralBonusesRemaining, setReferralBonusesRemaining] = useState(3)
+  const [showReferralsModal, setShowReferralsModal] = useState(false)
+
+  const { toasts, addToast, removeToast } = useToast()
+
+  const isManuallyDisconnected = useRef(false)
   const [showDisclaimer, setShowDisclaimer] = useState(true)
 
   // Get referral from URL on component mount
@@ -174,49 +169,18 @@ export default function App() {
 
     console.log("Loading contract data for account:", account)
     try {
-      // Fetch BNB balance (optional, but kept for consistency if needed elsewhere)
-      try {
-        const userBalance = await provider.getBalance(account)
-        setBalance(formatEther(userBalance))
-        console.log("Fetched user BNB balance:", formatEther(userBalance), "BNB for account:", account)
-      } catch (error) {
-        console.error("Error fetching BNB balance:", error)
-        setBalance("0")
-      }
+      const userBalance = await provider.getBalance(account)
+      console.log("Fetched user BNB balance:", formatEther(userBalance), "BNB for account:", account)
+      setBalance(formatEther(userBalance))
 
-      // Fetch USDT balance
-      try {
-        const rawUsdtBalance = await usdt.balanceOf(account)
-        const formattedUsdtBalance = formatUnits(rawUsdtBalance, 18) // USDT typically has 18 decimals
-        setUsdtBalance(formattedUsdtBalance)
-        console.log("Fetched user USDT balance:", formattedUsdtBalance, "USDT for account:", account)
-      } catch (error) {
-        console.error("Error fetching USDT balance:", error)
-        setUsdtBalance("0")
-        addToast("Error fetching USDT balance. Check token address or network.", "error")
-      }
+      const userUsdtBalance = await usdt.balanceOf(account)
+      console.log("Fetched user USDT balance:", formatEther(userUsdtBalance), "USDT for account:", account)
+      setUsdtBalance(formatEther(userUsdtBalance))
 
-      // Fetch USDT allowance
-      try {
-        const allowance = await usdt.allowance(account, CONTRACT_ADDRESS)
-        setUsdtAllowance(formatEther(allowance))
-        console.log("Fetched USDT allowance:", formatEther(allowance), "USDT")
-      } catch (error) {
-        console.error("Error fetching USDT allowance:", error)
-        setUsdtAllowance("0")
-      }
+      const allowance = await usdt.allowance(account, CONTRACT_ADDRESS)
+      setUsdtAllowance(formatEther(allowance))
+      console.log("Fetched USDT allowance:", formatEther(allowance), "USDT")
 
-      // Load contract constants
-      try {
-        const minDepositValue = await vault.MIN_DEPOSIT()
-        setMinDeposit(formatEther(minDepositValue))
-        console.log("Fetched MIN_DEPOSIT:", formatEther(minDepositValue), "USDT")
-      } catch (error) {
-        console.warn("Could not load min deposit:", error)
-        setMinDeposit("50") // Fallback value
-      }
-
-      // Load user vault data
       try {
         const vaultData = await vault.getUserVault(account)
         setRewards(formatEther(vaultData.pendingRewards))
@@ -224,12 +188,11 @@ export default function App() {
         console.log("Fetched vault rewards:", formatEther(vaultData.pendingRewards))
         console.log("Fetched vault active amount:", formatEther(vaultData.activeAmount))
       } catch (error) {
-        console.warn("Could not load vault data:", error)
+        console.log("No vault data found for user", error)
         setRewards("0")
         setVaultActiveAmount("0")
       }
 
-      // Load referral data
       try {
         const refData = await vault.getUserReferralData(account)
         setReferralRewards(formatEther(refData.availableRewards))
@@ -239,7 +202,7 @@ export default function App() {
           referredCount: refData.referredCount.toString(),
         })
       } catch (error) {
-        console.warn("Could not load referral data:", error)
+        console.log("No referral rewards found for user", error)
         setReferralRewards("0")
         setReferralCount("0")
       }
@@ -254,23 +217,31 @@ export default function App() {
             bonusesRemaining: bonusInfo.bonusesRemaining.toString(),
           })
         } catch (error) {
-          console.warn("No referral bonus info found", error)
-          setReferralBonusesRemaining("3") // Fallback value
+          console.log("No referral bonus info found", error)
+          setReferralBonusesRemaining("3")
         }
       }
 
+      try {
+        const minDepositValue = await vault.MIN_DEPOSIT()
+        setMinDeposit(formatEther(minDepositValue))
+        console.log("Fetched MIN_DEPOSIT:", formatEther(minDepositValue), "USDT")
+      } catch (error) {
+        console.error("Error fetching MIN_DEPOSIT:", error)
+        setMinDeposit("0")
+      }
+
       await loadTransactionHistory(vault, usdt)
-      console.log("All contract data loaded successfully.")
     } catch (error) {
-      console.error("A critical error occurred while loading contract data:", error)
+      console.error("Error loading contract data:", error)
       addToast("Error loading data from contract", "error")
     }
   }
 
   const connectWallet = async () => {
-    if (connecting) return
+    if (loading) return
 
-    setConnecting(true)
+    setLoading(true)
     try {
       isManuallyDisconnected.current = false
       const conn = await connectInjected()
@@ -281,7 +252,7 @@ export default function App() {
       console.error("Connection failed:", error)
       addToast(error.message || "Failed to connect wallet", "error")
     } finally {
-      setConnecting(false)
+      setLoading(false)
     }
   }
 
@@ -428,7 +399,6 @@ export default function App() {
 
   const formatAmount = (amount) => {
     const num = Number.parseFloat(amount)
-    if (isNaN(num)) return "0.00"
     if (num === 0) return "0"
     if (num < 0.0001) return "< 0.0001"
     return num.toFixed(6)
@@ -480,8 +450,8 @@ export default function App() {
 
             <p className="app-subtitle">Premium USDT Staking Platform on Binance Smart Chain</p>
 
-            <button className="connect-button premium-button" onClick={connectWallet} disabled={connecting}>
-              {connecting ? (
+            <button className="connect-button premium-button" onClick={connectWallet} disabled={loading}>
+              {loading ? (
                 <>
                   <div className="loading-spinner"></div>
                   Connecting...
@@ -579,9 +549,9 @@ export default function App() {
                 <p className="disclaimer-title">IMPORTANT DISCLAIMER</p>
                 <p className="disclaimer-text">
                   This platform exclusively uses <strong>USDT (BEP-20)</strong> on the{" "}
-                  <strong>Binance Smart Chain (BSC)</strong>. Depositing any other token or using a different network
-                  will result in permanent loss of funds. Ensure your wallet is connected to the BSC Mainnet and you are
-                  depositing BEP-20 USDT.
+                  <strong>Binance Smart Chain (BSC)</strong>. Depositing any other token or using a different
+                  network will result in permanent loss of funds. Ensure your wallet is connected to the BSC Mainnet and
+                  you are depositing BEP-20 USDT.
                 </p>
               </div>
             )}
@@ -719,7 +689,7 @@ export default function App() {
                     <div className="history-amount">
                       <span className="amount-value">{formatAmount(item.amount)} USDT</span>
                       <a
-                        href={`${BLOCK_EXPLORER}/tx/${item.txHash}`}
+                        href={`${process.env.REACT_APP_BLOCK_EXPLORER}/tx/${item.txHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="view-tx"
