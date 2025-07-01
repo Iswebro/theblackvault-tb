@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef, useCallback } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Contract, formatEther, parseEther } from "ethers"
 import { connectInjected, getReferralFromURL } from "./connectWallet"
 import { useToast, ToastContainer } from "./components/Toast"
@@ -17,172 +17,144 @@ const USDT_ADDRESS = process.env.REACT_APP_USDT_ADDRESS
 const BLOCK_EXPLORER = process.env.REACT_APP_BLOCK_EXPLORER
 
 export default function App() {
+  // Connection & Account State
   const [provider, setProvider] = useState(null)
   const [signer, setSigner] = useState(null)
   const [account, setAccount] = useState("")
+
+  // Contract State
   const [contract, setContract] = useState(null)
   const [usdtContract, setUsdtContract] = useState(null)
 
-  const [balance, setBalance] = useState("0") // BNB balance
-  const [usdtBalance, setUsdtBalance] = useState("0") // USDT balance
+  // UI & Loading State
+  const [isInitializing, setIsInitializing] = useState(false)
+  const [txLoading, setTxLoading] = useState(false)
+  const [showReferralsModal, setShowReferralsModal] = useState(false)
+  const { toasts, addToast, removeToast } = useToast()
+  const isManuallyDisconnected = useRef(false)
+
+  // Data State
+  const [balance, setBalance] = useState("0")
+  const [usdtBalance, setUsdtBalance] = useState("0")
   const [depositAmount, setDepositAmount] = useState("")
   const [rewards, setRewards] = useState("0")
   const [referralRewards, setReferralRewards] = useState("0")
   const [referralAddress, setReferralAddress] = useState("")
   const [history, setHistory] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [txLoading, setTxLoading] = useState(false)
   const [referralCount, setReferralCount] = useState(0)
   const [minDeposit, setMinDeposit] = useState("0")
   const [usdtAllowance, setUsdtAllowance] = useState("0")
   const [vaultActiveAmount, setVaultActiveAmount] = useState("0")
-  const [referralBonusesRemaining, setReferralBonusesRemaining] = useState(3)
-  const [showReferralsModal, setShowReferralsModal] = useState(false)
-
-  const { toasts, addToast, removeToast } = useToast()
-
-  const isManuallyDisconnected = useRef(false)
-  const [showDisclaimer, setShowDisclaimer] = useState(true)
 
   // Get referral from URL on component mount
   useEffect(() => {
     const refFromURL = getReferralFromURL()
-    setReferralAddress(refFromURL)
+    if (refFromURL) {
+      setReferralAddress(refFromURL)
+    }
   }, [])
 
-  // More robust data loading logic
-  const loadContractData = useCallback(async () => {
-    if (!provider || !account || !contract || !usdtContract) {
-      console.log("Aborting loadContractData: Dependencies not ready.", {
-        provider: !!provider,
-        account: !!account,
-        contract: !!contract,
-        usdtContract: !!usdtContract,
-      })
-      return
-    }
+  // Main initialization effect. Runs once when the wallet is connected and account is set.
+  useEffect(() => {
+    const initializeApp = async () => {
+      if (signer && account) {
+        setIsInitializing(true)
+        console.log("Initializing app for account:", account)
 
-    console.log("Starting to load all contract data for account:", account)
+        try {
+          // 1. Initialize contracts
+          const vaultContract = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
+          const tokenContract = new Contract(USDT_ADDRESS, ERC20Abi, signer)
+          setContract(vaultContract)
+          setUsdtContract(tokenContract)
+
+          // 2. Load all data from contracts
+          await loadAllContractData(provider, account, vaultContract, tokenContract)
+        } catch (error) {
+          console.error("Initialization failed:", error)
+          addToast("Could not initialize the app. Please refresh.", "error")
+        } finally {
+          setIsInitializing(false)
+        }
+      }
+    }
+    initializeApp()
+  }, [signer, account, provider, addToast]) // Dependency array is key here
+
+  // Data loading function
+  const loadAllContractData = async (currentProvider, currentAccount, vault, usdt) => {
+    console.log("Loading all contract data...")
     try {
       const [userBnbBalance, userUsdtBalance, allowance, vaultData, refData, minDepositValue] = await Promise.all([
-        provider.getBalance(account),
-        usdtContract.balanceOf(account),
-        usdtContract.allowance(account, CONTRACT_ADDRESS),
-        contract
-          .getUserVault(account)
-          .catch(() => null), // Non-critical, can fail for new users
-        contract
-          .getUserReferralData(account)
-          .catch(() => null), // Non-critical
-        contract
-          .MIN_DEPOSIT()
-          .catch(() => parseEther("50")), // Fallback
+        currentProvider.getBalance(currentAccount),
+        usdt.balanceOf(currentAccount),
+        usdt.allowance(currentAccount, CONTRACT_ADDRESS),
+        vault.getUserVault(currentAccount).catch(() => null),
+        vault.getUserReferralData(currentAccount).catch(() => null),
+        vault.MIN_DEPOSIT().catch(() => parseEther("50")),
       ])
 
-      console.log("Fetched BNB Balance:", formatEther(userBnbBalance))
       setBalance(formatEther(userBnbBalance))
-
-      console.log("Fetched USDT Balance:", formatEther(userUsdtBalance))
       setUsdtBalance(formatEther(userUsdtBalance))
-
-      console.log("Fetched USDT Allowance:", formatEther(allowance))
       setUsdtAllowance(formatEther(allowance))
+      setMinDeposit(formatEther(minDepositValue))
 
       if (vaultData) {
-        console.log("Fetched Vault Data:", {
-          rewards: formatEther(vaultData.pendingRewards),
-          activeAmount: formatEther(vaultData.activeAmount),
-        })
         setRewards(formatEther(vaultData.pendingRewards))
         setVaultActiveAmount(formatEther(vaultData.activeAmount))
       }
 
       if (refData) {
-        console.log("Fetched Referral Data:", {
-          rewards: formatEther(refData.availableRewards),
-          count: refData.referredCount.toString(),
-        })
         setReferralRewards(formatEther(refData.availableRewards))
         setReferralCount(refData.referredCount.toString())
       }
 
-      console.log("Fetched Min Deposit:", formatEther(minDepositValue))
-      setMinDeposit(formatEther(minDepositValue))
-
-      // Load history separately as it's less critical
-      loadTransactionHistory(contract, provider, account)
+      // Load history separately
+      loadTransactionHistory(vault, currentProvider, currentAccount)
+      console.log("All contract data loaded successfully.")
     } catch (error) {
       console.error("A critical error occurred while loading contract data:", error)
       addToast("Error loading data from contract", "error")
     }
-  }, [provider, account, contract, usdtContract, addToast])
+  }
 
-  // Initialize contracts and load data when signer is ready
-  useEffect(() => {
-    if (signer && account) {
-      console.log("Signer and account are ready. Initializing contracts...")
-      const vaultContract = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
-      const tokenContract = new Contract(USDT_ADDRESS, ERC20Abi, signer)
-      setContract(vaultContract)
-      setUsdtContract(tokenContract)
-    }
-  }, [signer, account])
-
-  // This effect triggers the data load when contracts are set
-  useEffect(() => {
-    if (contract && usdtContract) {
-      console.log("Contracts are initialized. Triggering data load.")
-      loadContractData()
-    }
-  }, [contract, usdtContract, loadContractData])
-
-  const loadTransactionHistory = async (vault, provider, userAccount) => {
-    console.log("Loading transaction history...")
+  const loadTransactionHistory = async (vault, currentProvider, userAccount) => {
     try {
       const depositFilter = vault.filters.Deposited(userAccount)
       const rewardsWithdrawFilter = vault.filters.RewardsWithdrawn(userAccount)
       const referralWithdrawFilter = vault.filters.ReferralRewardsWithdrawn(userAccount)
 
       const [depositEvents, rewardsWithdrawEvents, referralWithdrawEvents] = await Promise.all([
-        vault.queryFilter(depositFilter, -20000), // Look back further
-        vault.queryFilter(rewardsWithdrawFilter, -20000),
-        vault.queryFilter(referralWithdrawFilter, -20000),
+        vault.queryFilter(depositFilter, -50000),
+        vault.queryFilter(rewardsWithdrawFilter, -50000),
+        vault.queryFilter(referralWithdrawFilter, -50000),
       ])
 
       const processEvent = async (event, type) => {
-        try {
-          const block = await provider.getBlock(event.blockNumber)
-          return {
-            type: type,
-            amount: formatEther(event.args.amount),
-            time: new Date(block.timestamp * 1000),
-            txHash: event.transactionHash,
-          }
-        } catch (e) {
-          return null // Ignore events if block data fails
+        const block = await currentProvider.getBlock(event.blockNumber)
+        return {
+          type,
+          amount: formatEther(event.args.amount),
+          time: new Date(block.timestamp * 1000),
+          txHash: event.transactionHash,
         }
       }
 
-      const allEventsPromises = [
-        ...depositEvents.map((event) => processEvent(event, "Deposit")),
-        ...rewardsWithdrawEvents.map((event) => processEvent(event, "Rewards Withdrawn")),
-        ...referralWithdrawEvents.map((event) => processEvent(event, "Referral Withdrawal")),
+      const allEvents = [
+        ...depositEvents.map((e) => processEvent(e, "Deposit")),
+        ...rewardsWithdrawEvents.map((e) => processEvent(e, "Rewards Withdrawn")),
+        ...referralWithdrawEvents.map((e) => processEvent(e, "Referral Withdrawal")),
       ]
 
-      const processedEvents = (await Promise.all(allEventsPromises)).filter(Boolean)
-
-      processedEvents.sort((a, b) => b.time.getTime() - a.time.getTime())
-      setHistory(processedEvents)
-      console.log(`Loaded ${processedEvents.length} history items.`)
+      const processedHistory = (await Promise.all(allEvents)).sort((a, b) => b.time - a.time)
+      setHistory(processedHistory)
     } catch (error) {
       console.error("Error loading transaction history:", error)
-      setHistory([])
     }
   }
 
   const connectWallet = async () => {
-    if (loading) return
-    setLoading(true)
+    setIsInitializing(true)
     try {
       isManuallyDisconnected.current = false
       const conn = await connectInjected()
@@ -191,97 +163,9 @@ export default function App() {
       setAccount(conn.account)
       addToast("Wallet connected successfully!", "success")
     } catch (error) {
-      console.error("Connection failed in App.js:", error)
+      console.error("Connection failed:", error)
       addToast(error.message || "Failed to connect wallet", "error")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const approveUsdt = async () => {
-    if (!usdtContract || txLoading || !depositAmount || Number.parseFloat(depositAmount) <= 0) return
-
-    setTxLoading(true)
-    try {
-      addToast("Approving USDT...", "info")
-      const amountToApprove = parseEther(depositAmount)
-
-      const tx = await usdtContract.approve(CONTRACT_ADDRESS, amountToApprove)
-      addToast("Approval transaction submitted. Waiting for confirmation...", "info")
-      await tx.wait()
-      addToast("USDT approved successfully!", "success")
-      await loadContractData()
-    } catch (error) {
-      console.error("USDT approval failed:", error)
-      addToast(error.code === 4001 ? "Transaction cancelled" : "USDT approval failed", "error")
-    } finally {
-      setTxLoading(false)
-    }
-  }
-
-  const deposit = async () => {
-    if (!contract || !depositAmount || txLoading || Number.parseFloat(depositAmount) <= 0) return
-
-    if (Number.parseFloat(usdtAllowance) < Number.parseFloat(depositAmount)) {
-      addToast("Please approve the required USDT amount first.", "warning")
-      return
-    }
-
-    setTxLoading(true)
-    try {
-      addToast("Processing deposit...", "info")
-      const value = parseEther(depositAmount)
-      const tx =
-        referralAddress && referralAddress !== "0x0000000000000000000000000000000000000000"
-          ? await contract.depositWithReferrer(value, referralAddress)
-          : await contract.deposit(value)
-
-      addToast("Deposit transaction submitted. Waiting for confirmation...", "info")
-      await tx.wait()
-      addToast("Deposit successful!", "success")
-      setDepositAmount("")
-      await loadContractData()
-    } catch (error) {
-      console.error("Deposit failed:", error)
-      addToast(error.code === 4001 ? "Transaction cancelled" : "Deposit failed", "error")
-    } finally {
-      setTxLoading(false)
-    }
-  }
-
-  const withdraw = async () => {
-    if (!contract || txLoading || Number.parseFloat(rewards) === 0) return
-
-    setTxLoading(true)
-    try {
-      addToast("Withdrawing rewards...", "info")
-      const tx = await contract.withdrawRewards()
-      await tx.wait()
-      addToast("Rewards withdrawn successfully!", "success")
-      await loadContractData()
-    } catch (error) {
-      console.error("Withdraw failed:", error)
-      addToast(error.code === 4001 ? "Transaction cancelled" : "Withdrawal failed", "error")
-    } finally {
-      setTxLoading(false)
-    }
-  }
-
-  const withdrawReferral = async () => {
-    if (!contract || txLoading || Number.parseFloat(referralRewards) === 0) return
-
-    setTxLoading(true)
-    try {
-      addToast("Withdrawing referral rewards...", "info")
-      const tx = await contract.withdrawReferralRewards()
-      await tx.wait()
-      addToast("Referral rewards withdrawn successfully!", "success")
-      await loadContractData()
-    } catch (error) {
-      console.error("Referral withdraw failed:", error)
-      addToast(error.code === 4001 ? "Transaction cancelled" : "Referral withdrawal failed", "error")
-    } finally {
-      setTxLoading(false)
+      setIsInitializing(false)
     }
   }
 
@@ -292,7 +176,7 @@ export default function App() {
     setAccount("")
     setContract(null)
     setUsdtContract(null)
-    // Reset all states
+    // Reset all data states
     setBalance("0")
     setUsdtBalance("0")
     setDepositAmount("")
@@ -306,15 +190,15 @@ export default function App() {
     addToast("Wallet disconnected", "info")
   }
 
-  // Listen for account changes to auto-reconnect or disconnect
+  // Listen for account changes
   useEffect(() => {
     const handleAccountsChanged = (accounts) => {
-      if (accounts.length === 0) {
-        console.log("Wallet disconnected by user.")
+      if (accounts.length === 0 && !isManuallyDisconnected.current) {
         disconnect()
       } else if (account && accounts[0].toLowerCase() !== account.toLowerCase()) {
-        console.log("Account switched to:", accounts[0])
-        setAccount(accounts[0]) // This will trigger re-initialization
+        // Reset and reconnect with new account
+        disconnect()
+        connectWallet()
       }
     }
     if (window.ethereum) {
@@ -323,11 +207,51 @@ export default function App() {
     }
   }, [account])
 
+  const handleTransaction = async (txFunction, successMessage, errorMessage) => {
+    setTxLoading(true)
+    try {
+      addToast("Submitting transaction...", "info")
+      const tx = await txFunction()
+      await tx.wait()
+      addToast(successMessage, "success")
+      // Reload all data after a successful transaction
+      await loadAllContractData(provider, account, contract, usdtContract)
+    } catch (error) {
+      console.error(errorMessage, error)
+      addToast(error.code === 4001 ? "Transaction cancelled" : errorMessage, "error")
+    } finally {
+      setTxLoading(false)
+    }
+  }
+
+  const approveUsdt = () => {
+    if (!usdtContract || !depositAmount || Number(depositAmount) <= 0) return
+    const amountToApprove = parseEther(depositAmount)
+    handleTransaction(() => usdtContract.approve(CONTRACT_ADDRESS, amountToApprove), "USDT Approved", "Approval Failed")
+  }
+
+  const deposit = () => {
+    if (!contract || !depositAmount || Number(depositAmount) <= 0) return
+    if (Number(usdtAllowance) < Number(depositAmount)) {
+      addToast("Please approve USDT first", "warning")
+      return
+    }
+    const value = parseEther(depositAmount)
+    const txFunc =
+      referralAddress && referralAddress !== "0x0000000000000000000000000000000000000000"
+        ? () => contract.depositWithReferrer(value, referralAddress)
+        : () => contract.deposit(value)
+    handleTransaction(txFunc, "Deposit Successful", "Deposit Failed").then(() => setDepositAmount(""))
+  }
+
+  const withdraw = () => handleTransaction(() => contract.withdrawRewards(), "Rewards Withdrawn", "Withdrawal Failed")
+  const withdrawReferral = () =>
+    handleTransaction(() => contract.withdrawReferralRewards(), "Referral Rewards Withdrawn", "Withdrawal Failed")
+
   const formatAddress = (addr) => (addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : "")
   const formatAmount = (amount) => {
     const num = Number.parseFloat(amount)
-    if (isNaN(num) || num === 0) return "0.00"
-    return num.toFixed(4)
+    return isNaN(num) ? "0.00" : num.toFixed(4)
   }
   const handleMaxDeposit = () => setDepositAmount(usdtBalance)
   const getReferralLink = () => `${window.location.origin}${window.location.pathname}?ref=${account}`
@@ -335,9 +259,9 @@ export default function App() {
     navigator.clipboard.writeText(getReferralLink())
     addToast("Referral link copied!", "success")
   }
-  const needsApproval =
-    Number.parseFloat(depositAmount) > 0 && Number.parseFloat(usdtAllowance) < Number.parseFloat(depositAmount)
+  const needsApproval = Number(depositAmount) > 0 && Number(usdtAllowance) < Number(depositAmount)
 
+  // Render logic
   if (!account) {
     return (
       <div className="app-container">
@@ -355,8 +279,8 @@ export default function App() {
               <span className="title-vault">VAULT</span>
             </h1>
             <p className="app-subtitle">Premium USDT Staking Platform on Binance Smart Chain</p>
-            <button className="connect-button premium-button" onClick={connectWallet} disabled={loading}>
-              {loading ? (
+            <button className="connect-button premium-button" onClick={connectWallet} disabled={isInitializing}>
+              {isInitializing ? (
                 <>
                   <div className="loading-spinner"></div>Connecting...
                 </>
@@ -364,6 +288,20 @@ export default function App() {
                 "Connect Wallet"
               )}
             </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isInitializing) {
+    return (
+      <div className="app-container">
+        <div className="connect-screen">
+          <div className="connect-content">
+            <div className="loading-spinner" style={{ width: "50px", height: "50px", margin: "0 auto 2rem" }}></div>
+            <h2 style={{ color: "#e0e0e0" }}>Initializing App...</h2>
+            <p style={{ color: "#a0a0a0" }}>Loading your vault data</p>
           </div>
         </div>
       </div>
@@ -424,8 +362,7 @@ export default function App() {
                 <button className="vault-button premium-button primary" onClick={approveUsdt} disabled={txLoading}>
                   {txLoading ? (
                     <>
-                      <div className="loading-spinner" />
-                      Approving...
+                      <div className="loading-spinner" /> Approving...
                     </>
                   ) : (
                     "Approve USDT"
@@ -435,12 +372,11 @@ export default function App() {
                 <button
                   className="vault-button premium-button primary"
                   onClick={deposit}
-                  disabled={txLoading || !depositAmount || Number.parseFloat(depositAmount) <= 0}
+                  disabled={txLoading || !depositAmount || Number(depositAmount) <= 0}
                 >
                   {txLoading ? (
                     <>
-                      <div className="loading-spinner" />
-                      Depositing...
+                      <div className="loading-spinner" /> Depositing...
                     </>
                   ) : (
                     "Deposit USDT"
@@ -461,7 +397,7 @@ export default function App() {
             <button
               className="vault-button premium-button success"
               onClick={withdraw}
-              disabled={txLoading || Number.parseFloat(rewards) === 0}
+              disabled={txLoading || Number(rewards) === 0}
             >
               {txLoading ? "Processing..." : "Withdraw Rewards"}
             </button>
@@ -490,7 +426,7 @@ export default function App() {
             <button
               className="vault-button premium-button purple"
               onClick={withdrawReferral}
-              disabled={txLoading || Number.parseFloat(referralRewards) === 0}
+              disabled={txLoading || Number(referralRewards) === 0}
             >
               {txLoading ? "Processing..." : "Withdraw Referral Rewards"}
             </button>
