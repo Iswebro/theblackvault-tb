@@ -67,7 +67,7 @@ const BlackVaultABI = [
 // Configuration
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS
 const RPC_URL = process.env.REACT_APP_RPC_URL || "https://bsc-dataseed.binance.org/"
-const LAUNCH_TIMESTAMP = 1718668800 // 7am Brisbane time 17 June 2024
+const LAUNCH_TIMESTAMP = 1735689600 // January 1, 2025 00:00:00 UTC - UPDATE THIS TO YOUR LAUNCH DATE
 const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
 
 // Vercel's /tmp directory for temporary storage
@@ -82,6 +82,12 @@ const blackVaultContract = new ethers.Contract(CONTRACT_ADDRESS, BlackVaultABI, 
  */
 function getCurrentWeekIndex() {
   const nowTs = Math.floor(Date.now() / 1000)
+
+  // If current time is before launch, return 0
+  if (nowTs < LAUNCH_TIMESTAMP) {
+    return 0
+  }
+
   return Math.floor((nowTs - LAUNCH_TIMESTAMP) / WEEK_DURATION)
 }
 

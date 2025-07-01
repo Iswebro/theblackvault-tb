@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import LifetimeLeaderboardModal from "./LifetimeLeaderboardModal"
+import { LAUNCH_CONFIG } from "../config/launch.js"
 
 export default function Leaderboard() {
   const [weeklyLeaderboard, setWeeklyLeaderboard] = useState([])
@@ -50,16 +51,23 @@ export default function Leaderboard() {
 
   // Local fallback calculation
   const getLocalWeeklyData = () => {
-    // Calculate weeks since your contract deployment
-    const CONTRACT_DEPLOY_TIME = Math.floor(Date.now() / 1000) // Current time as deployment time
-    const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
     const currentTime = Math.floor(Date.now() / 1000)
 
-    const weekIndex = Math.floor((currentTime - CONTRACT_DEPLOY_TIME) / WEEK_DURATION)
+    // Check if platform has launched
+    if (!LAUNCH_CONFIG.hasLaunched()) {
+      return {
+        weekIndex: 0,
+        leaderboard: [],
+        message: `Platform launches on ${new Date(LAUNCH_CONFIG.LAUNCH_TIMESTAMP * 1000).toLocaleDateString()}`,
+        generatedAt: currentTime,
+      }
+    }
+
+    const weekIndex = LAUNCH_CONFIG.getCurrentWeekIndex()
 
     return {
       weekIndex: weekIndex,
-      leaderboard: [], // Empty until real data is available
+      leaderboard: [],
       message: "No referral data yet - Leaderboard will populate as users make referrals",
       generatedAt: currentTime,
     }
