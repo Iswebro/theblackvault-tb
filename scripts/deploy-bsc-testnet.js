@@ -16,21 +16,14 @@ async function main() {
     return
   }
 
-  // USDT contract addresses
-  const USDT_ADDRESSES = {
-    // BSC Testnet - you can use a mock USDT or deploy your own
-    testnet: "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd", // Mock USDT on testnet
-    // BSC Mainnet
-    mainnet: "0x55d398326f99059fF775485246999027B3197955", // Real USDT on mainnet
-  }
-
-  const usdtAddress = USDT_ADDRESSES.testnet
+  // Get USDT address from environment or use default testnet address
+  const usdtAddress = process.env.TESTNET_USDT_ADDRESS || "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd"
   console.log("📍 Using USDT address:", usdtAddress)
 
   // Deploy the contract
   console.log("⏳ Deploying BlackVault contract...")
-  const BlackVault = await hre.ethers.getContractFactory("BlackVault")
-  const blackVault = await BlackVault.deploy(usdtAddress)
+  const BlackVaultFactory = await hre.ethers.getContractFactory("BlackVault")
+  const blackVault = await BlackVaultFactory.deploy(usdtAddress)
 
   await blackVault.waitForDeployment()
   const contractAddress = await blackVault.getAddress()
@@ -38,6 +31,19 @@ async function main() {
   console.log("✅ BlackVault deployed successfully!")
   console.log("📍 Contract Address:", contractAddress)
   console.log("🔗 View on BSCScan:", `https://testnet.bscscan.com/address/${contractAddress}`)
+
+  // Estimate gas for deployment
+  console.log("⏳ Estimating deployment gas...")
+  const deploymentData = BlackVaultFactory.getDeployTransaction(usdtAddress)
+  const gasEstimate = await deployer.estimateGas(deploymentData)
+  const gasPrice = await deployer.provider.getFeeData()
+  const estimatedCost = gasEstimate * gasPrice.gasPrice
+  console.log("💸 Estimated gas cost:", hre.ethers.formatEther(estimatedCost), "BNB")
+
+  if (balance < estimatedCost * 2n) {
+    console.log("⚠️  Warning: Low BNB balance. You might need more BNB for gas.")
+    console.log("💰 Get more testnet BNB from: https://testnet.binance.org/faucet-smart")
+  }
 
   // Test contract functions
   console.log("\n🧪 Testing contract functions...")
@@ -48,7 +54,7 @@ async function main() {
     const isPaused = await blackVault.paused()
     const usdtAddr = await blackVault.getUSDTAddress()
 
-    console.log("📊 Daily Rate:", dailyRate.toString(), "(2.2%)")
+    console.log("📊 Daily Rate:", dailyRate.toString(), "(2.5%)")
     console.log("💸 Max Withdrawal:", hre.ethers.formatEther(maxWithdrawal), "USDT")
     console.log("💰 Min Deposit:", hre.ethers.formatEther(minDeposit), "USDT")
     console.log("⏸️  Paused:", isPaused)
@@ -81,7 +87,7 @@ async function main() {
     usdtAddress: usdtAddress,
     deployer: deployer.address,
     blockExplorer: `https://testnet.bscscan.com/address/${contractAddress}`,
-    dailyRate: "2.2%",
+    dailyRate: "2.5%",
     maxWithdrawal: "250 USDT",
     minDeposit: "50 USDT",
     timestamp: new Date().toISOString(),
@@ -94,6 +100,7 @@ async function main() {
   console.log("🔄 Next steps:")
   console.log("1. Update your .env file with:")
   console.log(`   REACT_APP_CONTRACT_ADDRESS=${contractAddress}`)
+  console.log(`   NEXT_PUBLIC_CONTRACT_ADDRESS=${contractAddress}`)
   console.log("2. Get some testnet USDT for testing")
   console.log("3. Restart your React app: npm start")
   console.log("4. Test USDT deposits and withdrawals!")
@@ -102,8 +109,8 @@ async function main() {
   console.log("- Users need to APPROVE USDT spending before depositing")
   console.log("- Minimum deposit: 50 USDT")
   console.log("- Maximum deposit: 100,000 USDT")
-  console.log("- Daily rewards: 2.2% of deposited amount")
-  console.log("- Referral bonus: 10% of referred deposits")
+  console.log("- Daily rewards: 2.5% of deposited amount")
+  console.log("- Referral bonus: 10% of referred deposits (first 3 per referee)")
 }
 
 main()

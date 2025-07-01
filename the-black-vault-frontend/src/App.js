@@ -549,7 +549,7 @@ export default function App() {
                 <p className="disclaimer-title">IMPORTANT DISCLAIMER</p>
                 <p className="disclaimer-text">
                   This platform exclusively uses <strong>USDT (BEP-20)</strong> on the{" "}
-                  <strong>Binance Smart Chain (BSC) Mainnet</strong>. Depositing any other token or using a different
+                  <strong>Binance Smart Chain (BSC)</strong>. Depositing any other token or using a different
                   network will result in permanent loss of funds. Ensure your wallet is connected to the BSC Mainnet and
                   you are depositing BEP-20 USDT.
                 </p>
