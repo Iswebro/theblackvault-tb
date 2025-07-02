@@ -40,6 +40,7 @@ export default function App() {
   const [showReferralsModal, setShowReferralsModal] = useState(false)
   const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false) // New state for troubleshooting modal
   const [dailyRate, setDailyRate] = useState("0")
+  const [timeUntilNextCycle, setTimeUntilNextCycle] = useState(0) // New state for countdown
 
   const { toasts, addToast, removeToast } = useToast()
 
@@ -242,12 +243,44 @@ export default function App() {
         setDailyRate("0")
       }
 
+      try {
+        const timeRemaining = await vault.getTimeUntilNextCycle()
+        setTimeUntilNextCycle(Number(timeRemaining.toString())) // Convert BigInt to number
+        console.log("Fetched time until next cycle:", timeRemaining.toString(), "seconds")
+      } catch (error) {
+        console.error("Error fetching time until next cycle:", error)
+        setTimeUntilNextCycle(0)
+      }
+
       await loadTransactionHistory(vault, usdt)
     } catch (error) {
       console.error("Error loading contract data:", error)
       addToast("Error loading data from contract", "error")
     }
   }
+
+  // New useEffect for the countdown timer
+  useEffect(() => {
+    let timerInterval
+    if (account && timeUntilNextCycle > 0) {
+      timerInterval = setInterval(() => {
+        setTimeUntilNextCycle((prevTime) => {
+          if (prevTime <= 1) {
+            clearInterval(timerInterval)
+            // Reload data when timer hits zero to get new cycle info and reset timer
+            loadContractData()
+            return 0
+          }
+          return prevTime - 1
+        })
+      }, 1000)
+    } else if (timeUntilNextCycle === 0 && account) {
+      // If it's already 0 and connected, ensure data is loaded for the current cycle
+      loadContractData()
+    }
+
+    return () => clearInterval(timerInterval)
+  }, [account, timeUntilNextCycle]) // Depend on account and timeUntilNextCycle
 
   const connectWallet = async () => {
     if (loading) return
@@ -470,6 +503,14 @@ export default function App() {
     return Number.parseFloat(num.toFixed(6)).toString()
   }
 
+  // Helper function to format seconds into HH:MM:SS
+  const formatCountdown = (seconds) => {
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    const s = seconds % 60
+    return [h, m, s].map((v) => (v < 10 ? "0" + v : v)).join(":")
+  }
+
   const handleMaxDeposit = () => {
     const maxAmount = Number.parseFloat(usdtBalance)
     if (maxAmount > 0) {
@@ -578,7 +619,7 @@ export default function App() {
                 <span className="balance-label">USDT Balance</span>
                 <span className="balance-value">{formatAmount(vaultActiveAmount)} USDT</span>
               </div>
-              {/* New: Projected Daily Rewards */}
+              {/* Projected Daily Rewards */}
               {Number.parseFloat(vaultActiveAmount) > 0 && dailyRate !== "0" && (
                 <div className="balance-item">
                   <span className="balance-label">Projected Daily Rewards</span>
@@ -588,6 +629,13 @@ export default function App() {
                     )}{" "}
                     USDT
                   </span>
+                </div>
+              )}
+              {/* Countdown Timer */}
+              {Number.parseFloat(vaultActiveAmount) > 0 && timeUntilNextCycle > 0 && (
+                <div className="balance-item">
+                  <span className="balance-label">Next Accrual In</span>
+                  <span className="balance-value">{formatCountdown(timeUntilNextCycle)}</span>
                 </div>
               )}
             </div>
