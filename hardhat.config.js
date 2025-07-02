@@ -5,8 +5,22 @@ require("dotenv").config()
 module.exports = {
   solidity: {
     compilers: [
+      {
+        version: "0.8.28", // Use the exact compiler version shown in BSCScan's debug log
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+          // Add this to specify the EVM version for compilation
+          // 'paris' (Shanghai) is often used for BSC deployments
+          // You might also try 'london' if 'paris' doesn't work,
+          // or check the BSCScan documentation for their default EVM version.
+          evmVersion: "paris",
+        },
+      },
+      // You can keep 0.8.20 as a fallback if needed, but primary focus on 0.8.28
       { version: "0.8.20", settings: { optimizer: { enabled: true, runs: 200 } } },
-      { version: "0.8.28", settings: { optimizer: { enabled: true, runs: 200 } } },
     ],
   },
   networks: {
@@ -29,26 +43,8 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      bscTestnet: process.env.BSCSCAN_API_KEY || "",
-      bsc: process.env.BSCSCAN_API_KEY || "",
+      bscTestnet: process.env.BSCSCAN_API_KEY || "8XJ1R73Q3XSDTEYXDNM7PD4931CZRDM5JC",
+      bsc: process.env.BSCSCAN_API_KEY || "8XJ1R73Q3XSDTEYXDNM7PD4931CZRDM5JC",
     },
-    customChains: [
-      {
-        network: "bscTestnet",
-        chainId: 97,
-        urls: {
-          apiURL: "https://api-testnet.bscscan.com/api",
-          browserURL: "https://testnet.bscscan.com",
-        },
-      },
-      {
-        network: "bsc",
-        chainId: 56,
-        urls: {
-          apiURL: "https://api.bscscan.com/api",
-          browserURL: "https://bscscan.com",
-        },
-      },
-    ],
   },
 }
