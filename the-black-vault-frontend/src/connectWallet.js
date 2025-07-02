@@ -5,7 +5,7 @@ import { config } from "./lib/config.ts"
 const targetNetwork = {
   chainId: `0x${config.chainId.toString(16)}`,
   chainName: config.chainName,
-  nativeCurrency: { name: "BNB", symbol: "tBNB", decimals: 18 },
+  nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 }, // Fixed: should be BNB, not tBNB for mainnet
   rpcUrls: [config.rpcUrl],
   blockExplorerUrls: [config.blockExplorer],
 }
@@ -86,16 +86,42 @@ export async function connectInjected() {
   } catch (error) {
     console.error("Connection failed:", error)
 
-    // Provide more specific error messages
-    if (error.code === 4001) {
-      throw new Error("Connection rejected by user")
-    } else if (error.code === -32002) {
-      throw new Error("Connection request already pending. Please check your wallet.")
-    } else if (error.message.includes("User rejected")) {
-      throw new Error("Connection cancelled by user")
-    } else {
-      throw new Error(error.message || "Failed to connect wallet")
+    // Safe error handling - check if error exists and has properties
+    let errorMessage = "Failed to connect wallet"
+
+    if (error) {
+      if (typeof error === "string") {
+        errorMessage = error
+      } else if (error.message) {
+        errorMessage = error.message
+      } else if (error.code) {
+        // Handle specific error codes
+        switch (error.code) {
+          case 4001:
+            errorMessage = "Connection rejected by user"
+            break
+          case -32002:
+            errorMessage = "Connection request already pending. Please check your wallet."
+            break
+          case 4902:
+            errorMessage = "Network not found in wallet. Please add BSC Mainnet manually."
+            break
+          default:
+            errorMessage = `Wallet error (code: ${error.code})`
+        }
+      }
     }
+
+    // Provide more specific error messages based on content
+    if (errorMessage.includes("No wallet found")) {
+      errorMessage = "Please use Trust Wallet's in-app browser or install MetaMask"
+    } else if (errorMessage.includes("rejected") || errorMessage.includes("cancelled")) {
+      errorMessage = "Connection cancelled. Please try again and approve the connection."
+    } else if (errorMessage.includes("pending")) {
+      errorMessage = "Connection already in progress. Please check your wallet app."
+    }
+
+    throw new Error(errorMessage)
   }
 }
 

@@ -260,9 +260,20 @@ export default function App() {
     } catch (error) {
       console.error("Connection failed:", error)
 
-      // More user-friendly error messages
-      let errorMessage = error.message || "Failed to connect wallet"
+      // Safe error handling
+      let errorMessage = "Failed to connect wallet"
 
+      if (error) {
+        if (typeof error === "string") {
+          errorMessage = error
+        } else if (error.message) {
+          errorMessage = error.message
+        } else if (error.code) {
+          errorMessage = `Wallet error (code: ${error.code})`
+        }
+      }
+
+      // More user-friendly error messages
       if (errorMessage.includes("No wallet found")) {
         errorMessage = "Please use Trust Wallet's in-app browser or install MetaMask"
       } else if (errorMessage.includes("rejected") || errorMessage.includes("cancelled")) {
@@ -292,7 +303,7 @@ export default function App() {
       await loadContractData()
     } catch (error) {
       console.error("USDT approval failed:", error)
-      if (error.code === 4001) {
+      if (error && error.code === 4001) {
         addToast("Transaction cancelled by user", "warning")
       } else {
         addToast("USDT approval failed. Please try again.", "error")
@@ -332,7 +343,7 @@ export default function App() {
       await loadContractData()
     } catch (error) {
       console.error("Deposit failed:", error)
-      if (error.code === 4001) {
+      if (error && error.code === 4001) {
         addToast("Transaction cancelled by user", "warning")
       } else {
         addToast("Deposit failed. Please try again.", "error")
@@ -357,7 +368,7 @@ export default function App() {
       await loadContractData()
     } catch (error) {
       console.error("Withdraw failed:", error)
-      if (error.code === 4001) {
+      if (error && error.code === 4001) {
         addToast("Transaction cancelled by user", "warning")
       } else {
         addToast("Withdrawal failed. Please try again.", "error")
@@ -382,7 +393,7 @@ export default function App() {
       await loadContractData()
     } catch (error) {
       console.error("Referral withdraw failed:", error)
-      if (error.code === 4001) {
+      if (error && error.code === 4001) {
         addToast("Transaction cancelled by user", "warning")
       } else {
         addToast("Referral withdrawal failed. Please try again.", "error")
@@ -483,17 +494,18 @@ export default function App() {
                 "Connect Wallet"
               )}
             </button>
+
             <div style={{ marginTop: "1rem", textAlign: "center" }}>
-              <p style={{ color: "#a0a0a0", fontSize: "0.9rem", marginBottom: "0.5rem" }}>Having trouble connecting?</p>
-              <button
-                className="premium-button"
-                onClick={() => {
-                  addToast("Please use Trust Wallet's in-app browser or try refreshing the page", "info")
-                }}
-                style={{ fontSize: "0.9rem", padding: "0.8rem 1.5rem" }}
-              >
-                Troubleshoot Connection
-              </button>
+              <p style={{ color: "#a0a0a0", fontSize: "0.9rem", marginBottom: "0.5rem" }}>For Trust Wallet users:</p>
+              <p style={{ color: "#c0c0c0", fontSize: "0.8rem", lineHeight: "1.4" }}>
+                1. Open Trust Wallet app
+                <br />
+                2. Go to DApps/Browser tab
+                <br />
+                3. Enter this website URL
+                <br />
+                4. Make sure you're on BSC Mainnet
+              </p>
             </div>
           </div>
         </div>
@@ -555,8 +567,6 @@ export default function App() {
                 <span className="referral-address">{formatAddress(referralAddress)}</span>
               </div>
             )}
-
-            {/* Removed: Referral bonuses remaining display */}
 
             <div className="wallet-balance">
               <span className="balance-label">Wallet Balance:</span>
