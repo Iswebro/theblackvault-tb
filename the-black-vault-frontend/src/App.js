@@ -103,6 +103,7 @@ export default function App() {
   }, [account, addToast])
 
   const initializeContracts = async () => {
+    if (!signer) return
     try {
       const vault = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
       setContract(vault)
@@ -112,6 +113,7 @@ export default function App() {
       setUsdtContract(usdt)
       console.log("USDT Contract initialized.")
 
+      // Pass the newly created contracts directly to load data
       await loadContractData(vault, usdt)
     } catch (error) {
       console.error("Error initializing contracts:", error)
@@ -158,25 +160,23 @@ export default function App() {
 
   const loadContractData = async (vault = contract, usdt = usdtContract) => {
     if (!vault || !provider || !account || !usdt) {
-      console.log("Skipping loadContractData: missing vault, provider, account, or usdt contract", {
-        vault,
-        provider,
-        account,
-        usdt,
-      })
+      console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt })
       return
     }
 
     console.log("Loading contract data for account:", account)
     try {
-      const userBalance = await provider.getBalance(account)
-      console.log("Fetched user BNB balance:", formatEther(userBalance), "BNB for account:", account)
-      setBalance(formatEther(userBalance))
+      // Fetch BNB Balance
+      const userBnbBalance = await provider.getBalance(account)
+      setBalance(formatEther(userBnbBalance))
+      console.log("Fetched BNB balance:", formatEther(userBnbBalance))
 
+      // Fetch USDT Balance
       const userUsdtBalance = await usdt.balanceOf(account)
-      console.log("Fetched user USDT balance:", formatEther(userUsdtBalance), "USDT for account:", account)
       setUsdtBalance(formatEther(userUsdtBalance))
+      console.log("Fetched USDT balance:", formatEther(userUsdtBalance))
 
+      // ... (rest of the function remains the same)
       const allowance = await usdt.allowance(account, CONTRACT_ADDRESS)
       setUsdtAllowance(formatEther(allowance))
       console.log("Fetched USDT allowance:", formatEther(allowance), "USDT")
@@ -207,7 +207,6 @@ export default function App() {
         setReferralCount("0")
       }
 
-      // Get referral bonus info if there's a referral address
       if (referralAddress && referralAddress !== "0x0000000000000000000000000000000000000000") {
         try {
           const bonusInfo = await vault.getReferralBonusInfo(referralAddress, account)
@@ -549,9 +548,9 @@ export default function App() {
                 <p className="disclaimer-title">IMPORTANT DISCLAIMER</p>
                 <p className="disclaimer-text">
                   This platform exclusively uses <strong>USDT (BEP-20)</strong> on the{" "}
-                  <strong>Binance Smart Chain (BSC)</strong>. Depositing any other token or using a different
-                  network will result in permanent loss of funds. Ensure your wallet is connected to the BSC Mainnet and
-                  you are depositing BEP-20 USDT.
+                  <strong>Binance Smart Chain (BSC)</strong>. Depositing any other token or using a different network
+                  will result in permanent loss of funds. Ensure your wallet is connected to the BSC Mainnet and you are
+                  depositing BEP-20 USDT.
                 </p>
               </div>
             )}
@@ -564,7 +563,7 @@ export default function App() {
                 required
                 className="vault-input premium-input"
                 placeholder={
-                  minDeposit !== "0" ? `Min. deposit ${formatAmount(minDeposit)} USDT` : "Min. deposit 50 USDT"
+                  minDeposit !== "0" ? `Min. deposit ${formatAmount(minDeposit)} USDT` : "Min. deposit: 50 USDT"
                 }
                 value={depositAmount}
                 onChange={(e) => setDepositAmount(e.target.value)}
