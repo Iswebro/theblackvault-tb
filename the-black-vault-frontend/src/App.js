@@ -572,27 +572,21 @@ export default function App() {
                 step="0.001"
                 min="0"
               />
-              {minDeposit !== "0" && (
-                <p className="text-sm text-gray-400 mt-2 text-center">
-                  Minimum deposit: {formatAmount(minDeposit)} USDT
-                </p>
-              )}
-              {needsApproval && (
-                <button
-                  className="vault-button premium-button primary"
-                  onClick={approveUsdt}
-                  disabled={txLoading || !depositAmount || Number.parseFloat(depositAmount) <= 0}
-                >
-                  {txLoading ? (
-                    <>
-                      <div className="loading-spinner"></div>
-                      Approving USDT...
-                    </>
-                  ) : (
-                    "Approve USDT"
-                  )}
-                </button>
-              )}
+
+              <button
+                className="vault-button premium-button primary"
+                onClick={approveUsdt}
+                disabled={txLoading || !depositAmount || Number.parseFloat(depositAmount) <= 0}
+              >
+                {txLoading ? (
+                  <>
+                    <div className="loading-spinner"></div>
+                    Approving USDT...
+                  </>
+                ) : (
+                  "Approve USDT"
+                )}
+              </button>
               <button
                 className="vault-button premium-button primary"
                 onClick={deposit}
