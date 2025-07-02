@@ -330,25 +330,43 @@ export default function App() {
       addToast("Processing deposit...", "info")
 
       const value = parseEther(depositAmount)
+      console.log("Attempting to deposit amount (wei):", value.toString())
 
       let tx
 
       if (referralAddress && referralAddress !== "0x0000000000000000000000000000000000000000") {
+        console.log("Calling depositWithReferrer with:", value.toString(), referralAddress)
         tx = await contract.depositWithReferrer(value, referralAddress)
       } else {
+        console.log("Calling deposit with:", value.toString())
         tx = await contract.deposit(value)
       }
 
+      console.log("Transaction sent, hash:", tx.hash)
       addToast("Transaction submitted. Waiting for confirmation...", "info")
-      await tx.wait()
 
-      addToast("Deposit successful!", "success")
-      setDepositAmount("")
-      await loadContractData()
+      // Wait for the transaction to be mined
+      const receipt = await tx.wait()
+      console.log("Transaction receipt:", receipt)
+
+      if (receipt.status === 1) {
+        addToast("Deposit successful!", "success")
+        setDepositAmount("")
+        await loadContractData()
+      } else {
+        // Transaction was mined but failed (reverted)
+        console.error("Transaction failed on-chain:", receipt)
+        addToast("Deposit transaction failed on-chain. Check explorer for details.", "error")
+      }
     } catch (error) {
-      console.error("Deposit failed:", error)
+      console.error("Deposit failed during submission or confirmation:", error)
       if (error && error.code === 4001) {
         addToast("Transaction cancelled by user", "warning")
+      } else if (error && error.data && error.data.message) {
+        // Attempt to extract revert reason from error.data.message
+        addToast(`Deposit failed: ${error.data.message}`, "error")
+      } else if (error && error.message) {
+        addToast(`Deposit failed: ${error.message}`, "error")
       } else {
         addToast("Deposit failed. Please try again.", "error")
       }
