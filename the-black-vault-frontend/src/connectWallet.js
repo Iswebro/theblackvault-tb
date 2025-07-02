@@ -45,7 +45,7 @@ export async function connectInjected() {
 
     // Verify we're on the correct network
     const network = await provider.getNetwork()
-    if (network.chainId !== BigInt(config.chainId)) {
+    if (Number(network.chainId) !== config.chainId) {
       throw new Error(`Please connect to ${config.chainName}. You are on Chain ID ${network.chainId}.`)
     }
 
