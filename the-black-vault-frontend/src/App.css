@@ -200,6 +200,27 @@ body {
   border-color: #a0a0a0; /* Lighter grey border */
 }
 
+/* New discreet button style */
+.discreet-button {
+  background: none;
+  border: none;
+  color: #a0a0a0; /* Light grey text */
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  margin-top: 1.5rem; /* Space from the main connect button */
+  text-decoration: underline;
+}
+
+.discreet-button:hover {
+  color: #e0e0e0; /* Lighter text on hover */
+  background: rgba(255, 255, 255, 0.05); /* Subtle background on hover */
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
 /* Main Interface */
 .main-interface {
   min-height: 100vh;
@@ -817,6 +838,9 @@ body {
   cursor: pointer;
   margin-left: 10px;
   transition: color 0.3s ease;
+  /* Ensure the close button is clickable */
+  position: relative;
+  z-index: 1;
 }
 
 .toast-close:hover {
