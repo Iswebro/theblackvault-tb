@@ -1,26 +1,30 @@
-require("@nomicfoundation/hardhat-toolbox")
-require("dotenv").config()
+require("@nomicfoundation/hardhat-toolbox");
+require("@nomicfoundation/hardhat-verify");
+require("dotenv").config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   solidity: {
     compilers: [
       {
-        version: "0.8.28", // Use the exact compiler version shown in BSCScan's debug log
+        version: "0.8.28",
         settings: {
           optimizer: {
             enabled: true,
             runs: 200,
           },
-          // Add this to specify the EVM version for compilation
-          // 'paris' (Shanghai) is often used for BSC deployments
-          // You might also try 'london' if 'paris' doesn't work,
-          // or check the BSCScan documentation for their default EVM version.
           evmVersion: "paris",
         },
       },
-      // You can keep 0.8.20 as a fallback if needed, but primary focus on 0.8.28
-      { version: "0.8.20", settings: { optimizer: { enabled: true, runs: 200 } } },
+      {
+        version: "0.8.20",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+        },
+      },
     ],
   },
   networks: {
@@ -34,7 +38,7 @@ module.exports = {
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       gasPrice: 20_000_000_000, // 20 gwei
     },
-    bscMainnet: {
+    bsc: {
       url: process.env.BSC_MAINNET_RPC_URL || "https://bsc-dataseed.binance.org/",
       chainId: 56,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
@@ -47,4 +51,4 @@ module.exports = {
       bsc: process.env.BSCSCAN_API_KEY || "8XJ1R73Q3XSDTEYXDNM7PD4931CZRDM5JC",
     },
   },
-}
+};
