@@ -13,7 +13,7 @@ interface IERC20 {
     function balanceOf(address account) external view returns (uint256);
     function transfer(address recipient, uint256 amount) external returns (bool);
     function allowance(address owner, address spender) external view returns (uint256);
-    function approve(address spender, uint256 amount) external returns (bool);
+    function approve(address spender, uint256 amount) external view returns (bool);
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
     function decimals() external view returns (uint8);
 }
@@ -72,6 +72,7 @@ contract BlackVault {
     uint256 public totalActiveAmount;     // Total USDT earning rewards (PERMANENT)
     uint256 public totalUsers;
     uint256 public contractLaunchCycle;
+    address public feeWallet;
 
     // ============ EVENTS ============
     event Deposited(
@@ -130,10 +131,12 @@ contract BlackVault {
     }
 
     // ============ CONSTRUCTOR ============
-    constructor(address _usdtAddress) {
+    constructor(address _usdtAddress, address _feeWallet) {
         require(_usdtAddress != address(0), "Invalid USDT address");
+        require(_feeWallet != address(0), "Invalid fee wallet address");
         owner = msg.sender;
         USDT = IERC20(_usdtAddress);
+        feeWallet = _feeWallet;
         contractLaunchCycle = getCurrentCycle();
         
         // Verify USDT contract
@@ -187,6 +190,15 @@ contract BlackVault {
         return (paused, remaining, totalPauseTime);
     }
 
+    /**
+     * @dev Update fee wallet address (owner only)
+     * @param _newFeeWallet New fee wallet address
+     */
+    function setFeeWallet(address _newFeeWallet) external onlyOwner {
+        require(_newFeeWallet != address(0), "Invalid fee wallet address");
+        feeWallet = _newFeeWallet;
+    }
+
     // ============ CORE FUNCTIONS ============
     
     /**
@@ -217,6 +229,12 @@ contract BlackVault {
 
         // Transfer USDT from user to contract
         require(USDT.transferFrom(msg.sender, address(this), amount), "USDT transfer failed");
+
+        // Collect 1% deposit fee to fee wallet
+        uint256 feeAmount = amount / 100; // 1% fee
+        if (feeAmount > 0) {
+            require(USDT.transfer(feeWallet, feeAmount), "Fee transfer failed");
+        }
 
         user.totalDeposited += amount;
         user.activeAmount += amount;
@@ -264,6 +282,12 @@ contract BlackVault {
 
         // Transfer USDT from user to contract
         require(USDT.transferFrom(msg.sender, address(this), amount), "USDT transfer failed");
+
+        // Collect 1% deposit fee to fee wallet
+        uint256 feeAmount = amount / 100; // 1% fee
+        if (feeAmount > 0) {
+            require(USDT.transfer(feeWallet, feeAmount), "Fee transfer failed");
+        }
 
         user.totalDeposited += amount;
         user.activeAmount += amount;

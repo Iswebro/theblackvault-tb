@@ -522,7 +522,13 @@ export default function App() {
               </div>
             )}
 
-            {/* Removed: Referral bonuses remaining display */}
+            {/* Show referral bonuses remaining if there's a referral */}
+            {referralAddress !== "0x0000000000000000000000000000000000000000" && (
+              <div className="referral-bonuses-remaining">
+                <span className="referral-label">Referral bonuses remaining:</span>
+                <span className="referral-value">{referralBonusesRemaining} / 3</span>
+              </div>
+            )}
 
             <div className="wallet-balance">
               <span className="balance-label">Wallet Balance:</span>

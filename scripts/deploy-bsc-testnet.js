@@ -18,12 +18,14 @@ async function main() {
 
   // Get USDT address from environment or use default testnet address
   const usdtAddress = process.env.TESTNET_USDT_ADDRESS || "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd"
+  const feeWallet = "0x706961C676FE743C34A867437661D13E16ADCbEc"
   console.log("📍 Using USDT address:", usdtAddress)
+  console.log("💰 Using Fee Wallet:", feeWallet)
 
   // Deploy the contract
   console.log("⏳ Deploying BlackVault contract...")
   const BlackVaultFactory = await hre.ethers.getContractFactory("BlackVault")
-  const blackVault = await BlackVaultFactory.deploy(usdtAddress)
+  const blackVault = await BlackVaultFactory.deploy(usdtAddress, feeWallet)
 
   await blackVault.waitForDeployment()
   const contractAddress = await blackVault.getAddress()
@@ -34,7 +36,7 @@ async function main() {
 
   // Estimate gas for deployment
   console.log("⏳ Estimating deployment gas...")
-  const deploymentData = BlackVaultFactory.getDeployTransaction(usdtAddress)
+  const deploymentData = BlackVaultFactory.getDeployTransaction(usdtAddress, feeWallet)
   const gasEstimate = await deployer.estimateGas(deploymentData)
   const gasPrice = await deployer.provider.getFeeData()
   const estimatedCost = gasEstimate * gasPrice.gasPrice
@@ -53,12 +55,14 @@ async function main() {
     const minDeposit = await blackVault.MIN_DEPOSIT()
     const isPaused = await blackVault.paused()
     const usdtAddr = await blackVault.getUSDTAddress()
+    const feeWalletAddr = await blackVault.feeWallet()
 
     console.log("📊 Daily Rate:", dailyRate.toString(), "(2.5%)")
     console.log("💸 Max Withdrawal:", hre.ethers.formatEther(maxWithdrawal), "USDT")
     console.log("💰 Min Deposit:", hre.ethers.formatEther(minDeposit), "USDT")
     console.log("⏸️  Paused:", isPaused)
     console.log("🪙 USDT Address:", usdtAddr)
+    console.log("💳 Fee Wallet:", feeWalletAddr)
   } catch (error) {
     console.log("⚠️  Could not read contract data:", error.message)
   }
@@ -72,7 +76,7 @@ async function main() {
       console.log("🔍 Verifying contract on BSCScan...")
       await hre.run("verify:verify", {
         address: contractAddress,
-        constructorArguments: [usdtAddress],
+        constructorArguments: [usdtAddress, feeWallet],
       })
       console.log("✅ Contract verified on BSCScan!")
     } catch (error) {
@@ -85,11 +89,13 @@ async function main() {
     network: "BSC Testnet",
     contractAddress: contractAddress,
     usdtAddress: usdtAddress,
+    feeWallet: feeWallet,
     deployer: deployer.address,
     blockExplorer: `https://testnet.bscscan.com/address/${contractAddress}`,
     dailyRate: "2.5%",
     maxWithdrawal: "250 USDT",
     minDeposit: "50 USDT",
+    depositFee: "1%",
     timestamp: new Date().toISOString(),
   }
 
@@ -111,6 +117,7 @@ async function main() {
   console.log("- Maximum deposit: 100,000 USDT")
   console.log("- Daily rewards: 2.5% of deposited amount")
   console.log("- Referral bonus: 10% of referred deposits (first 3 per referee)")
+  console.log("- Deposit fee: 1% goes to fee wallet")
 }
 
 main()

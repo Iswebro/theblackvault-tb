@@ -16,14 +16,16 @@ async function main() {
     return
   }
 
-  // BSC Mainnet USDT address
+  // BSC Mainnet USDT address and Fee Wallet
   const usdtAddress = "0x55d398326f99059fF775485246999027B3197955"
+  const feeWallet = "0x706961C676FE743C34A867437661D13E16ADCbEc"
   console.log("📍 Using USDT address:", usdtAddress)
+  console.log("💰 Using Fee Wallet:", feeWallet)
 
   // Deploy the contract
   console.log("⏳ Deploying BlackVault contract...")
   const BlackVault = await hre.ethers.getContractFactory("BlackVault")
-  const blackVault = await BlackVault.deploy(usdtAddress)
+  const blackVault = await BlackVault.deploy(usdtAddress, feeWallet)
 
   await blackVault.waitForDeployment()
   const contractAddress = await blackVault.getAddress()
@@ -40,12 +42,14 @@ async function main() {
     const minDeposit = await blackVault.MIN_DEPOSIT()
     const isPaused = await blackVault.paused()
     const usdtAddr = await blackVault.getUSDTAddress()
+    const feeWalletAddr = await blackVault.feeWallet()
 
     console.log("📊 Daily Rate:", dailyRate.toString(), "(2.5%)")
     console.log("💸 Max Withdrawal:", hre.ethers.formatEther(maxWithdrawal), "USDT")
     console.log("💰 Min Deposit:", hre.ethers.formatEther(minDeposit), "USDT")
     console.log("⏸️  Paused:", isPaused)
     console.log("🪙 USDT Address:", usdtAddr)
+    console.log("💳 Fee Wallet:", feeWalletAddr)
   } catch (error) {
     console.log("⚠️  Could not read contract data:", error.message)
   }
@@ -59,7 +63,7 @@ async function main() {
       console.log("🔍 Verifying contract on BSCScan...")
       await hre.run("verify:verify", {
         address: contractAddress,
-        constructorArguments: [usdtAddress],
+        constructorArguments: [usdtAddress, feeWallet],
       })
       console.log("✅ Contract verified on BSCScan!")
     } catch (error) {
@@ -72,11 +76,13 @@ async function main() {
     network: "BSC Mainnet",
     contractAddress: contractAddress,
     usdtAddress: usdtAddress,
+    feeWallet: feeWallet,
     deployer: deployer.address,
     blockExplorer: `https://bscscan.com/address/${contractAddress}`,
     dailyRate: "2.5%",
     maxWithdrawal: "250 USDT",
     minDeposit: "50 USDT",
+    depositFee: "1%",
     timestamp: new Date().toISOString(),
   }
 
@@ -90,10 +96,11 @@ async function main() {
   console.log(`   NEXT_PUBLIC_CONTRACT_ADDRESS=${contractAddress}`)
   console.log("2. Update your frontend configuration")
   console.log("3. Deploy your frontend to production")
-  console.log("4. Announce your launch!")
+  console.log("4. Test with small amounts first!")
 
   console.log("\n💡 Important Notes:")
   console.log("- This is MAINNET - real money!")
+  console.log("- 1% deposit fee goes to:", feeWallet)
   console.log("- Users need real USDT to interact")
   console.log("- Test thoroughly before announcing")
 }
