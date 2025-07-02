@@ -242,14 +242,36 @@ export default function App() {
 
     setLoading(true)
     try {
+      // Reset the manual disconnect flag
       isManuallyDisconnected.current = false
+
+      // Add a small delay to ensure wallet is ready
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      console.log("Attempting to connect wallet...")
       const conn = await connectInjected()
+
+      console.log("Connection successful:", conn.account)
       setProvider(conn.provider)
       setSigner(conn.signer)
       setAccount(conn.account)
+
+      addToast("Wallet connected successfully!", "success")
     } catch (error) {
       console.error("Connection failed:", error)
-      addToast(error.message || "Failed to connect wallet", "error")
+
+      // More user-friendly error messages
+      let errorMessage = error.message || "Failed to connect wallet"
+
+      if (errorMessage.includes("No wallet found")) {
+        errorMessage = "Please use Trust Wallet's in-app browser or install MetaMask"
+      } else if (errorMessage.includes("rejected") || errorMessage.includes("cancelled")) {
+        errorMessage = "Connection cancelled. Please try again and approve the connection."
+      } else if (errorMessage.includes("pending")) {
+        errorMessage = "Connection already in progress. Please check your wallet app."
+      }
+
+      addToast(errorMessage, "error")
     } finally {
       setLoading(false)
     }
@@ -461,6 +483,18 @@ export default function App() {
                 "Connect Wallet"
               )}
             </button>
+            <div style={{ marginTop: "1rem", textAlign: "center" }}>
+              <p style={{ color: "#a0a0a0", fontSize: "0.9rem", marginBottom: "0.5rem" }}>Having trouble connecting?</p>
+              <button
+                className="premium-button"
+                onClick={() => {
+                  addToast("Please use Trust Wallet's in-app browser or try refreshing the page", "info")
+                }}
+                style={{ fontSize: "0.9rem", padding: "0.8rem 1.5rem" }}
+              >
+                Troubleshoot Connection
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -522,13 +556,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Show referral bonuses remaining if there's a referral */}
-            {referralAddress !== "0x0000000000000000000000000000000000000000" && (
-              <div className="referral-bonuses-remaining">
-                <span className="referral-label">Referral bonuses remaining:</span>
-                <span className="referral-value">{referralBonusesRemaining} / 3</span>
-              </div>
-            )}
+            {/* Removed: Referral bonuses remaining display */}
 
             <div className="wallet-balance">
               <span className="balance-label">Wallet Balance:</span>
