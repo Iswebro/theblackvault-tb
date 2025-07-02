@@ -13,7 +13,7 @@ interface IERC20 {
     function balanceOf(address account) external view returns (uint256);
     function transfer(address recipient, uint256 amount) external returns (bool);
     function allowance(address owner, address spender) external view returns (uint256);
-    function approve(address spender, uint256 amount) external view returns (bool);
+    function approve(address spender, uint256 amount) external returns (bool);
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
     function decimals() external view returns (uint8);
 }
@@ -23,7 +23,7 @@ contract BlackVault {
     uint256 public constant DAILY_RATE = 25; // 2.5% daily (25 per 1000)
     uint256 public constant MAX_WITHDRAWAL_PER_CYCLE = 250 * 10**18; // 250 USDT (18 decimals)
     uint256 public constant CYCLE_DURATION = 86400; // 24 hours in seconds
-    uint256 public constant CYCLE_START_TIME = 1718668800; // 7am Brisbane time 17 June 2024
+    uint256 public constant CYCLE_START_TIME = 1751478000; // 3 July 2025 07:00 AEST
     uint256 public constant REFERRAL_REWARD_PERCENT = 10; // 10% referral bonus
     uint256 public constant MIN_DEPOSIT = 50 * 10**18; // 50 USDT minimum
     uint256 public constant MAX_DEPOSIT = 100000 * 10**18; // 100,000 USDT maximum
@@ -236,12 +236,14 @@ contract BlackVault {
             require(USDT.transfer(feeWallet, feeAmount), "Fee transfer failed");
         }
 
-        user.totalDeposited += amount;
-        user.activeAmount += amount;
+        uint256 netAmount = amount - feeAmount; // Calculate net amount after fee
+
+        user.totalDeposited += amount; // totalDeposited should still be the gross amount
+        user.activeAmount += netAmount; // activeAmount should be the net amount
         user.lastAccrualCycle = effectiveCycle;
 
-        totalDeposited += amount;
-        totalActiveAmount += amount;
+        totalDeposited += amount; // totalDeposited (contract-wide) should still be gross
+        totalActiveAmount += netAmount; // totalActiveAmount (contract-wide) should be net
 
         emit Deposited(msg.sender, amount, address(0), effectiveCycle);
     }
@@ -289,26 +291,28 @@ contract BlackVault {
             require(USDT.transfer(feeWallet, feeAmount), "Fee transfer failed");
         }
 
-        user.totalDeposited += amount;
-        user.activeAmount += amount;
+        uint256 netAmount = amount - feeAmount; // Calculate net amount after fee
+
+        user.totalDeposited += amount; // totalDeposited should still be the gross amount
+        user.activeAmount += netAmount; // activeAmount should be the net amount
         user.lastAccrualCycle = effectiveCycle;
 
         // Process referral reward (only for referee's first 3 deposits to this referrer)
         if (referralRewardCount[referrer][msg.sender] < MAX_REFERRAL_REWARDS_PER_REFEREE) {
             uint256 referralReward = (amount * REFERRAL_REWARD_PERCENT) / 100;
-            ReferralData storage refData = referrals[referrer];
-            refData.totalRewards += referralReward;
-            refData.availableRewards += referralReward;
+            ReferralData storage refDataForReward = referrals[referrer];
+            refDataForReward.totalRewards += referralReward;
+            refDataForReward.availableRewards += referralReward;
             referralRewardCount[referrer][msg.sender] += 1;
         }
         
         // Always update referral stats regardless of reward eligibility
-        ReferralData storage refData = referrals[referrer];
-        refData.referredCount++;
-        refData.totalReferredVolume += amount;
+        ReferralData storage refDataForStats = referrals[referrer];
+        refDataForStats.referredCount++;
+        refDataForStats.totalReferredVolume += amount;
 
-        totalDeposited += amount;
-        totalActiveAmount += amount;
+        totalDeposited += amount; // totalDeposited (contract-wide) should still be gross
+        totalActiveAmount += netAmount; // totalActiveAmount (contract-wide) should be net
 
         emit Deposited(msg.sender, amount, referrer, effectiveCycle);
     }
@@ -391,10 +395,10 @@ contract BlackVault {
      * @dev Get user's vault information
      */
     function getUserVault(address user) external view returns (
-        uint256 totalDeposited,
+        uint256 userTotalDeposited,
         uint256 activeAmount,
         uint256 pendingRewards,
-        uint256 totalRewardsWithdrawn,
+        uint256 userTotalRewardsWithdrawn,
         uint256 lastAccrualCycle,
         uint256 joinedCycle
     ) {
@@ -479,8 +483,12 @@ contract BlackVault {
         UserVault storage vault = vaults[user];
         ReferralData storage refData = referrals[user];
         
-        totalInvested = vault.totalDeposited;
-        totalEarned = vault.totalRewardsWithdrawn + refData.totalWithdrawn + vault.pendingRewards + refData.availableRewards;
+        // Renamed local variables to avoid shadowing state variables
+        uint256 userVaultTotalDeposited = vault.totalDeposited;
+        uint256 userVaultTotalRewardsWithdrawn = vault.totalRewardsWithdrawn;
+
+        totalInvested = userVaultTotalDeposited;
+        totalEarned = userVaultTotalRewardsWithdrawn + refData.totalWithdrawn + vault.pendingRewards + refData.availableRewards;
         
         if (totalInvested > 0) {
             roiPercentage = (totalEarned * 10000) / totalInvested; // ROI in basis points (100 = 1%)
