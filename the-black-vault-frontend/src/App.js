@@ -39,6 +39,7 @@ export default function App() {
   const [referralBonusesRemaining, setReferralBonusesRemaining] = useState(3)
   const [showReferralsModal, setShowReferralsModal] = useState(false)
   const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false) // New state for troubleshooting modal
+  const [dailyRate, setDailyRate] = useState("0")
 
   const { toasts, addToast, removeToast } = useToast()
 
@@ -230,6 +231,15 @@ export default function App() {
       } catch (error) {
         console.error("Error fetching MIN_DEPOSIT:", error)
         setMinDeposit("0")
+      }
+
+      try {
+        const dailyRateValue = await vault.DAILY_RATE()
+        setDailyRate(dailyRateValue.toString()) // Store as string
+        console.log("Fetched DAILY_RATE:", dailyRateValue.toString())
+      } catch (error) {
+        console.error("Error fetching DAILY_RATE:", error)
+        setDailyRate("0")
       }
 
       await loadTransactionHistory(vault, usdt)
@@ -568,6 +578,18 @@ export default function App() {
                 <span className="balance-label">USDT Balance</span>
                 <span className="balance-value">{formatAmount(vaultActiveAmount)} USDT</span>
               </div>
+              {/* New: Projected Daily Rewards */}
+              {Number.parseFloat(vaultActiveAmount) > 0 && dailyRate !== "0" && (
+                <div className="balance-item">
+                  <span className="balance-label">Projected Daily Rewards</span>
+                  <span className="balance-value">
+                    {formatAmount(
+                      ((Number.parseFloat(vaultActiveAmount) * Number.parseFloat(dailyRate)) / 1000).toString(),
+                    )}{" "}
+                    USDT
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
