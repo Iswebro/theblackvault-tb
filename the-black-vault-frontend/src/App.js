@@ -400,7 +400,9 @@ export default function App() {
     const num = Number.parseFloat(amount)
     if (num === 0) return "0"
     if (num < 0.0001) return "< 0.0001"
-    return num.toFixed(6)
+    // Use toFixed(6) for consistent precision, then parseFloat to remove trailing zeros
+    // and finally toString() to ensure it's a string for display.
+    return Number.parseFloat(num.toFixed(6)).toString()
   }
 
   const handleMaxDeposit = () => {
