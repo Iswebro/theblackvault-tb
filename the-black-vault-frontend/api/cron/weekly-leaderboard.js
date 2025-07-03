@@ -374,12 +374,11 @@ export default async function handler(req, res) {
     // Generate lifetime leaderboard
     const lifetimeData = await aggregateLifetimeLeaderboard()
 
-    // Store data in Upstash Redis
+    // Store data in Upstash Redis, ensuring JSON.stringify is used
     console.log("Storing leaderboard data in Upstash Redis...")
     await redis.set("WeekLeaderboard", JSON.stringify(weeklyData.leaderboard))
     await redis.set("LifetimeLeaderboard", JSON.stringify(lifetimeData.leaderboard))
-
-    console.log("Data successfully stored in Upstash Redis")
+    console.log("✅ Stored leaderboard data in Upstash Redis")
 
     console.log("Weekly leaderboard generated:", weeklyData.leaderboard.length, "entries")
     console.log("Lifetime leaderboard generated:", lifetimeData.leaderboard.length, "entries")
