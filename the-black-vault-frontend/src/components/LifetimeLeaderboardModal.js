@@ -33,7 +33,9 @@ export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddres
 
       // Find user's position if they have an account
       if (account && lifetimeData.length > 0) {
-        findUserPosition(lifetimeData, account.toLowerCase())
+        findUserPosition(lifetimeData, account.toLowerCase(), setUserLifetimePosition)
+      } else {
+        setUserLifetimePosition(null) // Reset if no account or no data
       }
     } catch (error) {
       console.error("Error loading lifetime leaderboard:", error)
@@ -43,28 +45,27 @@ export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddres
     }
   }
 
-  const findUserPosition = (leaderboardData, userAddress) => {
+  const findUserPosition = (leaderboardData, userAddress, setUserPositionCallback) => {
     // Check if user is in top 10
     const topTenPosition = leaderboardData.findIndex((entry) => entry.address.toLowerCase() === userAddress)
 
     if (topTenPosition !== -1) {
       // User is in top 10
-      setUserLifetimePosition({
+      setUserPositionCallback({
         inTopTen: true,
         position: topTenPosition + 1,
         data: leaderboardData[topTenPosition],
       })
     } else {
       // User is not in top 10, we need to simulate their position
-      // For now, we'll set a placeholder - in a real implementation,
-      // you'd need to fetch the user's actual position from your backend
-      setUserLifetimePosition({
+      // In a real implementation, you'd fetch the user's actual position from your backend
+      setUserPositionCallback({
         inTopTen: false,
-        position: 11, // Placeholder - should come from backend
+        position: "N/A", // Placeholder for rank outside top 10
         data: {
-          rank: 11,
+          rank: "N/A",
           address: userAddress,
-          totalRewards: "0", // Placeholder - should come from backend
+          totalRewards: "0", // Placeholder - should come from backend if available
         },
       })
     }

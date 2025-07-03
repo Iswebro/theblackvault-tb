@@ -17,16 +17,19 @@ export default async function handler(req, res) {
     // Fetch both weekly and lifetime data from Redis
     const weeklyRaw = await redis.get("WeekLeaderboard")
     const lifetimeRaw = await redis.get("LifetimeLeaderboard")
+
+    // Parse the data, defaulting to an empty array if null
     const weekly = weeklyRaw ? JSON.parse(weeklyRaw) : []
     const lifetime = lifetimeRaw ? JSON.parse(lifetimeRaw) : []
+
+    console.log("Leaderboard data fetched successfully.")
 
     return res.status(200).json({
       weekly,
       lifetime,
     })
   } catch (error) {
-    console.error("Upstash Redis error:", error) // Added this line for better debugging
-    console.error("Error fetching leaderboard data:", error)
+    console.error("Error fetching leaderboard data from Upstash Redis:", error)
     return res.status(500).json({
       success: false,
       error: "Failed to fetch leaderboard data",

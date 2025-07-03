@@ -379,9 +379,10 @@ export default async function handler(req, res) {
     await redis.set("WeekLeaderboard", JSON.stringify(weeklyData.leaderboard))
     await redis.set("LifetimeLeaderboard", JSON.stringify(lifetimeData.leaderboard))
 
+    console.log("Data successfully stored in Upstash Redis")
+
     console.log("Weekly leaderboard generated:", weeklyData.leaderboard.length, "entries")
     console.log("Lifetime leaderboard generated:", lifetimeData.leaderboard.length, "entries")
-    console.log("Data successfully stored in Vercel KV")
 
     res.status(200).json({
       success: true,

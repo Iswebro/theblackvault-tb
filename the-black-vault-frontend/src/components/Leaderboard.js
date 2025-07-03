@@ -34,15 +34,22 @@ export default function Leaderboard({ account }) {
 
       // Find user's position if they have an account
       if (account && weeklyData.length > 0) {
-        findUserPosition(weeklyData, account.toLowerCase())
+        findUserPosition(weeklyData, account.toLowerCase(), setUserWeeklyPosition)
+      } else {
+        setUserWeeklyPosition(null) // Reset if no account or no data
       }
 
       // Week info might be part of the weekly data object if provided by backend
-      // For now, we'll use placeholders or infer from the data if not explicitly provided
+      // For now, we'll infer from the data or use placeholders
+      // Assuming the backend sends weekIndex and isPreviousWeek within the weekly array's first element or a separate key
+      const currentWeekIndex = data.weeklyInfo?.weekIndex || 0 // Assuming weeklyInfo is a separate object
+      const isPreviousWeek = data.weeklyInfo?.isPreviousWeek || false
+      const message = data.weeklyInfo?.message || "Weekly leaderboard will populate as users make referrals"
+
       setWeekInfo({
-        weekIndex: data.weekly?.weekIndex || 0, // Assuming backend sends weekIndex in weekly object
-        isPreviousWeek: data.weekly?.isPreviousWeek || false, // Assuming backend sends isPreviousWeek
-        message: data.weekly?.message || "Weekly leaderboard will populate as users make referrals",
+        weekIndex: currentWeekIndex,
+        isPreviousWeek: isPreviousWeek,
+        message: message,
       })
     } catch (error) {
       console.error("Error loading weekly leaderboard:", error)
@@ -52,28 +59,27 @@ export default function Leaderboard({ account }) {
     }
   }
 
-  const findUserPosition = (leaderboardData, userAddress) => {
+  const findUserPosition = (leaderboardData, userAddress, setUserPositionCallback) => {
     // Check if user is in top 10
     const topTenPosition = leaderboardData.findIndex((entry) => entry.address.toLowerCase() === userAddress)
 
     if (topTenPosition !== -1) {
       // User is in top 10
-      setUserWeeklyPosition({
+      setUserPositionCallback({
         inTopTen: true,
         position: topTenPosition + 1,
         data: leaderboardData[topTenPosition],
       })
     } else {
       // User is not in top 10, we need to simulate their position
-      // For now, we'll set a placeholder - in a real implementation,
-      // you'd need to fetch the user's actual position from your backend
-      setUserWeeklyPosition({
+      // In a real implementation, you'd fetch the user's actual position from your backend
+      setUserPositionCallback({
         inTopTen: false,
-        position: 11, // Placeholder - should come from backend
+        position: "N/A", // Placeholder for rank outside top 10
         data: {
-          rank: 11,
+          rank: "N/A",
           address: userAddress,
-          totalRewards: "0", // Placeholder - should come from backend
+          totalRewards: "0", // Placeholder - should come from backend if available
         },
       })
     }
