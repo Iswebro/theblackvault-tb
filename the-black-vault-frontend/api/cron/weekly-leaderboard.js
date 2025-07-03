@@ -70,8 +70,9 @@ const RPC_URL = process.env.REACT_APP_RPC_URL || "https://bsc-dataseed.binance.o
 const LAUNCH_TIMESTAMP = 1751500800 // 7am Brisbane time 3 July 2025
 const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
 
-// Vercel's /tmp directory for temporary storage
-const DATA_DIR = "/tmp/leaderboard-data"
+// New constants for chunking and delay
+const BLOCK_CHUNK_SIZE = 50000 // Process 50,000 blocks at a time
+const REQUEST_DELAY_MS = 100 // Delay 100ms between requests to avoid rate limits
 
 // Ethers.js setup
 const provider = new ethers.JsonRpcProvider(RPC_URL)
@@ -124,6 +125,33 @@ function calculateReferralReward(depositAmount) {
 }
 
 /**
+ * Helper function to fetch events in chunks
+ */
+async function fetchEventsInChunks(contract, filter, fromBlock, toBlock) {
+  let allEvents = []
+  let currentFromBlock = fromBlock
+
+  while (currentFromBlock <= toBlock) {
+    const currentToBlock = Math.min(currentFromBlock + BLOCK_CHUNK_SIZE - 1, toBlock)
+    console.log(`Fetching events from block ${currentFromBlock} to ${currentToBlock}`)
+    try {
+      const chunkEvents = await contract.queryFilter(filter, currentFromBlock, currentToBlock)
+      allEvents = allEvents.concat(chunkEvents)
+      console.log(`Fetched ${chunkEvents.length} events in this chunk. Total: ${allEvents.length}`)
+    } catch (error) {
+      console.error(`Error fetching events for chunk ${currentFromBlock}-${currentToBlock}:`, error)
+      throw error // Re-throw to stop aggregation if a chunk fails
+    }
+
+    currentFromBlock = currentToBlock + 1
+    if (currentFromBlock <= toBlock) {
+      await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY_MS)) // Delay between chunks
+    }
+  }
+  return allEvents
+}
+
+/**
  * Aggregate weekly leaderboard data
  */
 async function aggregateWeeklyLeaderboard(weekIndex) {
@@ -139,11 +167,11 @@ async function aggregateWeeklyLeaderboard(weekIndex) {
   console.log(`Scanning blocks ${fromBlock} to ${toBlock}`)
 
   try {
-    // Get all deposit events for this week
+    // Get all deposit events for this week using chunking
     const depositFilter = blackVaultContract.filters.Deposited()
-    const depositEvents = await blackVaultContract.queryFilter(depositFilter, fromBlock, toBlock)
+    const depositEvents = await fetchEventsInChunks(blackVaultContract, depositFilter, fromBlock, toBlock)
 
-    console.log(`Found ${depositEvents.length} deposit events in week ${weekIndex}`)
+    console.log(`Found ${depositEvents.length} total deposit events in week ${weekIndex}`)
 
     // Aggregate referral rewards by referrer
     const referrerRewards = {}
@@ -217,9 +245,10 @@ async function aggregateLifetimeLeaderboard() {
   console.log("Aggregating lifetime leaderboard...")
 
   try {
-    // Get all deposit events from genesis
+    // Get all deposit events from genesis using chunking
     const depositFilter = blackVaultContract.filters.Deposited()
-    const depositEvents = await blackVaultContract.queryFilter(depositFilter, 0)
+    const latestBlock = await provider.getBlockNumber()
+    const depositEvents = await fetchEventsInChunks(blackVaultContract, depositFilter, 0, latestBlock)
 
     console.log(`Found ${depositEvents.length} total deposit events`)
 
