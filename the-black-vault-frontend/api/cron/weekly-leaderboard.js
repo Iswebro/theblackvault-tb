@@ -334,64 +334,63 @@ async function aggregateLifetimeLeaderboard() {
 }
 
 export default async function handler(req, res) {
-  // Handle POST requests for cron job execution
-  if (req.method === "POST") {
+  // Only allow GET (Vercel Cron always fires GET)
+  if (req.method !== "GET") {
+    res.setHeader("Allow", ["GET", "POST"]) // Keep POST for manual triggers if desired
+    return res.status(405).json({ error: "Method not allowed; use GET" })
+  }
+
+  try {
+    console.log("Starting weekly leaderboard cron job...")
+
     // Verify this is a cron request (optional security measure)
     if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
       return res.status(401).json({ error: "Unauthorized" })
     }
 
-    try {
-      console.log("Starting weekly leaderboard cron job...")
+    const currentWeekIndex = getCurrentWeekIndex()
+    console.log(`Current week index: ${currentWeekIndex}`)
 
-      const currentWeekIndex = getCurrentWeekIndex()
-      console.log(`Current week index: ${currentWeekIndex}`)
-
-      // Guard against negative week index
-      if (currentWeekIndex < 0) {
-        console.log("Week index is negative, contract hasn't launched yet")
-        return res.status(200).json({
-          success: true,
-          message: "Contract hasn't launched yet - week index is negative",
-          weekIndex: currentWeekIndex,
-          timestamp: new Date().toISOString(),
-        })
-      }
-
-      // Generate current week leaderboard
-      const weeklyData = await aggregateWeeklyLeaderboard(currentWeekIndex)
-
-      // Generate lifetime leaderboard
-      const lifetimeData = await aggregateLifetimeLeaderboard()
-
-      // Store data in Upstash Redis
-      console.log("Storing leaderboard data in Upstash Redis...")
-      await redis.set("WeekLeaderboard", JSON.stringify(weeklyData.leaderboard))
-      await redis.set("LifetimeLeaderboard", JSON.stringify(lifetimeData.leaderboard))
-
-      console.log("Weekly leaderboard generated:", weeklyData.leaderboard.length, "entries")
-      console.log("Lifetime leaderboard generated:", lifetimeData.leaderboard.length, "entries")
-      console.log("Data successfully stored in Vercel KV")
-
-      res.status(200).json({
+    // Guard against negative week index
+    if (currentWeekIndex < 0) {
+      console.log("Week index is negative, contract hasn't launched yet")
+      return res.status(200).json({
         success: true,
-        message: "Leaderboard data generated and stored successfully",
+        message: "Contract hasn't launched yet - week index is negative",
         weekIndex: currentWeekIndex,
-        weeklyEntries: weeklyData.leaderboard.length,
-        lifetimeEntries: lifetimeData.leaderboard.length,
-        generatedAt: new Date().toISOString(),
-      })
-    } catch (error) {
-      console.error("Error in weekly leaderboard cron:", error)
-      res.status(500).json({
-        success: false,
-        error: error.message,
         timestamp: new Date().toISOString(),
       })
     }
-  } else {
-    // Method not allowed
-    res.setHeader("Allow", ["GET", "POST"])
-    res.status(405).json({ error: "Method not allowed" })
+
+    // Generate current week leaderboard
+    const weeklyData = await aggregateWeeklyLeaderboard(currentWeekIndex)
+
+    // Generate lifetime leaderboard
+    const lifetimeData = await aggregateLifetimeLeaderboard()
+
+    // Store data in Upstash Redis
+    console.log("Storing leaderboard data in Upstash Redis...")
+    await redis.set("WeekLeaderboard", JSON.stringify(weeklyData.leaderboard))
+    await redis.set("LifetimeLeaderboard", JSON.stringify(lifetimeData.leaderboard))
+
+    console.log("Weekly leaderboard generated:", weeklyData.leaderboard.length, "entries")
+    console.log("Lifetime leaderboard generated:", lifetimeData.leaderboard.length, "entries")
+    console.log("Data successfully stored in Vercel KV")
+
+    res.status(200).json({
+      success: true,
+      message: "Leaderboard data generated and stored successfully",
+      weekIndex: currentWeekIndex,
+      weeklyEntries: weeklyData.leaderboard.length,
+      lifetimeEntries: lifetimeData.leaderboard.length,
+      generatedAt: new Date().toISOString(),
+    })
+  } catch (error) {
+    console.error("Error in weekly leaderboard cron:", error)
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    })
   }
 }
