@@ -25,6 +25,7 @@ export default async function handler(req, res) {
       lifetime,
     })
   } catch (error) {
+    console.error("Upstash Redis error:", error) // Added this line for better debugging
     console.error("Error fetching leaderboard data:", error)
     return res.status(500).json({
       success: false,
