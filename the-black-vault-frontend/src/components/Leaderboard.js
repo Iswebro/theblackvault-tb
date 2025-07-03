@@ -3,13 +3,9 @@
 import { useState, useEffect, useCallback } from "react"
 
 export default function Leaderboard({ account }) {
-  const [weeklyLeaderboard, setWeeklyLeaderboard] = useState([])
-  const [lifetimeLeaderboard, setLifetimeLeaderboard] = useState([]) // New state for lifetime
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [weekInfo, setWeekInfo] = useState(null)
-  const [userWeeklyPosition, setUserWeeklyPosition] = useState(null)
-  const [userLifetimePosition, setUserLifetimePosition] = useState(null) // New state for user's lifetime position
+  const [data, setData] = useState({ weekly: [], lifetime: [] }) // Combined state for both leaderboards
 
   const formatAddress = useCallback((addr) => {
     if (!addr) return ""
@@ -34,8 +30,8 @@ export default function Leaderboard({ account }) {
         data: leaderboardData[topTenPosition],
       }
     } else {
-      // If user is not in top 10, we need to fetch their actual rank and rewards from backend
-      // For now, we'll use placeholders. In a real app, you'd have a separate API for this.
+      // If user is not in top 10, we need to simulate their position
+      // In a real implementation, you'd fetch the user's actual position from your backend
       return {
         inTopTen: false,
         position: "N/A", // Placeholder for rank outside top 10
@@ -50,62 +46,44 @@ export default function Leaderboard({ account }) {
 
   const loadLeaderboardData = useCallback(async () => {
     setLoading(true)
-    setError(null)
+    setError(null) // Clear previous errors on retry
 
     try {
-      const response = await fetch("/api/leaderboard")
-      const data = await response.json()
+      const res = await fetch("/api/leaderboard")
 
-      if (!response.ok) {
-        console.error("API response not OK:", data.error || response.statusText)
-        throw new Error(data.error || "Failed to load leaderboard data")
+      if (!res.ok) {
+        const errorText = await res.text() // Get raw error text for more details
+        console.error("API response not OK:", res.status, errorText)
+        throw new Error(`HTTP error! status: ${res.status} - ${errorText}`)
       }
 
-      const weeklyData = data.weekly || []
-      const lifetimeData = data.lifetime || []
-
-      setWeeklyLeaderboard(weeklyData)
-      setLifetimeLeaderboard(lifetimeData)
+      const json = await res.json()
+      setData(json)
+      setError(null) // Ensure error is null on success
 
       // Find user's position for weekly
-      if (account && weeklyData.length > 0) {
-        setUserWeeklyPosition(findUserPosition(weeklyData, account.toLowerCase()))
-      } else {
-        setUserWeeklyPosition(null)
+      if (account && json.weekly.length > 0) {
+        // Update userWeeklyPosition state
+        // This state was previously directly in Leaderboard.js, but now it's part of the data object
+        // and should be handled by the parent component if needed, or derived here.
+        // For this component, we'll derive it locally for rendering.
       }
 
       // Find user's position for lifetime
-      if (account && lifetimeData.length > 0) {
-        setUserLifetimePosition(findUserPosition(lifetimeData, account.toLowerCase()))
-      } else {
-        setUserLifetimePosition(null)
+      if (account && json.lifetime.length > 0) {
+        // Similar to weekly, derive locally or handle in parent.
       }
-
-      // Week info might be part of the weekly data object if provided by backend
-      // For now, we'll infer from the data or use placeholders
-      // The backend /api/leaderboard doesn't currently return weekInfo, so we'll use a generic message.
-      setWeekInfo({
-        weekIndex: 0, // Placeholder
-        isPreviousWeek: false, // Placeholder
-        message: "Weekly leaderboard will populate as users make referrals",
-      })
     } catch (err) {
-      console.error("Error loading leaderboard data:", err) // Log full error details
-      setError("Error loading leaderboard")
+      console.error("Leaderboard fetch error:", err)
+      setError(err.message || "Fetch failed")
     } finally {
       setLoading(false)
     }
-  }, [account, findUserPosition]) // Add findUserPosition to dependencies
+  }, [account])
 
   useEffect(() => {
     loadLeaderboardData()
   }, [loadLeaderboardData])
-
-  const getWeekDisplayText = () => {
-    if (!weekInfo) return "Loading..."
-    // If weekInfo had actual data, you'd use it here. For now, a generic message.
-    return "Current Week"
-  }
 
   const isUserEntry = (address) => {
     return account && address.toLowerCase() === account.toLowerCase()
@@ -125,7 +103,7 @@ export default function Leaderboard({ account }) {
         </div>
       ) : error ? (
         <div className="leaderboard-error">
-          <p className="error-message">{error}</p>
+          <p className="error-message">Error: {error}</p>
           <button className="retry-button" onClick={loadLeaderboardData}>
             Retry
           </button>
@@ -134,7 +112,9 @@ export default function Leaderboard({ account }) {
         <div className="leaderboard-empty">
           <p className="empty-message">No {title.toLowerCase()} data yet</p>
           <p className="empty-submessage">
-            {title.includes("Weekly") ? weekInfo?.message : "Leaderboard will populate as users make referrals"}
+            {title.includes("Weekly")
+              ? "Weekly leaderboard will populate as users make referrals"
+              : "Leaderboard will populate as users make referrals"}
           </p>
         </div>
       ) : (
@@ -178,13 +158,19 @@ export default function Leaderboard({ account }) {
     </div>
   )
 
+  // Derive user positions for rendering
+  const userWeeklyPosition =
+    account && data.weekly.length > 0 ? findUserPosition(data.weekly, account.toLowerCase()) : null
+  const userLifetimePosition =
+    account && data.lifetime.length > 0 ? findUserPosition(data.lifetime, account.toLowerCase()) : null
+
   return (
     <>
       {/* Weekly Leaderboard Section */}
-      {renderLeaderboardSection("Weekly Referral Leaderboard", weeklyLeaderboard, userWeeklyPosition)}
+      {renderLeaderboardSection("Weekly Referral Leaderboard", data.weekly, userWeeklyPosition)}
 
       {/* All-time Leaderboard Section */}
-      {renderLeaderboardSection("All-time Referral Leaderboard", lifetimeLeaderboard, userLifetimePosition)}
+      {renderLeaderboardSection("All-time Referral Leaderboard", data.lifetime, userLifetimePosition)}
 
       <p className="leaderboard-note">Leaderboards track referral rewards earned.</p>
     </>
