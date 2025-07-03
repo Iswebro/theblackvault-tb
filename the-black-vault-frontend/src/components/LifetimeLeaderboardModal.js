@@ -2,16 +2,17 @@
 
 import { useState, useEffect } from "react"
 
-export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddress, formatAmount }) {
+export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddress, formatAmount, account }) {
   const [leaderboard, setLeaderboard] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [userLifetimePosition, setUserLifetimePosition] = useState(null)
 
   useEffect(() => {
     if (isOpen) {
       loadLifetimeLeaderboard()
     }
-  }, [isOpen])
+  }, [isOpen, account])
 
   const loadLifetimeLeaderboard = async () => {
     setLoading(true)
@@ -19,20 +20,57 @@ export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddres
 
     try {
       // Use relative path for Vercel API routes
-      const response = await fetch("/api/leaderboard/lifetime")
+      const response = await fetch("/api/leaderboard")
       const data = await response.json()
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to load lifetime leaderboard")
       }
 
-      setLeaderboard(data.leaderboard || [])
+      const lifetimeData = data.lifetime || []
+      setLeaderboard(lifetimeData)
+
+      // Find user's position if they have an account
+      if (account && lifetimeData.length > 0) {
+        findUserPosition(lifetimeData, account.toLowerCase())
+      }
     } catch (error) {
       console.error("Error loading lifetime leaderboard:", error)
       setError(error.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  const findUserPosition = (leaderboardData, userAddress) => {
+    // Check if user is in top 10
+    const topTenPosition = leaderboardData.findIndex((entry) => entry.address.toLowerCase() === userAddress)
+
+    if (topTenPosition !== -1) {
+      // User is in top 10
+      setUserLifetimePosition({
+        inTopTen: true,
+        position: topTenPosition + 1,
+        data: leaderboardData[topTenPosition],
+      })
+    } else {
+      // User is not in top 10, we need to simulate their position
+      // For now, we'll set a placeholder - in a real implementation,
+      // you'd need to fetch the user's actual position from your backend
+      setUserLifetimePosition({
+        inTopTen: false,
+        position: 11, // Placeholder - should come from backend
+        data: {
+          rank: 11,
+          address: userAddress,
+          totalRewards: "0", // Placeholder - should come from backend
+        },
+      })
+    }
+  }
+
+  const isUserEntry = (address) => {
+    return account && address.toLowerCase() === account.toLowerCase()
   }
 
   if (!isOpen) return null
@@ -75,13 +113,38 @@ export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddres
                 <span className="leaderboard-address">Address</span>
                 <span className="leaderboard-metric">Total Rewards (USDT)</span>
               </div>
+
+              {/* Top 10 entries */}
               {leaderboard.map((entry) => (
-                <div key={entry.rank} className="lifetime-leaderboard-item">
+                <div
+                  key={entry.rank}
+                  className={`lifetime-leaderboard-item ${isUserEntry(entry.address) ? "user-entry" : ""}`}
+                >
                   <span className="leaderboard-rank">#{entry.rank}</span>
-                  <span className="leaderboard-address">{formatAddress(entry.address)}</span>
+                  <span className="leaderboard-address">
+                    {formatAddress(entry.address)}
+                    {isUserEntry(entry.address) && <span className="you-badge">YOU</span>}
+                  </span>
                   <span className="leaderboard-metric">{formatAmount(entry.totalRewards)}</span>
                 </div>
               ))}
+
+              {/* User's position if not in top 10 */}
+              {userLifetimePosition && !userLifetimePosition.inTopTen && (
+                <>
+                  <div className="leaderboard-separator">
+                    <span>...</span>
+                  </div>
+                  <div className="lifetime-leaderboard-item user-entry user-position">
+                    <span className="leaderboard-rank">#{userLifetimePosition.position}</span>
+                    <span className="leaderboard-address">
+                      {formatAddress(userLifetimePosition.data.address)}
+                      <span className="you-badge">YOU</span>
+                    </span>
+                    <span className="leaderboard-metric">{formatAmount(userLifetimePosition.data.totalRewards)}</span>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

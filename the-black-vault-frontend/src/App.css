@@ -968,7 +968,7 @@ body {
 
 .leaderboard-header {
   display: grid;
-  grid-template-columns: 0.5fr 2fr 1fr 1.5fr;
+  grid-template-columns: 0.5fr 2fr 1.5fr;
   gap: 0.5rem;
   padding-bottom: 0.75rem;
   margin-bottom: 0.75rem;
@@ -981,15 +981,80 @@ body {
 
 .leaderboard-item {
   display: grid;
-  grid-template-columns: 0.5fr 2fr 1fr 1.5fr;
+  grid-template-columns: 0.5fr 2fr 1.5fr;
   gap: 0.5rem;
   padding: 0.75rem 0;
   border-bottom: 1px dashed #303030;
   align-items: center;
+  transition: all 0.3s ease;
 }
 
 .leaderboard-item:last-child {
   border-bottom: none;
+}
+
+.leaderboard-item:hover {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+/* User entry highlighting */
+.leaderboard-item.user-entry {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 215, 0, 0.05)); /* Gold gradient */
+  border: 1px solid rgba(255, 215, 0, 0.3); /* Gold border */
+  border-radius: 8px;
+  padding: 0.75rem 0.5rem;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.2);
+  animation: userGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes userGlow {
+  0% {
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 25px rgba(255, 215, 0, 0.4);
+  }
+}
+
+.leaderboard-item.user-entry:hover {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 215, 0, 0.08));
+}
+
+/* User position separator */
+.leaderboard-separator {
+  text-align: center;
+  padding: 1rem 0;
+  color: #606060;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+/* You badge */
+.you-badge {
+  background: linear-gradient(135deg, #ffd700, #ffed4e); /* Gold gradient */
+  color: #000;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 0.2rem 0.5rem;
+  border-radius: 12px;
+  margin-left: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 .leaderboard-rank {
@@ -1000,6 +1065,8 @@ body {
 .leaderboard-address {
   font-family: "Courier New", monospace;
   color: #c0c0c0;
+  display: flex;
+  align-items: center;
 }
 
 .leaderboard-metric {
@@ -1487,7 +1554,7 @@ body {
   padding: 1rem 1.5rem;
   border-bottom: 1px solid #404040;
   align-items: center;
-  transition: background 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .lifetime-leaderboard-item:last-child {
@@ -1495,7 +1562,24 @@ body {
 }
 
 .lifetime-leaderboard-item:hover {
-  background: #1a1a1a;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+/* Apply user highlighting to lifetime leaderboard as well */
+.lifetime-leaderboard-item.user-entry {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 215, 0, 0.05));
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.2);
+  animation: userGlow 2s ease-in-out infinite alternate;
+}
+
+.lifetime-leaderboard-item.user-entry:hover {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 215, 0, 0.08));
 }
 
 .lifetime-leaderboard-item .leaderboard-rank {
@@ -1506,6 +1590,8 @@ body {
 .lifetime-leaderboard-item .leaderboard-address {
   font-family: "Courier New", monospace;
   color: #c0c0c0;
+  display: flex;
+  align-items: center;
 }
 
 .lifetime-leaderboard-item .leaderboard-metric {
@@ -1544,5 +1630,17 @@ body {
 
   .reset-info {
     font-size: 0.8rem;
+  }
+
+  .leaderboard-header,
+  .leaderboard-item {
+    grid-template-columns: 0.5fr 1.5fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .you-badge {
+    font-size: 0.6rem;
+    padding: 0.15rem 0.4rem;
+    margin-left: 0.25rem;
   }
 }
