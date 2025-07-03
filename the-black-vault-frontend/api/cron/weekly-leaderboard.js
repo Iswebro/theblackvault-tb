@@ -5,74 +5,39 @@ const BlackVaultABI = [
   {
     anonymous: false,
     inputs: [
-      {
-        indexed: true,
-        internalType: "address",
-        name: "user",
-        type: "address",
-      },
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "amount",
-        type: "uint256",
-      },
-      {
-        indexed: true,
-        internalType: "address",
-        name: "referrer",
-        type: "address",
-      },
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "cycle",
-        type: "uint256",
-      },
+      { indexed: true,  internalType: "address", name: "user",     type: "address" },
+      { indexed: false, internalType: "uint256", name: "amount",   type: "uint256" },
+      { indexed: true,  internalType: "address", name: "referrer", type: "address" },
+      { indexed: false, internalType: "uint256", name: "cycle",    type: "uint256" }
     ],
     name: "Deposited",
     type: "event",
   },
   {
     inputs: [
-      {
-        internalType: "address",
-        name: "referrer",
-        type: "address",
-      },
-      {
-        internalType: "address",
-        name: "referee",
-        type: "address",
-      },
+      { internalType: "address", name: "referrer", type: "address" },
+      { internalType: "address", name: "referee",  type: "address" }
     ],
     name: "getReferralBonusInfo",
     outputs: [
-      {
-        internalType: "uint256",
-        name: "bonusesUsed",
-        type: "uint256",
-      },
-      {
-        internalType: "uint256",
-        name: "bonusesRemaining",
-        type: "uint256",
-      },
+      { internalType: "uint256", name: "bonusesUsed",     type: "uint256" },
+      { internalType: "uint256", name: "bonusesRemaining", type: "uint256" }
     ],
     stateMutability: "view",
     type: "function",
-  },
+  }
 ]
 
 // Configuration
-const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS
-const RPC_URL = process.env.REACT_APP_RPC_URL || "https://bsc-dataseed.binance.org/"
-const LAUNCH_TIMESTAMP = 1751500800 // 7am Brisbane time 3 July 2025
-const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
+const CONTRACT_ADDRESS  = process.env.REACT_APP_CONTRACT_ADDRESS
+const RPC_URL           = process.env.REACT_APP_RPC_URL || "https://bsc-dataseed.binance.org/"
+const LAUNCH_TIMESTAMP  = 1751500800        // 7am Brisbane time 3 July 2025
+const WEEK_DURATION     = 7 * 24 * 60 * 60   // 7 days in seconds
+const GENESIS_BLOCK     = 52634693           // First deposit event block
 
 // Adjusted constants for chunking and delay
-const BLOCK_CHUNK_SIZE = 10000 // Process 10,000 blocks at a time (reduced from 50k)
-const REQUEST_DELAY_MS = 500 // Delay 500ms between requests (increased from 100ms)
+const BLOCK_CHUNK_SIZE  = 10000              // Process 10,000 blocks at a time
+const REQUEST_DELAY_MS  = 500                // Delay 500ms between requests
 
 // Ethers.js setup
 const provider = new ethers.JsonRpcProvider(RPC_URL)
@@ -91,7 +56,7 @@ function getCurrentWeekIndex() {
  */
 function getWeekBounds(weekIndex) {
   const weekStart = LAUNCH_TIMESTAMP + weekIndex * WEEK_DURATION
-  const weekEnd = weekStart + WEEK_DURATION
+  const weekEnd   = weekStart + WEEK_DURATION
   return { weekStart, weekEnd }
 }
 
@@ -100,16 +65,14 @@ function getWeekBounds(weekIndex) {
  */
 async function getBlockByTimestamp(timestamp) {
   try {
-    const currentBlock = await provider.getBlockNumber()
+    const currentBlock    = await provider.getBlockNumber()
     const currentBlockData = await provider.getBlock(currentBlock)
     const currentTimestamp = currentBlockData.timestamp
 
     // BSC has ~3 second block time
     const avgBlockTime = 3
-    const blockDiff = Math.floor((currentTimestamp - timestamp) / avgBlockTime)
-    const estimatedBlock = Math.max(0, currentBlock - blockDiff)
-
-    return estimatedBlock
+    const blockDiff    = Math.floor((currentTimestamp - timestamp) / avgBlockTime)
+    return Math.max(0, currentBlock - blockDiff)
   } catch (error) {
     console.error("Error estimating block:", error)
     return 0
@@ -140,14 +103,15 @@ async function fetchEventsInChunks(contract, filter, fromBlock, toBlock) {
       console.log(`Fetched ${chunkEvents.length} events in this chunk. Total: ${allEvents.length}`)
     } catch (error) {
       console.error(`Error fetching events for chunk ${currentFromBlock}-${currentToBlock}:`, error)
-      throw error // Re-throw to stop aggregation if a chunk fails
+      throw error
     }
 
     currentFromBlock = currentToBlock + 1
     if (currentFromBlock <= toBlock) {
-      await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY_MS)) // Delay between chunks
+      await new Promise(res => setTimeout(res, REQUEST_DELAY_MS))
     }
   }
+
   return allEvents
 }
 
@@ -159,10 +123,10 @@ async function aggregateWeeklyLeaderboard(weekIndex) {
 
   const { weekStart, weekEnd } = getWeekBounds(weekIndex)
   const fromBlock = await getBlockByTimestamp(weekStart)
-  const toBlock = await getBlockByTimestamp(weekEnd)
+  const toBlock   = await getBlockByTimestamp(weekEnd)
 
   console.log(
-    `Week ${weekIndex}: ${new Date(weekStart * 1000).toISOString()} to ${new Date(weekEnd * 1000).toISOString()}`,
+    `Week ${weekIndex}: ${new Date(weekStart * 1000).toISOString()} to ${new Date(weekEnd * 1000).toISOString()}`
   )
   console.log(`Scanning blocks ${fromBlock} to ${toBlock}`)
 
@@ -175,17 +139,14 @@ async function aggregateWeeklyLeaderboard(weekIndex) {
     const referrerRewards = {}
     for (const event of depositEvents) {
       const referrer = event.args.referrer.toLowerCase()
-      const referee = event.args.user.toLowerCase()
-      const amount = event.args.amount.toString()
+      const referee  = event.args.user.toLowerCase()
+      const amount   = event.args.amount.toString()
 
-      if (referrer === ethers.ZeroAddress.toLowerCase()) {
-        continue
-      }
+      if (referrer === ethers.ZeroAddress.toLowerCase()) continue
 
       try {
-        const bonusInfo = await blackVaultContract.getReferralBonusInfo(referrer, referee)
-        const bonusesUsed = Number.parseInt(bonusInfo.bonusesUsed.toString())
-
+        const bonusInfo   = await blackVaultContract.getReferralBonusInfo(referrer, referee)
+        const bonusesUsed = Number(bonusInfo.bonusesUsed.toString())
         if (bonusesUsed <= 3) {
           const rewardAmount = calculateReferralReward(amount)
           referrerRewards[referrer] = (referrerRewards[referrer] || BigInt(0)) + rewardAmount
@@ -199,17 +160,11 @@ async function aggregateWeeklyLeaderboard(weekIndex) {
       .map(([address, totalRewards]) => ({ address, totalRewards: totalRewards.toString() }))
       .sort((a, b) => BigInt(b.totalRewards) - BigInt(a.totalRewards))
       .slice(0, 10)
-      .map((entry, index) => ({ rank: index + 1, ...entry }))
+      .map((entry, idx) => ({ rank: idx + 1, ...entry }))
 
     console.log(`Week ${weekIndex} top referrers:`, leaderboard)
+    return { weekIndex, weekStart, weekEnd, generatedAt: Math.floor(Date.now() / 1000), leaderboard }
 
-    return {
-      weekIndex,
-      weekStart,
-      weekEnd,
-      generatedAt: Math.floor(Date.now() / 1000),
-      leaderboard,
-    }
   } catch (error) {
     console.error(`Error aggregating week ${weekIndex}:`, error)
     throw error
@@ -224,25 +179,29 @@ async function aggregateLifetimeLeaderboard() {
 
   try {
     const depositFilter = blackVaultContract.filters.Deposited()
-    const latestBlock = await provider.getBlockNumber()
-    const depositEvents = await fetchEventsInChunks(blackVaultContract, depositFilter, 0, latestBlock)
+    const latestBlock   = await provider.getBlockNumber()
+    console.log("Lifetime scan from", GENESIS_BLOCK, "to", latestBlock)
+
+    const depositEvents = await fetchEventsInChunks(
+      blackVaultContract,
+      depositFilter,
+      GENESIS_BLOCK,
+      latestBlock
+    )
 
     console.log(`Found ${depositEvents.length} total deposit events`)
 
     const referrerRewards = {}
     for (const event of depositEvents) {
       const referrer = event.args.referrer.toLowerCase()
-      const referee = event.args.user.toLowerCase()
-      const amount = event.args.amount.toString()
+      const referee  = event.args.user.toLowerCase()
+      const amount   = event.args.amount.toString()
 
-      if (referrer === ethers.ZeroAddress.toLowerCase()) {
-        continue
-      }
+      if (referrer === ethers.ZeroAddress.toLowerCase()) continue
 
       try {
-        const bonusInfo = await blackVaultContract.getReferralBonusInfo(referrer, referee)
-        const bonusesUsed = Number.parseInt(bonusInfo.bonusesUsed.toString())
-
+        const bonusInfo   = await blackVaultContract.getReferralBonusInfo(referrer, referee)
+        const bonusesUsed = Number(bonusInfo.bonusesUsed.toString())
         if (bonusesUsed <= 3) {
           const rewardAmount = calculateReferralReward(amount)
           referrerRewards[referrer] = (referrerRewards[referrer] || BigInt(0)) + rewardAmount
@@ -256,14 +215,11 @@ async function aggregateLifetimeLeaderboard() {
       .map(([address, totalRewards]) => ({ address, totalRewards: totalRewards.toString() }))
       .sort((a, b) => BigInt(b.totalRewards) - BigInt(a.totalRewards))
       .slice(0, 10)
-      .map((entry, index) => ({ rank: index + 1, ...entry }))
+      .map((entry, idx) => ({ rank: idx + 1, ...entry }))
 
     console.log("Lifetime top referrers:", leaderboard)
+    return { generatedAt: Math.floor(Date.now() / 1000), leaderboard }
 
-    return {
-      generatedAt: Math.floor(Date.now() / 1000),
-      leaderboard,
-    }
   } catch (error) {
     console.error("Error aggregating lifetime leaderboard:", error)
     throw error
@@ -277,23 +233,14 @@ export default async function handler(req, res) {
 
   try {
     console.log("Starting weekly leaderboard cron job...")
-
     const currentWeekIndex = getCurrentWeekIndex()
     console.log("Current Week Index:", currentWeekIndex)
 
-    const weeklyData = await aggregateWeeklyLeaderboard(currentWeekIndex)
+    const weeklyData   = await aggregateWeeklyLeaderboard(currentWeekIndex)
     const lifetimeData = await aggregateLifetimeLeaderboard()
 
-    console.log(
-      "Weekly leaderboard generated:",
-      weeklyData.leaderboard.length,
-      "entries",
-    )
-    console.log(
-      "Lifetime leaderboard generated:",
-      lifetimeData.leaderboard.length,
-      "entries",
-    )
+    console.log("Weekly leaderboard generated:", weeklyData.leaderboard.length, "entries")
+    console.log("Lifetime leaderboard generated:", lifetimeData.leaderboard.length, "entries")
 
     res.status(200).json({
       success: true,
