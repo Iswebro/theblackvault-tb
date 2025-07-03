@@ -1,162 +1,397 @@
 import { ethers } from "ethers"
+import { Redis } from "@upstash/redis"
 
-// --- ABI & Config ---------------------------------------------------
+const redis = new Redis({
+  url: process.env.REDIS_REST_URL,
+  token: process.env.REDIS_REST_TOKEN,
+})
+
+// Load ABI for the contract
 const BlackVaultABI = [
   {
     anonymous: false,
     inputs: [
-      { indexed: true,  internalType: "address", name: "user",     type: "address" },
-      { indexed: false, internalType: "uint256", name: "amount",   type: "uint256" },
-      { indexed: true,  internalType: "address", name: "referrer", type: "address" },
-      { indexed: false, internalType: "uint256", name: "cycle",    type: "uint256" }
+      {
+        indexed: true,
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "referrer",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "cycle",
+        type: "uint256",
+      },
     ],
     name: "Deposited",
     type: "event",
   },
   {
     inputs: [
-      { internalType: "address", name: "referrer", type: "address" },
-      { internalType: "address", name: "referee",  type: "address" }
+      {
+        internalType: "address",
+        name: "referrer",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "referee",
+        type: "address",
+      },
     ],
     name: "getReferralBonusInfo",
     outputs: [
-      { internalType: "uint256", name: "bonusesUsed",     type: "uint256" },
-      { internalType: "uint256", name: "bonusesRemaining", type: "uint256" }
+      {
+        internalType: "uint256",
+        name: "bonusesUsed",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "bonusesRemaining",
+        type: "uint256",
+      },
     ],
     stateMutability: "view",
     type: "function",
-  }
+  },
 ]
 
-const CONTRACT_ADDRESS  = process.env.REACT_APP_CONTRACT_ADDRESS
-const RPC_URL           = process.env.REACT_APP_RPC_URL 
-const LAUNCH_TIMESTAMP  = 1751500800           // 7am Brisbane 3 Jul 2025
-const WEEK_DURATION     = 7 * 24 * 60 * 60      // one week
-const GENESIS_BLOCK     = 52634693              // first deposit event 
-const BLOCK_CHUNK_SIZE  = 10000                 // chunk size
-const REQUEST_DELAY_MS  = 500                   // delay between chunks
+// Configuration
+const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS
+const RPC_URL = process.env.REACT_APP_RPC_URL // Use only this RPC endpoint
+const LAUNCH_TIMESTAMP = 1751500800 // 7am Brisbane time 3 July 2025
+const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
+const GENESIS_BLOCK = 52634693 // First deposit event block
 
-// --- Ethers setup --------------------------------------------------
+// Chunking and rate limiting constants
+const BLOCK_CHUNK_SIZE = 10000 // Process 10,000 blocks at a time
+const REQUEST_DELAY_MS = 500 // Delay 500ms between requests
+
+// Ethers.js setup
 const provider = new ethers.JsonRpcProvider(RPC_URL)
-const vault     = new ethers.Contract(CONTRACT_ADDRESS, BlackVaultABI, provider)
+const blackVaultContract = new ethers.Contract(CONTRACT_ADDRESS, BlackVaultABI, provider)
 
-// --- Helpers -------------------------------------------------------
+/**
+ * Get current week index based on Brisbane time
+ */
 function getCurrentWeekIndex() {
-  const now   = Math.floor(Date.now() / 1000)
-  return Math.floor((now - LAUNCH_TIMESTAMP) / WEEK_DURATION)
+  const nowTs = Math.floor(Date.now() / 1000)
+  return Math.floor((nowTs - LAUNCH_TIMESTAMP) / WEEK_DURATION)
 }
 
-function getWeekBounds(i) {
-  const start = LAUNCH_TIMESTAMP + i * WEEK_DURATION
-  return { weekStart: start, weekEnd: start + WEEK_DURATION }
+/**
+ * Get week start and end timestamps
+ */
+function getWeekBounds(weekIndex) {
+  const weekStart = LAUNCH_TIMESTAMP + weekIndex * WEEK_DURATION
+  const weekEnd = weekStart + WEEK_DURATION
+  return { weekStart, weekEnd }
 }
 
-async function getBlockByTimestamp(ts) {
-  const latest     = await provider.getBlockNumber()
-  const latestData = await provider.getBlock(latest)
-  const deltaSecs  = latestData.timestamp - ts
-  const estBlocks  = Math.floor(deltaSecs / 3)   // ~3s per BSC block
-  return Math.max(0, latest - estBlocks)
-}
+/**
+ * Convert timestamp to block number (approximate)
+ */
+async function getBlockByTimestamp(timestamp) {
+  try {
+    const currentBlock = await provider.getBlockNumber()
+    const currentBlockData = await provider.getBlock(currentBlock)
+    const currentTimestamp = currentBlockData.timestamp
 
-function calculateReferralReward(amount) {
-  return (BigInt(amount) * 10n) / 100n
-}
+    // BSC has ~3 second block time
+    const avgBlockTime = 3
+    const blockDiff = Math.floor((currentTimestamp - timestamp) / avgBlockTime)
+    const estimatedBlock = Math.max(0, currentBlock - blockDiff)
 
-async function fetchEventsInChunks(filter, fromB, toB) {
-  let all = [], start = fromB
-  while (start <= toB) {
-    const end = Math.min(start + BLOCK_CHUNK_SIZE - 1, toB)
-    console.log(`Fetching blocks ${start}-${end}`)
-    const evs = await vault.queryFilter(filter, start, end)
-    all = all.concat(evs)
-    start = end + 1
-    if (start <= toB) await new Promise(r=>setTimeout(r, REQUEST_DELAY_MS))
+    return estimatedBlock
+  } catch (error) {
+    console.error("Error estimating block:", error)
+    return 0
   }
-  return all
 }
 
-// --- Aggregators ---------------------------------------------------
-async function aggregateWeekly(weekIndex) {
+/**
+ * Calculate referral rewards for a deposit amount
+ */
+function calculateReferralReward(depositAmount) {
+  // 10% referral bonus
+  return (BigInt(depositAmount) * BigInt(10)) / BigInt(100)
+}
+
+/**
+ * Helper function to fetch events in chunks
+ */
+async function fetchEventsInChunks(contract, filter, fromBlock, toBlock) {
+  let allEvents = []
+  let currentFromBlock = fromBlock
+
+  while (currentFromBlock <= toBlock) {
+    const currentToBlock = Math.min(currentFromBlock + BLOCK_CHUNK_SIZE - 1, toBlock)
+    console.log(`Fetching events from block ${currentFromBlock} to ${currentToBlock}`)
+    try {
+      const chunkEvents = await contract.queryFilter(filter, currentFromBlock, currentToBlock)
+      allEvents = allEvents.concat(chunkEvents)
+      console.log(`Fetched ${chunkEvents.length} events in this chunk. Total: ${allEvents.length}`)
+    } catch (error) {
+      console.error(`Error fetching events for chunk ${currentFromBlock}-${currentToBlock}:`, error)
+      throw error // Re-throw to stop aggregation if a chunk fails
+    }
+
+    currentFromBlock = currentToBlock + 1
+    if (currentFromBlock <= toBlock) {
+      await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY_MS)) // Delay between chunks
+    }
+  }
+  return allEvents
+}
+
+/**
+ * Aggregate weekly leaderboard data
+ */
+async function aggregateWeeklyLeaderboard(weekIndex) {
+  console.log(`Aggregating weekly leaderboard for week ${weekIndex}...`)
+
   const { weekStart, weekEnd } = getWeekBounds(weekIndex)
   const fromBlock = await getBlockByTimestamp(weekStart)
-  const toBlock   = await getBlockByTimestamp(weekEnd)
-  console.log(`Week ${weekIndex} blocks ${fromBlock}-${toBlock}`)
-
-  const filter = vault.filters.Deposited()
-  const events = await fetchEventsInChunks(filter, fromBlock, toBlock)
-  console.log(`Found ${events.length} deposit events this week`)
-
-  const rewards = {}
-  for (const e of events) {
-    const r = e.args.referrer.toLowerCase()
-    const u = e.args.user.toLowerCase()
-    const a = e.args.amount.toString()
-    if (r === ethers.ZeroAddress.toLowerCase()) continue
-
-    const info = await vault.getReferralBonusInfo(r, u)
-    if (Number(info.bonusesUsed.toString()) <= 3) {
-      rewards[r] = (rewards[r] || 0n) + calculateReferralReward(a)
-    }
-  }
-
-  const sorted = Object.entries(rewards)
-    .map(([addr, amt]) => ({ address: addr, totalRewards: amt.toString() }))
-    .sort((a,b)=>BigInt(b.totalRewards)-BigInt(a.totalRewards))
-    .slice(0,10)
-    .map((e,i)=>({ rank: i+1, ...e }))
-
-  return sorted
-}
-
-async function aggregateLifetime() {
+  const toBlock = await getBlockByTimestamp(weekEnd)
   const latestBlock = await provider.getBlockNumber()
-  console.log(`Lifetime scan ${GENESIS_BLOCK}-${latestBlock}`)
 
-  const filter = vault.filters.Deposited()
-  const events = await fetchEventsInChunks(filter, GENESIS_BLOCK, latestBlock)
-  console.log(`Found ${events.length} total deposit events`)
+  // Debug logging
+  console.log(`Current weekIndex: ${weekIndex}`)
+  console.log(`fromBlock: ${fromBlock}`)
+  console.log(`toBlock: ${toBlock}`)
+  console.log(`latestBlock: ${latestBlock}`)
 
-  const rewards = {}
-  for (const e of events) {
-    const r = e.args.referrer.toLowerCase()
-    const u = e.args.user.toLowerCase()
-    const a = e.args.amount.toString()
-    if (r === ethers.ZeroAddress.toLowerCase()) continue
-
-    const info = await vault.getReferralBonusInfo(r, u)
-    if (Number(info.bonusesUsed.toString()) <= 3) {
-      rewards[r] = (rewards[r] || 0n) + calculateReferralReward(a)
-    }
-  }
-
-  return Object.entries(rewards)
-    .map(([addr, amt]) => ({ address: addr, totalRewards: amt.toString() }))
-    .sort((a,b)=>BigInt(b.totalRewards)-BigInt(a.totalRewards))
-    .slice(0,10)
-    .map((e,i)=>({ rank: i+1, ...e }))
-}
-
-// --- Handler -------------------------------------------------------
-export default async function handler(req, res) {
-  if (req.method !== "GET") {
-    return res.status(405).json({ error: "Only GET allowed" })
-  }
+  console.log(
+    `Week ${weekIndex}: ${new Date(weekStart * 1000).toISOString()} to ${new Date(weekEnd * 1000).toISOString()}`,
+  )
+  console.log(`Scanning blocks ${fromBlock} to ${toBlock}`)
 
   try {
-    const weekIndex  = getCurrentWeekIndex()
-    const weekly     = await aggregateWeekly(weekIndex)
-    const lifetime   = await aggregateLifetime()
+    // Get all deposit events for this week using chunking
+    const depositFilter = blackVaultContract.filters.Deposited()
+    const depositEvents = await fetchEventsInChunks(blackVaultContract, depositFilter, fromBlock, toBlock)
 
-    return res.status(200).json({
-      success: true,
+    console.log(`Found ${depositEvents.length} total deposit events in week ${weekIndex}`)
+
+    // Aggregate referral rewards by referrer
+    const referrerRewards = {}
+
+    for (const event of depositEvents) {
+      const referrer = event.args.referrer.toLowerCase()
+      const referee = event.args.user.toLowerCase()
+      const amount = event.args.amount.toString()
+
+      // Skip if no referrer (zero address)
+      if (referrer === ethers.ZeroAddress.toLowerCase()) {
+        continue
+      }
+
+      // Check if this referrer-referee pair is eligible for bonus
+      try {
+        const bonusInfo = await blackVaultContract.getReferralBonusInfo(referrer, referee)
+        const bonusesUsed = Number.parseInt(bonusInfo.bonusesUsed.toString())
+
+        // Only count if this would be within the first 3 bonuses
+        if (bonusesUsed <= 3) {
+          const rewardAmount = calculateReferralReward(amount)
+
+          if (!referrerRewards[referrer]) {
+            referrerRewards[referrer] = BigInt(0)
+          }
+
+          referrerRewards[referrer] += rewardAmount
+        }
+      } catch (error) {
+        console.error(`Error checking bonus info for ${referrer} -> ${referee}:`, error)
+      }
+    }
+
+    // Convert to array and sort
+    const leaderboard = Object.entries(referrerRewards)
+      .map(([address, totalRewards]) => ({
+        address,
+        totalRewards: totalRewards.toString(),
+      }))
+      .sort((a, b) => BigInt(b.totalRewards) - BigInt(a.totalRewards))
+      .slice(0, 10) // Top 10
+      .map((entry, index) => ({
+        rank: index + 1,
+        address: entry.address,
+        totalRewards: entry.totalRewards,
+      }))
+
+    console.log(`Week ${weekIndex} top referrers:`, leaderboard.length)
+
+    // Create the weekly data object
+    const weeklyData = {
       weekIndex,
-      weeklyLeaderboard: weekly,
-      lifetimeLeaderboard: lifetime,
-      generatedAt: new Date().toISOString(),
-    })
-  } catch (err) {
-    console.error("Leaderboard error:", err)
-    return res.status(500).json({ error: err.message })
+      weekStart,
+      weekEnd,
+      generatedAt: Math.floor(Date.now() / 1000),
+      leaderboard,
+    }
+
+    return weeklyData
+  } catch (error) {
+    console.error(`Error aggregating week ${weekIndex}:`, error)
+    throw error
+  }
+}
+
+/**
+ * Aggregate lifetime leaderboard data
+ */
+async function aggregateLifetimeLeaderboard() {
+  console.log("Aggregating lifetime leaderboard...")
+
+  try {
+    // Get all deposit events from GENESIS_BLOCK using chunking
+    const depositFilter = blackVaultContract.filters.Deposited()
+    const latestBlock = await provider.getBlockNumber()
+
+    // Debug logging
+    console.log(`Lifetime scan from GENESIS_BLOCK: ${GENESIS_BLOCK}`)
+    console.log(`latestBlock: ${latestBlock}`)
+
+    const depositEvents = await fetchEventsInChunks(blackVaultContract, depositFilter, GENESIS_BLOCK, latestBlock)
+
+    console.log(`Found ${depositEvents.length} total deposit events`)
+
+    // Aggregate referral rewards by referrer
+    const referrerRewards = {}
+
+    for (const event of depositEvents) {
+      const referrer = event.args.referrer.toLowerCase()
+      const referee = event.args.user.toLowerCase()
+      const amount = event.args.amount.toString()
+
+      // Skip if no referrer (zero address)
+      if (referrer === ethers.ZeroAddress.toLowerCase()) {
+        continue
+      }
+
+      // Check if this referrer-referee pair is eligible for bonus
+      try {
+        const bonusInfo = await blackVaultContract.getReferralBonusInfo(referrer, referee)
+        const bonusesUsed = Number.parseInt(bonusInfo.bonusesUsed.toString())
+
+        // Only count if this would be within the first 3 bonuses
+        if (bonusesUsed <= 3) {
+          const rewardAmount = calculateReferralReward(amount)
+
+          if (!referrerRewards[referrer]) {
+            referrerRewards[referrer] = BigInt(0)
+          }
+
+          referrerRewards[referrer] += rewardAmount
+        }
+      } catch (error) {
+        console.error(`Error checking bonus info for ${referrer} -> ${referee}:`, error)
+      }
+    }
+
+    // Convert to array and sort
+    const leaderboard = Object.entries(referrerRewards)
+      .map(([address, totalRewards]) => ({
+        address,
+        totalRewards: totalRewards.toString(),
+      }))
+      .sort((a, b) => BigInt(b.totalRewards) - BigInt(a.totalRewards))
+      .slice(0, 10) // Top 10
+      .map((entry, index) => ({
+        rank: index + 1,
+        address: entry.address,
+        totalRewards: entry.totalRewards,
+      }))
+
+    console.log(`Lifetime top referrers:`, leaderboard.length)
+
+    // Create the lifetime data object
+    const lifetimeData = {
+      generatedAt: Math.floor(Date.now() / 1000),
+      leaderboard,
+    }
+
+    return lifetimeData
+  } catch (error) {
+    console.error("Error aggregating lifetime leaderboard:", error)
+    throw error
+  }
+}
+
+export default async function handler(req, res) {
+  // Handle POST requests for cron job execution
+  if (req.method === "POST") {
+    // Verify this is a cron request (optional security measure)
+    if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+      return res.status(401).json({ error: "Unauthorized" })
+    }
+
+    try {
+      console.log("Starting weekly leaderboard cron job...")
+
+      const currentWeekIndex = getCurrentWeekIndex()
+      console.log(`Current week index: ${currentWeekIndex}`)
+
+      // Guard against negative week index
+      if (currentWeekIndex < 0) {
+        console.log("Week index is negative, contract hasn't launched yet")
+        return res.status(200).json({
+          success: true,
+          message: "Contract hasn't launched yet - week index is negative",
+          weekIndex: currentWeekIndex,
+          timestamp: new Date().toISOString(),
+        })
+      }
+
+      // Generate current week leaderboard
+      const weeklyData = await aggregateWeeklyLeaderboard(currentWeekIndex)
+
+      // Generate lifetime leaderboard
+      const lifetimeData = await aggregateLifetimeLeaderboard()
+
+      // Store data in Upstash Redis
+      console.log("Storing leaderboard data in Upstash Redis...")
+      await redis.set("WeekLeaderboard", JSON.stringify(weeklyData.leaderboard))
+      await redis.set("LifetimeLeaderboard", JSON.stringify(lifetimeData.leaderboard))
+
+      console.log("Weekly leaderboard generated:", weeklyData.leaderboard.length, "entries")
+      console.log("Lifetime leaderboard generated:", lifetimeData.leaderboard.length, "entries")
+      console.log("Data successfully stored in Vercel KV")
+
+      res.status(200).json({
+        success: true,
+        message: "Leaderboard data generated and stored successfully",
+        weekIndex: currentWeekIndex,
+        weeklyEntries: weeklyData.leaderboard.length,
+        lifetimeEntries: lifetimeData.leaderboard.length,
+        generatedAt: new Date().toISOString(),
+      })
+    } catch (error) {
+      console.error("Error in weekly leaderboard cron:", error)
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      })
+    }
+  } else {
+    // Method not allowed
+    res.setHeader("Allow", ["GET", "POST"])
+    res.status(405).json({ error: "Method not allowed" })
   }
 }

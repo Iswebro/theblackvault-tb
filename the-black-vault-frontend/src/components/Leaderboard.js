@@ -20,14 +20,15 @@ export default function Leaderboard({ account }) {
     setError(null)
 
     try {
-      // Use relative path for Vercel API routes
+      // Fetch from the consolidated /api/leaderboard endpoint
       const response = await fetch("/api/leaderboard")
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to load weekly leaderboard")
+        throw new Error(data.error || "Failed to load leaderboard data")
       }
 
+      // Extract weekly data from the combined response
       const weeklyData = data.weekly || []
       setWeeklyLeaderboard(weeklyData)
 
@@ -36,10 +37,12 @@ export default function Leaderboard({ account }) {
         findUserPosition(weeklyData, account.toLowerCase())
       }
 
+      // Week info might be part of the weekly data object if provided by backend
+      // For now, we'll use placeholders or infer from the data if not explicitly provided
       setWeekInfo({
-        weekIndex: data.weekIndex || 0,
-        isPreviousWeek: data.isPreviousWeek || false,
-        message: data.message,
+        weekIndex: data.weekly?.weekIndex || 0, // Assuming backend sends weekIndex in weekly object
+        isPreviousWeek: data.weekly?.isPreviousWeek || false, // Assuming backend sends isPreviousWeek
+        message: data.weekly?.message || "Weekly leaderboard will populate as users make referrals",
       })
     } catch (error) {
       console.error("Error loading weekly leaderboard:", error)

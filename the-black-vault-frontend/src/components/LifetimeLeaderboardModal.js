@@ -19,7 +19,7 @@ export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddres
     setError(null)
 
     try {
-      // Use relative path for Vercel API routes
+      // Fetch from the consolidated /api/leaderboard endpoint
       const response = await fetch("/api/leaderboard")
       const data = await response.json()
 
@@ -27,6 +27,7 @@ export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddres
         throw new Error(data.error || "Failed to load lifetime leaderboard")
       }
 
+      // Extract lifetime data from the combined response
       const lifetimeData = data.lifetime || []
       setLeaderboard(lifetimeData)
 
