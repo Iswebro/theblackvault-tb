@@ -12,9 +12,9 @@ const LAUNCH_TIMESTAMP = 1751500800 // 7am Brisbane time 3 July 2025
 const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
 const DATA_DIR = path.resolve("./leaderboard-data")
 
-// New constants for chunking and delay
-const BLOCK_CHUNK_SIZE = 50000 // Process 50,000 blocks at a time
-const REQUEST_DELAY_MS = 100 // Delay 100ms between requests to avoid rate limits
+// Adjusted constants for chunking and delay
+const BLOCK_CHUNK_SIZE = 10000 // Process 10,000 blocks at a time (reduced from 50k)
+const REQUEST_DELAY_MS = 500 // Delay 500ms between requests (increased from 100ms)
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -87,8 +87,8 @@ async function fetchEventsInChunks(contract, filter, fromBlock, toBlock) {
       console.log(`Fetched ${chunkEvents.length} events in this chunk. Total: ${allEvents.length}`)
     } catch (error) {
       console.error(`Error fetching events for chunk ${currentFromBlock}-${currentToBlock}:`, error)
-      // Implement retry logic or break if persistent error
-      throw error // Re-throw to stop aggregation if a chunk fails
+      // Re-throw to stop aggregation if a chunk fails, as retries might not help with persistent rate limits
+      throw error
     }
 
     currentFromBlock = currentToBlock + 1

@@ -70,9 +70,9 @@ const RPC_URL = process.env.REACT_APP_RPC_URL || "https://bsc-dataseed.binance.o
 const LAUNCH_TIMESTAMP = 1751500800 // 7am Brisbane time 3 July 2025
 const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
 
-// New constants for chunking and delay
-const BLOCK_CHUNK_SIZE = 50000 // Process 50,000 blocks at a time
-const REQUEST_DELAY_MS = 100 // Delay 100ms between requests to avoid rate limits
+// Adjusted constants for chunking and delay
+const BLOCK_CHUNK_SIZE = 10000 // Process 10,000 blocks at a time (reduced from 50k)
+const REQUEST_DELAY_MS = 500 // Delay 500ms between requests (increased from 100ms)
 
 // Ethers.js setup
 const provider = new ethers.JsonRpcProvider(RPC_URL)
