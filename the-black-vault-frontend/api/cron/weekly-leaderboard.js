@@ -1,5 +1,10 @@
 import { ethers } from "ethers"
-import { kv } from "@vercel/kv"
+import { Redis } from "@upstash/redis"
+
+const redis = new Redis({
+  url: process.env.REDIS_REST_URL,
+  token: process.env.REDIS_REST_TOKEN,
+})
 
 // Load ABI for the contract
 const BlackVaultABI = [
@@ -334,14 +339,17 @@ export default async function handler(req, res) {
     try {
       console.log("Fetching leaderboard data from Vercel KV...")
 
-      // Fetch both weekly and lifetime data from KV
-      const [weeklyData, lifetimeData] = await Promise.all([kv.get("WeekLeaderboard"), kv.get("LifetimeLeaderboard")])
+      // Fetch both weekly and lifetime data from Redis
+      const weeklyRaw = await redis.get("WeekLeaderboard")
+      const lifetimeRaw = await redis.get("LifetimeLeaderboard")
+      const weekly = weeklyRaw ? JSON.parse(weeklyRaw) : []
+      const lifetime = lifetimeRaw ? JSON.parse(lifetimeRaw) : []
 
       return res.status(200).json({
         success: true,
-        weekly: weeklyData || { leaderboard: [], message: "No weekly data available yet" },
-        lifetime: lifetimeData || { leaderboard: [], message: "No lifetime data available yet" },
-        lastUpdated: weeklyData?.generatedAt || lifetimeData?.generatedAt || null,
+        weekly: weekly.length > 0 ? weekly : { leaderboard: [], message: "No weekly data available yet" },
+        lifetime: lifetime.length > 0 ? lifetime : { leaderboard: [], message: "No lifetime data available yet" },
+        lastUpdated: new Date().toISOString(),
       })
     } catch (error) {
       console.error("Error fetching leaderboard data:", error)
@@ -383,9 +391,10 @@ export default async function handler(req, res) {
       // Generate lifetime leaderboard
       const lifetimeData = await aggregateLifetimeLeaderboard()
 
-      // Store data in Vercel KV
-      console.log("Storing leaderboard data in Vercel KV...")
-      await Promise.all([kv.set("WeekLeaderboard", weeklyData), kv.set("LifetimeLeaderboard", lifetimeData)])
+      // Store data in Upstash Redis
+      console.log("Storing leaderboard data in Upstash Redis...")
+      await redis.set("WeekLeaderboard", JSON.stringify(weeklyData.leaderboard))
+      await redis.set("LifetimeLeaderboard", JSON.stringify(lifetimeData.leaderboard))
 
       console.log("Weekly leaderboard generated:", weeklyData.leaderboard.length, "entries")
       console.log("Lifetime leaderboard generated:", lifetimeData.leaderboard.length, "entries")

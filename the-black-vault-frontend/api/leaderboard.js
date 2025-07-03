@@ -1,4 +1,9 @@
-import { kv } from "@vercel/kv"
+import { Redis } from "@upstash/redis"
+
+const redis = new Redis({
+  url: process.env.REDIS_REST_URL,
+  token: process.env.REDIS_REST_TOKEN,
+})
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -7,25 +12,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log("Fetching leaderboard data from Vercel KV...")
+    console.log("Fetching leaderboard data from Upstash Redis...")
 
-    // Fetch both weekly and lifetime data from KV
-    const [weeklyData, lifetimeData] = await Promise.all([kv.get("WeekLeaderboard"), kv.get("LifetimeLeaderboard")])
+    // Fetch both weekly and lifetime data from Redis
+    const weeklyRaw = await redis.get("WeekLeaderboard")
+    const lifetimeRaw = await redis.get("LifetimeLeaderboard")
+    const weekly = weeklyRaw ? JSON.parse(weeklyRaw) : []
+    const lifetime = lifetimeRaw ? JSON.parse(lifetimeRaw) : []
 
     return res.status(200).json({
-      success: true,
-      weekly: weeklyData || {
-        leaderboard: [],
-        message: "No weekly data available yet",
-        weekIndex: -1,
-        generatedAt: null,
-      },
-      lifetime: lifetimeData || {
-        leaderboard: [],
-        message: "No lifetime data available yet",
-        generatedAt: null,
-      },
-      lastUpdated: weeklyData?.generatedAt || lifetimeData?.generatedAt || null,
+      weekly,
+      lifetime,
     })
   } catch (error) {
     console.error("Error fetching leaderboard data:", error)
