@@ -472,6 +472,12 @@ body {
   border: 1px solid #606060;
 }
 
+.referral-stats .referral-value {
+  color: #e0e0e0; /* Light platinum */
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
 .referral-count {
   display: flex;
   align-items: center;
