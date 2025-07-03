@@ -226,7 +226,10 @@ async function aggregateWeeklyLeaderboard(weekIndex) {
         address,
         totalRewards: totalRewards.toString(),
       }))
-      .sort((a, b) => BigInt(b.totalRewards) - BigInt(a.totalRewards))
+      .sort((a, b) => {
+        const diff = BigInt(b.totalRewards) - BigInt(a.totalRewards)
+        return diff > 0 ? 1 : diff < 0 ? -1 : 0
+      })
       .slice(0, 10) // Top 10
       .map((entry, index) => ({
         rank: index + 1,
@@ -310,7 +313,10 @@ async function aggregateLifetimeLeaderboard() {
         address,
         totalRewards: totalRewards.toString(),
       }))
-      .sort((a, b) => BigInt(b.totalRewards) - BigInt(a.totalRewards))
+      .sort((a, b) => {
+        const diff = BigInt(b.totalRewards) - BigInt(a.totalRewards)
+        return diff > 0 ? 1 : diff < 0 ? -1 : 0
+      })
       .slice(0, 10) // Top 10
       .map((entry, index) => ({
         rank: index + 1,
