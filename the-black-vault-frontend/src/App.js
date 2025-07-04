@@ -41,6 +41,8 @@ export default function App() {
   const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false) // New state for troubleshooting modal
   const [dailyRate, setDailyRate] = useState("0")
   const [timeUntilNextCycle, setTimeUntilNextCycle] = useState(0) // New state for countdown
+  const [lastAccrualCycle, setLastAccrualCycle] = useState(0)
+  const [currentCycle, setCurrentCycle] = useState(0)
 
   const { toasts, addToast, removeToast } = useToast()
 
@@ -186,15 +188,22 @@ export default function App() {
       console.log("Fetched USDT allowance:", formatEther(allowance), "USDT")
 
       try {
+        const currentCycleValue = await vault.getCurrentCycle()
+        setCurrentCycle(Number(currentCycleValue.toString()))
+        console.log("Fetched current cycle:", currentCycleValue.toString())
+
         const vaultData = await vault.getUserVault(account)
         setRewards(formatEther(vaultData.pendingRewards))
         setVaultActiveAmount(formatEther(vaultData.activeAmount))
+        setLastAccrualCycle(Number(vaultData.lastAccrualCycle.toString()))
         console.log("Fetched vault rewards:", formatEther(vaultData.pendingRewards))
         console.log("Fetched vault active amount:", formatEther(vaultData.activeAmount))
+        console.log("Fetched last accrual cycle:", vaultData.lastAccrualCycle.toString())
       } catch (error) {
         console.log("No vault data found for user", error)
         setRewards("0")
         setVaultActiveAmount("0")
+        setLastAccrualCycle(0)
       }
 
       try {
@@ -259,6 +268,22 @@ export default function App() {
     }
   }
 
+  const loadRealtimeRewards = async () => {
+    if (!account) return
+
+    try {
+      const response = await fetch(`/api/user-rewards?address=${account}`)
+      const data = await response.json()
+
+      if (response.ok) {
+        setRewards(data.calculatedRewards)
+        console.log("Updated rewards from API:", data.calculatedRewards)
+      }
+    } catch (error) {
+      console.error("Error fetching realtime rewards:", error)
+    }
+  }
+
   // New useEffect for the countdown timer
   useEffect(() => {
     let timerInterval
@@ -281,6 +306,28 @@ export default function App() {
 
     return () => clearInterval(timerInterval)
   }, [account, timeUntilNextCycle]) // Depend on account and timeUntilNextCycle
+
+  useEffect(() => {
+    let rewardsInterval
+    if (account && Number.parseFloat(vaultActiveAmount) > 0) {
+      rewardsInterval = setInterval(loadRealtimeRewards, 10000) // 10 seconds
+    }
+
+    return () => clearInterval(rewardsInterval)
+  }, [account, vaultActiveAmount])
+
+  // Auto-refresh balance every 30 seconds if user has active deposits
+  useEffect(() => {
+    let refreshInterval
+    if (account && Number.parseFloat(vaultActiveAmount) > 0) {
+      refreshInterval = setInterval(() => {
+        console.log("Auto-refreshing balance...")
+        loadContractData()
+      }, 30000) // 30 seconds
+    }
+
+    return () => clearInterval(refreshInterval)
+  }, [account, vaultActiveAmount])
 
   const connectWallet = async () => {
     if (loading) return
@@ -418,6 +465,55 @@ export default function App() {
     }
   }
 
+  const microDeposit = async () => {
+    if (!contract || !usdtContract || txLoading) return
+
+    const microAmount = "0.01" // 0.01 USDT
+
+    if (Number.parseFloat(usdtBalance) < Number.parseFloat(microAmount)) {
+      addToast("Insufficient USDT balance for micro-deposit", "error")
+      return
+    }
+
+    if (Number.parseFloat(usdtAllowance) < Number.parseFloat(microAmount)) {
+      addToast("Please approve USDT first", "error")
+      return
+    }
+
+    setTxLoading(true)
+    try {
+      addToast("Processing micro-deposit to update rewards...", "info")
+
+      const value = parseEther(microAmount)
+      let tx
+
+      if (referralAddress && referralAddress !== "0x0000000000000000000000000000000000000000") {
+        tx = await contract.depositWithReferrer(value, referralAddress)
+      } else {
+        tx = await contract.deposit(value)
+      }
+
+      addToast("Transaction submitted. Waiting for confirmation...", "info")
+      const receipt = await tx.wait()
+
+      if (receipt.status === 1) {
+        addToast("Rewards updated successfully!", "success")
+        await loadContractData()
+      } else {
+        addToast("Micro-deposit failed on-chain", "error")
+      }
+    } catch (error) {
+      console.error("Micro-deposit failed:", error)
+      if (error && error.code === 4001) {
+        addToast("Transaction cancelled by user", "warning")
+      } else {
+        addToast("Micro-deposit failed. Please try again.", "error")
+      }
+    } finally {
+      setTxLoading(false)
+    }
+  }
+
   const withdraw = async () => {
     if (!contract || txLoading) return
 
@@ -468,6 +564,30 @@ export default function App() {
     }
   }
 
+  const updateRewardsBalance = async () => {
+    if (!contract || txLoading) return
+
+    setTxLoading(true)
+    try {
+      addToast("Updating rewards balance...", "info")
+
+      // Call getUserVault to get the latest data and trigger frontend update
+      const vaultData = await contract.getUserVault(account)
+      setRewards(formatEther(vaultData.pendingRewards))
+      setVaultActiveAmount(formatEther(vaultData.activeAmount))
+
+      // Also reload all contract data to ensure everything is fresh
+      await loadContractData()
+
+      addToast("Balance updated successfully!", "success")
+    } catch (error) {
+      console.error("Update balance failed:", error)
+      addToast("Failed to update balance. Please try again.", "error")
+    } finally {
+      setTxLoading(false)
+    }
+  }
+
   const disconnect = () => {
     isManuallyDisconnected.current = true
     setProvider(null)
@@ -509,6 +629,16 @@ export default function App() {
     const m = Math.floor((seconds % 3600) / 60)
     const s = seconds % 60
     return [h, m, s].map((v) => (v < 10 ? "0" + v : v)).join(":")
+  }
+
+  const calculatePendingRewards = () => {
+    if (Number.parseFloat(vaultActiveAmount) === 0 || dailyRate === "0") return "0"
+
+    const cyclesPassed = Math.max(0, currentCycle - lastAccrualCycle)
+    const calculatedRewards =
+      (Number.parseFloat(vaultActiveAmount) * Number.parseFloat(dailyRate) * cyclesPassed) / 1000
+
+    return Math.max(Number.parseFloat(rewards), calculatedRewards).toString()
   }
 
   const handleMaxDeposit = () => {
@@ -736,9 +866,25 @@ export default function App() {
               Vault Rewards
             </h3>
             <div className="reward-display">
-              <span className="reward-amount">{formatAmount(rewards)} USDT</span>
+              <span className="reward-amount">{formatAmount(calculatePendingRewards())} USDT</span>
               <span className="reward-label">Available to withdraw</span>
             </div>
+            <button
+              className="vault-button premium-button"
+              onClick={microDeposit}
+              disabled={txLoading || Number.parseFloat(usdtBalance) < 0.01}
+              style={{ marginBottom: "1rem", fontSize: "0.9rem" }}
+            >
+              {txLoading ? "Processing..." : "Update Rewards (0.01 USDT)"}
+            </button>
+            <button
+              className="vault-button premium-button"
+              onClick={updateRewardsBalance}
+              disabled={txLoading}
+              style={{ marginBottom: "1rem" }}
+            >
+              {txLoading ? "Updating..." : "Update Balance"}
+            </button>
             <button
               className="vault-button premium-button success"
               onClick={withdraw}
