@@ -465,55 +465,6 @@ export default function App() {
     }
   }
 
-  const microDeposit = async () => {
-    if (!contract || !usdtContract || txLoading) return
-
-    const microAmount = "0.01" // 0.01 USDT
-
-    if (Number.parseFloat(usdtBalance) < Number.parseFloat(microAmount)) {
-      addToast("Insufficient USDT balance for micro-deposit", "error")
-      return
-    }
-
-    if (Number.parseFloat(usdtAllowance) < Number.parseFloat(microAmount)) {
-      addToast("Please approve USDT first", "error")
-      return
-    }
-
-    setTxLoading(true)
-    try {
-      addToast("Processing micro-deposit to update rewards...", "info")
-
-      const value = parseEther(microAmount)
-      let tx
-
-      if (referralAddress && referralAddress !== "0x0000000000000000000000000000000000000000") {
-        tx = await contract.depositWithReferrer(value, referralAddress)
-      } else {
-        tx = await contract.deposit(value)
-      }
-
-      addToast("Transaction submitted. Waiting for confirmation...", "info")
-      const receipt = await tx.wait()
-
-      if (receipt.status === 1) {
-        addToast("Rewards updated successfully!", "success")
-        await loadContractData()
-      } else {
-        addToast("Micro-deposit failed on-chain", "error")
-      }
-    } catch (error) {
-      console.error("Micro-deposit failed:", error)
-      if (error && error.code === 4001) {
-        addToast("Transaction cancelled by user", "warning")
-      } else {
-        addToast("Micro-deposit failed. Please try again.", "error")
-      }
-    } finally {
-      setTxLoading(false)
-    }
-  }
-
   const withdraw = async () => {
     if (!contract || txLoading) return
 
@@ -869,14 +820,6 @@ export default function App() {
               <span className="reward-amount">{formatAmount(calculatePendingRewards())} USDT</span>
               <span className="reward-label">Available to withdraw</span>
             </div>
-            <button
-              className="vault-button premium-button"
-              onClick={microDeposit}
-              disabled={txLoading || Number.parseFloat(usdtBalance) < 0.01}
-              style={{ marginBottom: "1rem", fontSize: "0.9rem" }}
-            >
-              {txLoading ? "Processing..." : "Update Rewards (0.01 USDT)"}
-            </button>
             <button
               className="vault-button premium-button"
               onClick={updateRewardsBalance}
