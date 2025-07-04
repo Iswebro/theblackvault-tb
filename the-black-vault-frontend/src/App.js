@@ -742,7 +742,7 @@ export default function App() {
             <button
               className="vault-button premium-button success"
               onClick={withdraw}
-              disabled={txLoading || Number.parseFloat(rewards) === 0}
+              disabled={txLoading} // Changed from disabled={txLoading || Number.parseFloat(rewards) === 0}
             >
               {txLoading ? "Processing..." : "Withdraw Rewards"}
             </button>
