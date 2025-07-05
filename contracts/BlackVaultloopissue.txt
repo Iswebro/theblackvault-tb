@@ -2,11 +2,10 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title BlackVaultV2 - USDT Staking Vault (Phase 1 Launch - V2)
+ * @title BlackVault - USDT Staking Vault (Phase 1 Launch)
  * @dev A USDT staking vault where principal is permanently locked, only rewards can be withdrawn
  * @notice PRINCIPAL DEPOSITS ARE PERMANENT - ONLY REWARDS CAN BE WITHDRAWN
  * @notice This contract works with USDT (BEP-20) on Binance Smart Chain
- * @notice V2: Fixed getUserVault to return dynamic pending rewards calculation
  */
 
 interface IERC20 {
@@ -19,7 +18,7 @@ interface IERC20 {
     function decimals() external view returns (uint8);
 }
 
-contract BlackVaultV2 {
+contract BlackVault {
     // ============ IMMUTABLE CONSTANTS ============
     uint256 public constant DAILY_RATE = 25; // 2.5% daily (25 per 1000)
     uint256 public constant MAX_WITHDRAWAL_PER_CYCLE = 250 * 10**18; // 250 USDT (18 decimals)
@@ -103,9 +102,6 @@ contract BlackVaultV2 {
     event EmergencyUnpaused(
         address indexed by
     );
-
-    /// @dev Emitted when the owner tops up a user's pendingRewards in an emergency
-    event EmergencyRewarded(address indexed user, uint256 amount);
 
     // ============ MODIFIERS ============
     modifier onlyOwner() {
@@ -397,8 +393,6 @@ contract BlackVaultV2 {
 
     /**
      * @dev Get user's vault information
-     * @notice V2: Returns dynamic pending rewards calculation
-     * @notice Frontend should use this function, not raw vaults[user] mapping
      */
     function getUserVault(address user) external view returns (
         uint256 userTotalDeposited,
@@ -409,19 +403,10 @@ contract BlackVaultV2 {
         uint256 joinedCycle
     ) {
         UserVault storage vault = vaults[user];
-        
-        // V2: Compute dynamic pending = stored + missed cycles
-        uint256 owed = vault.pendingRewards;
-        uint256 currentCycle = getCurrentCycle();
-        if (currentCycle > vault.lastAccrualCycle) {
-            uint256 cyclesPassed = currentCycle - vault.lastAccrualCycle;
-            owed += (vault.activeAmount * DAILY_RATE * cyclesPassed) / 1000;
-        }
-        
         return (
             vault.totalDeposited,
             vault.activeAmount,
-            owed, // Dynamic pending rewards
+            vault.pendingRewards,
             vault.totalRewardsWithdrawn,
             vault.lastAccrualCycle,
             vault.joinedCycle
@@ -489,8 +474,6 @@ contract BlackVaultV2 {
 
     /**
      * @dev Calculate user's lifetime ROI
-     * @notice V2: Includes dynamic pending rewards in calculation
-     * @notice Frontend should use this function for accurate ROI display
      */
     function getUserROI(address user) external view returns (
         uint256 totalInvested,
@@ -505,14 +488,7 @@ contract BlackVaultV2 {
         uint256 userVaultTotalRewardsWithdrawn = vault.totalRewardsWithdrawn;
 
         totalInvested = userVaultTotalDeposited;
-        
-        // Include dynamic pending rewards
-        uint256 dynamicPending = vault.pendingRewards;
-        uint256 cc = getCurrentCycle();
-        if (cc > vault.lastAccrualCycle) {
-            dynamicPending += (vault.activeAmount * DAILY_RATE * (cc - vault.lastAccrualCycle)) / 1000;
-        }
-        totalEarned = userVaultTotalRewardsWithdrawn + refData.totalWithdrawn + dynamicPending + refData.availableRewards;
+        totalEarned = userVaultTotalRewardsWithdrawn + refData.totalWithdrawn + vault.pendingRewards + refData.availableRewards;
         
         if (totalInvested > 0) {
             roiPercentage = (totalEarned * 10000) / totalInvested; // ROI in basis points (100 = 1%)
@@ -563,19 +539,6 @@ contract BlackVaultV2 {
         require(USDT.allowance(msg.sender, address(this)) >= amount, "Insufficient USDT allowance");
         
         require(USDT.transferFrom(msg.sender, address(this), amount), "USDT transfer failed");
-    }
-
-    /**
-     * @dev Emergency micro-reward to top up a user's pendingRewards
-     *      without changing their activeAmount. Owner only.
-     * @notice This function is reentrancy-safe as it only modifies storage and emits events
-     * @notice No external calls are made, making reentrancy protection unnecessary
-     */
-    function emergencyReward(address user, uint256 amount) external onlyOwner notPaused {
-        require(amount > 0, "Amount must be > 0");
-        UserVault storage v = vaults[user];
-        v.pendingRewards += amount;
-        emit EmergencyRewarded(user, amount);
     }
 
     // ============ WEEKLY GIVEAWAY (disabled by default) ============

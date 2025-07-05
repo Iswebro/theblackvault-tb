@@ -11,7 +11,7 @@ import { config } from "./lib/config.ts"
 import HowItWorks from "./components/HowItWorks"
 import Leaderboard from "./components/Leaderboard"
 import ReferralsModal from "./components/ReferralsModal"
-import TroubleshootingModal from "./components/TroubleshootingModal" // New import
+import TroubleshootingModal from "./components/TroubleshootingModal"
 
 const CONTRACT_ADDRESS = config.contractAddress
 const USDT_ADDRESS = config.usdtAddress
@@ -38,11 +38,12 @@ export default function App() {
   const [vaultActiveAmount, setVaultActiveAmount] = useState("0")
   const [referralBonusesRemaining, setReferralBonusesRemaining] = useState(3)
   const [showReferralsModal, setShowReferralsModal] = useState(false)
-  const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false) // New state for troubleshooting modal
+  const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false)
   const [dailyRate, setDailyRate] = useState("0")
-  const [timeUntilNextCycle, setTimeUntilNextCycle] = useState(0) // New state for countdown
+  const [timeUntilNextCycle, setTimeUntilNextCycle] = useState(0)
   const [lastAccrualCycle, setLastAccrualCycle] = useState(0)
   const [currentCycle, setCurrentCycle] = useState(0)
+  const [showWarningBanner, setShowWarningBanner] = useState(true) // New state for warning banner
 
   const { toasts, addToast, removeToast } = useToast()
 
@@ -182,7 +183,7 @@ export default function App() {
       setUsdtBalance(formatEther(userUsdtBalance))
       console.log("Fetched USDT balance:", formatEther(userUsdtBalance))
 
-      // ... (rest of the function remains the same)
+      // Fetch USDT Allowance
       const allowance = await usdt.allowance(account, CONTRACT_ADDRESS)
       setUsdtAllowance(formatEther(allowance))
       console.log("Fetched USDT allowance:", formatEther(allowance), "USDT")
@@ -192,11 +193,12 @@ export default function App() {
         setCurrentCycle(Number(currentCycleValue.toString()))
         console.log("Fetched current cycle:", currentCycleValue.toString())
 
+        // ✅ CRITICAL: Use getUserVault() for dynamic calculation, not raw storage
         const vaultData = await vault.getUserVault(account)
-        setRewards(formatEther(vaultData.pendingRewards))
+        setRewards(formatEther(vaultData.pendingRewards)) // This includes dynamic calculation
         setVaultActiveAmount(formatEther(vaultData.activeAmount))
         setLastAccrualCycle(Number(vaultData.lastAccrualCycle.toString()))
-        console.log("Fetched vault rewards:", formatEther(vaultData.pendingRewards))
+        console.log("✅ Fetched vault rewards (dynamic):", formatEther(vaultData.pendingRewards))
         console.log("Fetched vault active amount:", formatEther(vaultData.activeAmount))
         console.log("Fetched last accrual cycle:", vaultData.lastAccrualCycle.toString())
       } catch (error) {
@@ -268,17 +270,15 @@ export default function App() {
     }
   }
 
+  // ✅ CRITICAL: Real-time rewards using getUserVault(), not raw storage
   const loadRealtimeRewards = async () => {
-    if (!account) return
+    if (!account || !contract) return
 
     try {
-      const response = await fetch(`/api/user-rewards?address=${account}`)
-      const data = await response.json()
-
-      if (response.ok) {
-        setRewards(data.calculatedRewards)
-        console.log("Updated rewards from API:", data.calculatedRewards)
-      }
+      // Use getUserVault() for dynamic calculation
+      const vaultData = await contract.getUserVault(account)
+      setRewards(formatEther(vaultData.pendingRewards)) // Dynamic calculation
+      console.log("✅ Updated rewards from getUserVault():", formatEther(vaultData.pendingRewards))
     } catch (error) {
       console.error("Error fetching realtime rewards:", error)
     }
@@ -330,6 +330,7 @@ export default function App() {
     return () => clearInterval(syncInterval)
   }, [account, contract]) // Depend on account and contract to ensure it runs when connected
 
+  // ✅ Real-time rewards update using getUserVault()
   useEffect(() => {
     let rewardsInterval
     if (account && Number.parseFloat(vaultActiveAmount) > 0) {
@@ -337,7 +338,7 @@ export default function App() {
     }
 
     return () => clearInterval(rewardsInterval)
-  }, [account, vaultActiveAmount])
+  }, [account, vaultActiveAmount, contract])
 
   // Auto-refresh balance every 30 seconds if user has active deposits
   useEffect(() => {
@@ -545,9 +546,9 @@ export default function App() {
     try {
       addToast("Updating rewards balance...", "info")
 
-      // Call getUserVault to get the latest data and trigger frontend update
+      // ✅ Use getUserVault() to get the latest dynamic data
       const vaultData = await contract.getUserVault(account)
-      setRewards(formatEther(vaultData.pendingRewards))
+      setRewards(formatEther(vaultData.pendingRewards)) // Dynamic calculation
       setVaultActiveAmount(formatEther(vaultData.activeAmount))
 
       // Also reload all contract data to ensure everything is fresh
@@ -605,14 +606,10 @@ export default function App() {
     return [h, m, s].map((v) => (v < 10 ? "0" + v : v)).join(":")
   }
 
+  // ✅ CRITICAL: Use getUserVault() dynamic calculation, not manual calculation
   const calculatePendingRewards = () => {
-    if (Number.parseFloat(vaultActiveAmount) === 0 || dailyRate === "0") return "0"
-
-    const cyclesPassed = Math.max(0, currentCycle - lastAccrualCycle)
-    const calculatedRewards =
-      (Number.parseFloat(vaultActiveAmount) * Number.parseFloat(dailyRate) * cyclesPassed) / 1000
-
-    return Math.max(Number.parseFloat(rewards), calculatedRewards).toString()
+    // The rewards state is already set from getUserVault() which includes dynamic calculation
+    return rewards
   }
 
   const handleMaxDeposit = () => {
@@ -640,6 +637,26 @@ export default function App() {
     return (
       <div className="app-container">
         <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+        {/* Warning Banner - Show even when not connected */}
+        {showWarningBanner && (
+          <div className="warning-banner">
+            <div className="warning-content">
+              <span className="warning-icon">🚨</span>
+              <span className="warning-text">
+                Do not deposit into Black Vault right now. Rewards aren't updating automatically due to a contract
+                issue. Please hold off until we deploy V2.0 with a permanent fix.
+              </span>
+              <button
+                className="warning-close"
+                onClick={() => setShowWarningBanner(false)}
+                aria-label="Dismiss warning"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="connect-screen">
           <div className="connect-content">
@@ -695,6 +712,22 @@ export default function App() {
       </div>
 
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+      {/* Warning Banner - Show when connected */}
+      {showWarningBanner && (
+        <div className="warning-banner">
+          <div className="warning-content">
+            <span className="warning-icon">🚨</span>
+            <span className="warning-text">
+              Do not deposit into Black Vault right now. Rewards aren't updating automatically due to a contract issue.
+              Please hold off until we deploy V2.0 with a permanent fix.
+            </span>
+            <button className="warning-close" onClick={() => setShowWarningBanner(false)} aria-label="Dismiss warning">
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="main-interface">
         {/* Header */}
@@ -885,11 +918,11 @@ export default function App() {
             </div>
 
             <button
-              className="vault-button premium-button purple"
+              className="vault-button premium-button success"
               onClick={withdrawReferral}
               disabled={txLoading || Number.parseFloat(referralRewards) === 0}
             >
-              {txLoading ? "Processing..." : "Withdraw Referral"}
+              {txLoading ? "Processing..." : "Withdraw Referral Rewards"}
             </button>
           </div>
 
@@ -899,72 +932,63 @@ export default function App() {
               <span className="card-icon">📊</span>
               Transaction History
             </h3>
-
-            {history.length === 0 ? (
-              <div className="empty-state">
-                <p className="empty-message">No transactions yet</p>
-                <p className="empty-submessage">Your deposits and withdrawals will appear here</p>
-              </div>
-            ) : (
-              <div className="history-list">
-                {history.map((item, index) => (
+            <div className="history-list">
+              {history.length === 0 ? (
+                <p className="no-history">No transactions yet</p>
+              ) : (
+                history.slice(0, 5).map((tx, index) => (
                   <div key={index} className="history-item">
                     <div className="history-info">
-                      <div className={`history-dot ${item.type.toLowerCase().replace(/\s+/g, "-")}`}></div>
-                      <div className="history-details">
-                        <span className="history-type">{item.type}</span>
-                        <span className="history-time">
-                          {item.time.toLocaleDateString()} {item.time.toLocaleTimeString()}
-                        </span>
-                      </div>
+                      <span className="history-type">{tx.type}</span>
+                      <span className="history-amount">{formatAmount(tx.amount)} USDT</span>
                     </div>
-                    <div className="history-amount">
-                      <span className="amount-value">{formatAmount(item.amount)} USDT</span>
+                    <div className="history-meta">
+                      <span className="history-time">{tx.time.toLocaleDateString()}</span>
                       <a
-                        href={`${process.env.REACT_APP_BLOCK_EXPLORER}/tx/${item.txHash}`}
+                        href={`${config.blockExplorer}/tx/${tx.txHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="view-tx"
+                        className="history-link"
                       >
                         View
                       </a>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Weekly Giveaway Banner */}
-          <div className="vault-card premium-card">
-            <div className="text-center p-4 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black rounded-lg mb-4">
-              🎉 Weekly USDT Giveaway for Top 3 referrers is coming soon! Stay Tuned.
+                ))
+              )}
             </div>
           </div>
 
-          {/* Leaderboard Section - Pass account prop */}
-          <Leaderboard account={account} />
+          {/* Leaderboard */}
+          <Leaderboard userAddress={account} />
 
-          {/* How It Works Section */}
+          {/* How It Works */}
           <HowItWorks />
 
-          {/* Disconnect Button */}
-          <div className="disconnect-section">
-            <button onClick={disconnect} className="disconnect-button">
-              Disconnect Wallet
-            </button>
+          {/* Footer */}
+          <div className="footer">
+            <div className="footer-actions">
+              <button className="footer-button" onClick={() => setShowTroubleshootingModal(true)}>
+                Troubleshooting
+              </button>
+              <button className="footer-button" onClick={disconnect}>
+                Disconnect
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Referrals Modal */}
+      {/* Modals */}
       <ReferralsModal
         isOpen={showReferralsModal}
         onClose={() => setShowReferralsModal(false)}
-        contract={contract}
-        account={account}
-        formatAddress={formatAddress}
+        userAddress={account}
+        referralLink={getReferralLink()}
+        onCopyLink={copyReferralLink}
       />
+
+      <TroubleshootingModal isOpen={showTroubleshootingModal} onClose={() => setShowTroubleshootingModal(false)} />
     </div>
   )
 }
