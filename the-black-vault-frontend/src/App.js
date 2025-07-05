@@ -307,6 +307,29 @@ export default function App() {
     return () => clearInterval(timerInterval)
   }, [account, timeUntilNextCycle]) // Depend on account and timeUntilNextCycle
 
+  // Add a new useEffect hook for periodic re-synchronization
+  useEffect(() => {
+    let syncInterval
+    if (account) {
+      // Re-sync every 30 seconds to correct for any local clock drift
+      syncInterval = setInterval(() => {
+        console.log("Periodically re-syncing time until next cycle...")
+        if (contract) {
+          contract
+            .getTimeUntilNextCycle()
+            .then((timeRemaining) => {
+              setTimeUntilNextCycle(Number(timeRemaining.toString()))
+            })
+            .catch((error) => {
+              console.error("Error re-syncing time until next cycle:", error)
+            })
+        }
+      }, 30000) // Every 30 seconds
+    }
+
+    return () => clearInterval(syncInterval)
+  }, [account, contract]) // Depend on account and contract to ensure it runs when connected
+
   useEffect(() => {
     let rewardsInterval
     if (account && Number.parseFloat(vaultActiveAmount) > 0) {
