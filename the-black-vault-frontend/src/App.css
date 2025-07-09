@@ -200,6 +200,18 @@ body {
   border-color: #a0a0a0; /* Lighter grey border */
 }
 
+.premium-button.warning {
+  background: #f59e0b; /* Amber/orange background */
+  border-color: #d97706; /* Darker amber border */
+  box-shadow: 0 0 40px rgba(245, 158, 11, 0.3), 0 10px 40px rgba(217, 119, 6, 0.4), inset 0 1px 0
+    rgba(255, 255, 255, 0.1);
+}
+
+.premium-button.warning:hover {
+  background: #f97316; /* Slightly more orange on hover */
+  border-color: #ea580c; /* Even darker border on hover */
+}
+
 /* New discreet button style */
 .discreet-button {
   background: none;

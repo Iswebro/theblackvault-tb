@@ -12,6 +12,7 @@ import HowItWorks from "./components/HowItWorks"
 import Leaderboard from "./components/Leaderboard"
 import ReferralsModal from "./components/ReferralsModal"
 import TroubleshootingModal from "./components/TroubleshootingModal"
+import BlackVaultV1Abi from "./contract/BlackVaultV1ABI.json"
 
 const CONTRACT_ADDRESS = config.contractAddress
 const USDT_ADDRESS = config.usdtAddress
@@ -22,6 +23,7 @@ export default function App() {
   const [account, setAccount] = useState("")
   const [contract, setContract] = useState(null)
   const [usdtContract, setUsdtContract] = useState(null)
+  const [oldVaultContract, setOldVaultContract] = useState(null)
 
   const [balance, setBalance] = useState("0")
   const [usdtBalance, setUsdtBalance] = useState("0")
@@ -115,6 +117,10 @@ export default function App() {
       const usdt = new Contract(USDT_ADDRESS, ERC20Abi, signer)
       setUsdtContract(usdt)
       console.log("USDT Contract initialized.")
+
+      const oldVault = new Contract(process.env.REACT_APP_OLD_CONTRACT_ADDRESS, BlackVaultV1Abi, signer)
+      setOldVaultContract(oldVault)
+      console.log("BlackVault V1 Contract initialized.")
 
       await loadContractData(vault, usdt)
     } catch (error) {
@@ -453,6 +459,56 @@ export default function App() {
     }
   }
 
+  const withdrawOldVaultRewards = async () => {
+    if (!oldVaultContract || txLoading) return
+
+    setTxLoading(true)
+    try {
+      addToast("Withdrawing V1 vault rewards...", "info")
+      const tx = await oldVaultContract.withdrawRewards()
+
+      addToast("Transaction submitted. Waiting for confirmation...", "info")
+      await tx.wait()
+
+      addToast("V1 vault rewards withdrawn!", "success")
+      await loadContractData()
+    } catch (error) {
+      console.error("V1 vault withdraw failed:", error)
+      if (error && error.code === 4001) {
+        addToast("Transaction cancelled by user", "warning")
+      } else {
+        addToast("V1 vault withdrawal failed. Please try again.", "error")
+      }
+    } finally {
+      setTxLoading(false)
+    }
+  }
+
+  const withdrawOldReferralRewards = async () => {
+    if (!oldVaultContract || txLoading) return
+
+    setTxLoading(true)
+    try {
+      addToast("Withdrawing V1 referral rewards...", "info")
+      const tx = await oldVaultContract.withdrawReferralRewards()
+
+      addToast("Transaction submitted. Waiting for confirmation...", "info")
+      await tx.wait()
+
+      addToast("V1 referral rewards withdrawn!", "success")
+      await loadContractData()
+    } catch (error) {
+      console.error("V1 referral withdraw failed:", error)
+      if (error && error.code === 4001) {
+        addToast("Transaction cancelled by user", "warning")
+      } else {
+        addToast("V1 referral withdrawal failed. Please try again.", "error")
+      }
+    } finally {
+      setTxLoading(false)
+    }
+  }
+
   const disconnect = () => {
     isManuallyDisconnected.current = true
     setProvider(null)
@@ -460,6 +516,7 @@ export default function App() {
     setAccount("")
     setContract(null)
     setUsdtContract(null)
+    setOldVaultContract(null)
     setBalance("0")
     setUsdtBalance("0")
     setUsdtAllowance("0")
@@ -711,6 +768,13 @@ export default function App() {
             >
               {txLoading ? "Processing..." : "Withdraw Rewards"}
             </button>
+            <button
+              className="vault-button premium-button warning"
+              onClick={withdrawOldVaultRewards}
+              disabled={!oldVaultContract || txLoading}
+            >
+              {txLoading ? "Processing..." : "Withdraw V1 Vault Rewards"}
+            </button>
           </div>
 
           <div className="vault-card premium-card">
@@ -742,6 +806,13 @@ export default function App() {
               disabled={txLoading || Number.parseFloat(referralRewards) === 0}
             >
               {txLoading ? "Processing..." : "Withdraw Referral"}
+            </button>
+            <button
+              className="vault-button premium-button warning"
+              onClick={withdrawOldReferralRewards}
+              disabled={!oldVaultContract || txLoading}
+            >
+              {txLoading ? "Processing..." : "Withdraw V1 Referral Rewards"}
             </button>
           </div>
 
