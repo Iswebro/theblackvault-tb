@@ -475,6 +475,12 @@ export default function App() {
       return
     }
 
+    // Check if user has rewards before attempting withdrawal
+    if (Number.parseFloat(rewards) === 0) {
+      addToast("No rewards available to withdraw", "warning")
+      return
+    }
+
     console.log("✅ Proceeding with withdrawal...")
 
     setTxLoading(true)
@@ -487,6 +493,26 @@ export default function App() {
       // Check if function exists
       if (!contract.withdrawRewards) {
         throw new Error("withdrawRewards function not found on contract")
+      }
+
+      // First try to estimate gas to catch revert early
+      try {
+        await contract.withdrawRewards.estimateGas()
+      } catch (estimateError) {
+        console.error("Gas estimation failed:", estimateError)
+
+        // Handle common revert reasons
+        if (
+          estimateError.message.includes("missing revert data") ||
+          estimateError.message.includes("CALL_EXCEPTION") ||
+          estimateError.code === "CALL_EXCEPTION"
+        ) {
+          throw new Error("No rewards available to withdraw")
+        } else if (estimateError.reason) {
+          throw new Error(estimateError.reason)
+        } else {
+          throw new Error("Transaction would fail - likely no rewards available")
+        }
       }
 
       const tx = await contract.withdrawRewards()
@@ -507,12 +533,28 @@ export default function App() {
         reason: error.reason,
       })
 
+      // User-friendly error handling
       if (error && error.code === 4001) {
         addToast("Transaction cancelled by user", "warning")
+      } else if (
+        error.message.includes("No rewards available") ||
+        error.message.includes("missing revert data") ||
+        error.message.includes("CALL_EXCEPTION")
+      ) {
+        addToast("No rewards available to withdraw", "warning")
       } else if (error.reason) {
         addToast(`Withdrawal failed: ${error.reason}`, "error")
       } else if (error.message) {
-        addToast(`Withdrawal failed: ${error.message}`, "error")
+        // Clean up technical error messages for mobile
+        let cleanMessage = error.message
+        if (cleanMessage.includes("missing revert data")) {
+          cleanMessage = "No rewards available to withdraw"
+        } else if (cleanMessage.includes("CALL_EXCEPTION")) {
+          cleanMessage = "Transaction failed - likely no rewards available"
+        } else if (cleanMessage.length > 100) {
+          cleanMessage = "Withdrawal failed - please try again"
+        }
+        addToast(`Withdrawal failed: ${cleanMessage}`, "error")
       } else {
         addToast("Withdrawal failed. Please try again.", "error")
       }
@@ -539,6 +581,12 @@ export default function App() {
       return
     }
 
+    // Check if user has referral rewards before attempting withdrawal
+    if (Number.parseFloat(referralRewards) === 0) {
+      addToast("No referral rewards available to withdraw", "warning")
+      return
+    }
+
     console.log("✅ Proceeding with referral withdrawal...")
 
     setTxLoading(true)
@@ -551,6 +599,26 @@ export default function App() {
       // Check if function exists
       if (!contract.withdrawReferralRewards) {
         throw new Error("withdrawReferralRewards function not found on contract")
+      }
+
+      // First try to estimate gas to catch revert early
+      try {
+        await contract.withdrawReferralRewards.estimateGas()
+      } catch (estimateError) {
+        console.error("Gas estimation failed:", estimateError)
+
+        // Handle common revert reasons
+        if (
+          estimateError.message.includes("missing revert data") ||
+          estimateError.message.includes("CALL_EXCEPTION") ||
+          estimateError.code === "CALL_EXCEPTION"
+        ) {
+          throw new Error("No referral rewards available to withdraw")
+        } else if (estimateError.reason) {
+          throw new Error(estimateError.reason)
+        } else {
+          throw new Error("Transaction would fail - likely no referral rewards available")
+        }
       }
 
       const tx = await contract.withdrawReferralRewards()
@@ -571,12 +639,28 @@ export default function App() {
         reason: error.reason,
       })
 
+      // User-friendly error handling
       if (error && error.code === 4001) {
         addToast("Transaction cancelled by user", "warning")
+      } else if (
+        error.message.includes("No referral rewards available") ||
+        error.message.includes("missing revert data") ||
+        error.message.includes("CALL_EXCEPTION")
+      ) {
+        addToast("No referral rewards available to withdraw", "warning")
       } else if (error.reason) {
         addToast(`Referral withdrawal failed: ${error.reason}`, "error")
       } else if (error.message) {
-        addToast(`Referral withdrawal failed: ${error.message}`, "error")
+        // Clean up technical error messages for mobile
+        let cleanMessage = error.message
+        if (cleanMessage.includes("missing revert data")) {
+          cleanMessage = "No referral rewards available to withdraw"
+        } else if (cleanMessage.includes("CALL_EXCEPTION")) {
+          cleanMessage = "Transaction failed - likely no referral rewards available"
+        } else if (cleanMessage.length > 100) {
+          cleanMessage = "Referral withdrawal failed - please try again"
+        }
+        addToast(`Referral withdrawal failed: ${cleanMessage}`, "error")
       } else {
         addToast("Referral withdrawal failed. Please try again.", "error")
       }
