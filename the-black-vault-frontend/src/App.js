@@ -110,17 +110,31 @@ export default function App() {
   const initializeContracts = async () => {
     if (!signer) return
     try {
+      console.log("Initializing contracts...")
+      console.log("CONTRACT_ADDRESS:", CONTRACT_ADDRESS)
+      console.log("USDT_ADDRESS:", USDT_ADDRESS)
+      console.log("OLD_CONTRACT_ADDRESS:", process.env.REACT_APP_OLD_CONTRACT_ADDRESS)
+
       const vault = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
       setContract(vault)
-      console.log("BlackVault Contract initialized.")
+      console.log("BlackVault Contract initialized:", vault)
 
       const usdt = new Contract(USDT_ADDRESS, ERC20Abi, signer)
       setUsdtContract(usdt)
-      console.log("USDT Contract initialized.")
+      console.log("USDT Contract initialized:", usdt)
 
       const oldVault = new Contract(process.env.REACT_APP_OLD_CONTRACT_ADDRESS, BlackVaultV1Abi, signer)
       setOldVaultContract(oldVault)
-      console.log("BlackVault V1 Contract initialized.")
+      console.log("BlackVault V1 Contract initialized:", oldVault)
+
+      // Test if the main contract has the expected functions
+      console.log("Testing main contract functions...")
+      try {
+        const minDeposit = await vault.MIN_DEPOSIT()
+        console.log("MIN_DEPOSIT from main contract:", minDeposit.toString())
+      } catch (error) {
+        console.error("Error calling MIN_DEPOSIT on main contract:", error)
+      }
 
       await loadContractData(vault, usdt)
     } catch (error) {
@@ -412,20 +426,41 @@ export default function App() {
   const withdraw = async () => {
     if (!contract || txLoading) return
 
+    console.log("Withdraw function called")
+    console.log("Contract:", contract)
+    console.log("Account:", account)
+    console.log("Current rewards:", rewards)
+
     setTxLoading(true)
     try {
       addToast("Processing withdrawal...", "info")
+
+      // Add more debugging
+      console.log("Calling withdrawRewards on contract...")
       const tx = await contract.withdrawRewards()
+      console.log("Transaction created:", tx)
 
       addToast("Transaction submitted. Waiting for confirmation...", "info")
-      await tx.wait()
+      const receipt = await tx.wait()
+      console.log("Transaction receipt:", receipt)
 
       addToast("Rewards withdrawn successfully!", "success")
       await loadContractData()
     } catch (error) {
       console.error("Withdraw failed:", error)
+      console.error("Error details:", {
+        code: error.code,
+        message: error.message,
+        data: error.data,
+        reason: error.reason,
+      })
+
       if (error && error.code === 4001) {
         addToast("Transaction cancelled by user", "warning")
+      } else if (error.reason) {
+        addToast(`Withdrawal failed: ${error.reason}`, "error")
+      } else if (error.message) {
+        addToast(`Withdrawal failed: ${error.message}`, "error")
       } else {
         addToast("Withdrawal failed. Please try again.", "error")
       }
@@ -437,20 +472,40 @@ export default function App() {
   const withdrawReferral = async () => {
     if (!contract || txLoading) return
 
+    console.log("Withdraw referral function called")
+    console.log("Contract:", contract)
+    console.log("Account:", account)
+    console.log("Current referral rewards:", referralRewards)
+
     setTxLoading(true)
     try {
       addToast("Processing referral withdrawal...", "info")
+
+      console.log("Calling withdrawReferralRewards on contract...")
       const tx = await contract.withdrawReferralRewards()
+      console.log("Transaction created:", tx)
 
       addToast("Transaction submitted. Waiting for confirmation...", "info")
-      await tx.wait()
+      const receipt = await tx.wait()
+      console.log("Transaction receipt:", receipt)
 
       addToast("Referral rewards withdrawn successfully!", "success")
       await loadContractData()
     } catch (error) {
       console.error("Referral withdraw failed:", error)
+      console.error("Error details:", {
+        code: error.code,
+        message: error.message,
+        data: error.data,
+        reason: error.reason,
+      })
+
       if (error && error.code === 4001) {
         addToast("Transaction cancelled by user", "warning")
+      } else if (error.reason) {
+        addToast(`Referral withdrawal failed: ${error.reason}`, "error")
+      } else if (error.message) {
+        addToast(`Referral withdrawal failed: ${error.message}`, "error")
       } else {
         addToast("Referral withdrawal failed. Please try again.", "error")
       }
