@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react"
 import { ethers, Contract } from "ethers"
-import BlackVaultAbi from "./BlackVault.json"
-import ERC20Abi from "./ERC20.json"
+// Corrected import paths:
+import BlackVaultAbi from "./contract/BlackVaultABI.json"
+import ERC20Abi from "./contract/ERC20Abi.json"
 import { formatEther } from "ethers/lib/utils"
 import { ToastContainer, toast } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
