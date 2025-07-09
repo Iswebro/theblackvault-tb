@@ -675,6 +675,27 @@ export default function App() {
     setTxLoading(true)
     try {
       addToast("Withdrawing V1 vault rewards...", "info")
+
+      // First try to estimate gas to catch revert early
+      try {
+        await oldVaultContract.withdrawRewards.estimateGas()
+      } catch (estimateError) {
+        console.error("V1 vault gas estimation failed:", estimateError)
+
+        // Handle common revert reasons
+        if (
+          estimateError.message.includes("missing revert data") ||
+          estimateError.message.includes("CALL_EXCEPTION") ||
+          estimateError.code === "CALL_EXCEPTION"
+        ) {
+          throw new Error("No V1 vault rewards available to withdraw")
+        } else if (estimateError.reason) {
+          throw new Error(estimateError.reason)
+        } else {
+          throw new Error("Transaction would fail - likely no V1 vault rewards available")
+        }
+      }
+
       const tx = await oldVaultContract.withdrawRewards()
 
       addToast("Transaction submitted. Waiting for confirmation...", "info")
@@ -684,8 +705,29 @@ export default function App() {
       await loadContractData()
     } catch (error) {
       console.error("V1 vault withdraw failed:", error)
+
+      // User-friendly error handling
       if (error && error.code === 4001) {
         addToast("Transaction cancelled by user", "warning")
+      } else if (
+        error.message.includes("No V1 vault rewards available") ||
+        error.message.includes("missing revert data") ||
+        error.message.includes("CALL_EXCEPTION")
+      ) {
+        addToast("No V1 vault rewards available to withdraw", "warning")
+      } else if (error.reason) {
+        addToast(`V1 vault withdrawal failed: ${error.reason}`, "error")
+      } else if (error.message) {
+        // Clean up technical error messages for mobile
+        let cleanMessage = error.message
+        if (cleanMessage.includes("missing revert data")) {
+          cleanMessage = "No V1 vault rewards available to withdraw"
+        } else if (cleanMessage.includes("CALL_EXCEPTION")) {
+          cleanMessage = "Transaction failed - likely no V1 vault rewards available"
+        } else if (cleanMessage.length > 100) {
+          cleanMessage = "V1 vault withdrawal failed - please try again"
+        }
+        addToast(`V1 vault withdrawal failed: ${cleanMessage}`, "error")
       } else {
         addToast("V1 vault withdrawal failed. Please try again.", "error")
       }
@@ -700,6 +742,27 @@ export default function App() {
     setTxLoading(true)
     try {
       addToast("Withdrawing V1 referral rewards...", "info")
+
+      // First try to estimate gas to catch revert early
+      try {
+        await oldVaultContract.withdrawReferralRewards.estimateGas()
+      } catch (estimateError) {
+        console.error("V1 referral gas estimation failed:", estimateError)
+
+        // Handle common revert reasons
+        if (
+          estimateError.message.includes("missing revert data") ||
+          estimateError.message.includes("CALL_EXCEPTION") ||
+          estimateError.code === "CALL_EXCEPTION"
+        ) {
+          throw new Error("No V1 referral rewards available to withdraw")
+        } else if (estimateError.reason) {
+          throw new Error(estimateError.reason)
+        } else {
+          throw new Error("Transaction would fail - likely no V1 referral rewards available")
+        }
+      }
+
       const tx = await oldVaultContract.withdrawReferralRewards()
 
       addToast("Transaction submitted. Waiting for confirmation...", "info")
@@ -709,8 +772,29 @@ export default function App() {
       await loadContractData()
     } catch (error) {
       console.error("V1 referral withdraw failed:", error)
+
+      // User-friendly error handling
       if (error && error.code === 4001) {
         addToast("Transaction cancelled by user", "warning")
+      } else if (
+        error.message.includes("No V1 referral rewards available") ||
+        error.message.includes("missing revert data") ||
+        error.message.includes("CALL_EXCEPTION")
+      ) {
+        addToast("No V1 referral rewards available to withdraw", "warning")
+      } else if (error.reason) {
+        addToast(`V1 referral withdrawal failed: ${error.reason}`, "error")
+      } else if (error.message) {
+        // Clean up technical error messages for mobile
+        let cleanMessage = error.message
+        if (cleanMessage.includes("missing revert data")) {
+          cleanMessage = "No V1 referral rewards available to withdraw"
+        } else if (cleanMessage.includes("CALL_EXCEPTION")) {
+          cleanMessage = "Transaction failed - likely no V1 referral rewards available"
+        } else if (cleanMessage.length > 100) {
+          cleanMessage = "V1 referral withdrawal failed - please try again"
+        }
+        addToast(`V1 referral withdrawal failed: ${cleanMessage}`, "error")
       } else {
         addToast("V1 referral withdrawal failed. Please try again.", "error")
       }
