@@ -1,342 +1,816 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { ethers, Contract } from "ethers"
+import { useEffect, useState, useRef } from "react"
+import { Contract, formatEther, parseEther } from "ethers"
+import { connectInjected, getReferralFromURL } from "./connectWallet"
+import { useToast, ToastContainer } from "./components/Toast"
 import BlackVaultAbi from "./contract/BlackVaultABI.json"
 import ERC20Abi from "./contract/ERC20Abi.json"
-import { formatEther } from "ethers/lib/utils"
 import "./App.css"
+import { config } from "./lib/config.ts"
+import HowItWorks from "./components/HowItWorks"
+import Leaderboard from "./components/Leaderboard"
+import ReferralsModal from "./components/ReferralsModal"
+import TroubleshootingModal from "./components/TroubleshootingModal"
 
-const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS
-const USDT_ADDRESS = process.env.REACT_APP_USDT_ADDRESS
+const CONTRACT_ADDRESS = config.contractAddress
+const USDT_ADDRESS = config.usdtAddress
 
-function App() {
-  const [account, setAccount] = useState("")
+export default function App() {
+  const [provider, setProvider] = useState(null)
   const [signer, setSigner] = useState(null)
+  const [account, setAccount] = useState("")
   const [contract, setContract] = useState(null)
   const [usdtContract, setUsdtContract] = useState(null)
-  const [balance, setBalance] = useState("0.0")
-  const [rewards, setRewards] = useState("0.0")
-  const [referralRewards, setReferralRewards] = useState("0.0")
-  const [referralCount, setReferralCount] = useState("0")
-  const [minDeposit, setMinDeposit] = useState("0.0")
-  const [usdtAllowance, setUsdtAllowance] = useState("0.0")
-  const [vaultActiveAmount, setVaultActiveAmount] = useState("0.0")
-  const [dailyRate, setDailyRate] = useState("0")
-  const [timeUntilNextCycle, setTimeUntilNextCycle] = useState(0)
+
+  const [balance, setBalance] = useState("0")
+  const [usdtBalance, setUsdtBalance] = useState("0")
+  const [depositAmount, setDepositAmount] = useState("")
+  const [rewards, setRewards] = useState("0")
+  const [referralRewards, setReferralRewards] = useState("0")
+  const [referralAddress, setReferralAddress] = useState("")
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(false)
-  const [depositAmount, setDepositAmount] = useState("")
-  const [referralAddress, setReferralAddress] = useState("")
-  const [referralBonusesRemaining, setReferralBonusesRemaining] = useState("0")
-  const [toasts, setToasts] = useState([])
+  const [txLoading, setTxLoading] = useState(false)
+  const [referralCount, setReferralCount] = useState(0)
+  const [minDeposit, setMinDeposit] = useState("0")
+  const [usdtAllowance, setUsdtAllowance] = useState("0")
+  const [vaultActiveAmount, setVaultActiveAmount] = useState("0")
+  const [referralBonusesRemaining, setReferralBonusesRemaining] = useState(3)
+  const [showReferralsModal, setShowReferralsModal] = useState(false)
+  const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false)
+  const [dailyRate, setDailyRate] = useState("0")
+  const [timeUntilNextCycle, setTimeUntilNextCycle] = useState(0)
 
-  const addToast = (message, type = "info") => {
-    const id = Date.now()
-    const newToast = { id, message, type }
-    setToasts((prev) => [...prev, newToast])
+  const { toasts, addToast, removeToast } = useToast()
+  const isManuallyDisconnected = useRef(false)
+  const [showDisclaimer, setShowDisclaimer] = useState(true)
 
-    // Auto remove toast after 5 seconds
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id))
-    }, 5000)
-  }
-
-  const removeToast = (id) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id))
-  }
-
-  const connectWallet = async () => {
-    if (window.ethereum) {
-      try {
-        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" })
-        const provider = new ethers.providers.Web3Provider(window.ethereum)
-        const signer = provider.getSigner()
-
-        setAccount(accounts[0])
-        setSigner(signer)
-        addToast("Wallet connected!", "success")
-      } catch (error) {
-        console.error("Error connecting to wallet:", error)
-        addToast("Failed to connect wallet.", "error")
-      }
-    } else {
-      addToast("Please install MetaMask!", "error")
-    }
-  }
-
+  // Get referral from URL on component mount
   useEffect(() => {
-    if (window.ethereum) {
-      window.ethereum.on("accountsChanged", async () => {
-        await connectWallet()
-      })
-    }
+    const refFromURL = getReferralFromURL()
+    setReferralAddress(refFromURL)
   }, [])
 
+  // Initialize contracts when wallet connects
   useEffect(() => {
-    if (signer) {
+    if (signer && account && provider) {
+      console.log("Initializing contracts for account:", account)
       initializeContracts()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signer])
+  }, [signer, account, provider])
 
+  // Listen for account changes
   useEffect(() => {
-    let intervalId
+    if (window.ethereum) {
+      const handleAccountsChanged = async (accounts) => {
+        console.log("Accounts changed event received:", accounts)
+        if (accounts.length === 0) {
+          console.log("No accounts found, disconnecting.")
+          if (!isManuallyDisconnected.current) {
+            disconnect()
+          }
+        } else if (account && accounts[0].toLowerCase() !== account.toLowerCase()) {
+          if (!isManuallyDisconnected.current) {
+            console.log("Account switched from", account, "to", accounts[0])
+            setAccount(accounts[0])
+            addToast("Account switched", "info")
+          }
+        } else if (!account && accounts.length > 0 && !isManuallyDisconnected.current) {
+          console.log("Initial account detected:", accounts[0])
+          setAccount(accounts[0])
+          addToast("Wallet connected successfully!", "success")
+        }
+      }
 
-    if (timeUntilNextCycle > 0) {
-      intervalId = setInterval(() => {
-        setTimeUntilNextCycle((prevTime) => prevTime - 1)
-      }, 1000)
+      const handleChainChanged = () => {
+        console.log("Chain changed, reloading page.")
+        window.location.reload()
+      }
+
+      window.ethereum.on("accountsChanged", handleAccountsChanged)
+      window.ethereum.on("chainChanged", handleChainChanged)
+
+      window.ethereum
+        .request({ method: "eth_accounts" })
+        .then(handleAccountsChanged)
+        .catch((err) => console.error("Error getting initial accounts:", err))
+
+      return () => {
+        if (window.ethereum.removeListener) {
+          window.ethereum.removeListener("accountsChanged", handleAccountsChanged)
+          window.ethereum.removeListener("chainChanged", handleChainChanged)
+        }
+      }
     }
-
-    return () => clearInterval(intervalId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeUntilNextCycle])
+  }, [account, addToast])
 
   const initializeContracts = async () => {
+    if (!signer) return
     try {
-      const blackVaultContract = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
-      setContract(blackVaultContract)
+      const vault = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
+      setContract(vault)
+      console.log("BlackVault Contract initialized.")
 
-      const usdtTokenContract = new Contract(USDT_ADDRESS, ERC20Abi, signer)
-      setUsdtContract(usdtTokenContract)
+      const usdt = new Contract(USDT_ADDRESS, ERC20Abi, signer)
+      setUsdtContract(usdt)
+      console.log("USDT Contract initialized.")
 
-      addToast("Contracts initialized!", "success")
-      loadContractData(blackVaultContract, usdtTokenContract)
-      loadTransactionHistory(blackVaultContract)
+      await loadContractData(vault, usdt)
     } catch (error) {
       console.error("Error initializing contracts:", error)
-      addToast("Failed to initialize contracts.", "error")
+      addToast("Error connecting to contracts", "error")
     }
   }
 
-  const loadContractData = async (blackVaultContract, usdtTokenContract) => {
-    setLoading(true)
+  const loadTransactionHistory = async (vault, usdt) => {
+    if (!vault || !provider || !account) {
+      console.log("Skipping loadTransactionHistory: missing vault, provider, or account")
+      return
+    }
+
     try {
-      const [
-        userVault,
-        userReferralData,
-        minDepositValue,
-        usdtAllowanceValue,
-        contractStats,
-        dailyRateValue,
-        timeUntilNextCycleValue,
-        referralBonusInfo,
-      ] = await Promise.all([
-        blackVaultContract.getUserVault(account),
-        blackVaultContract.getUserReferralData(account),
-        blackVaultContract.MIN_DEPOSIT(),
-        usdtTokenContract.allowance(account, CONTRACT_ADDRESS),
-        blackVaultContract.getContractStats(),
-        blackVaultContract.DAILY_RATE(),
-        blackVaultContract.getTimeUntilNextCycle(),
-        blackVaultContract.getReferralBonusInfo(referralAddress, account),
-      ])
+      const depositEvents = await vault.queryFilter(vault.filters.Deposited(account), -10000)
+      const rewardsWithdrawEvents = await vault.queryFilter(vault.filters.RewardsWithdrawn(account), -10000)
+      const referralWithdrawEvents = await vault.queryFilter(vault.filters.ReferralRewardsWithdrawn(account), -10000)
 
-      setBalance(formatEther(userVault.totalDeposited))
-      setRewards(formatEther(userVault.pendingRewards))
-      setReferralRewards(formatEther(userReferralData.availableRewards))
-      setReferralCount(userReferralData.referredCount.toString())
-      setMinDeposit(formatEther(minDepositValue))
-      setUsdtAllowance(formatEther(usdtAllowanceValue))
-      setVaultActiveAmount(formatEther(userVault.activeAmount))
-      setDailyRate(dailyRateValue.toString())
-      setTimeUntilNextCycle(timeUntilNextCycleValue.toNumber())
-      setReferralBonusesRemaining(referralBonusInfo.bonusesRemaining.toString())
+      const processEvent = async (event, type) => {
+        const block = await provider.getBlock(event.blockNumber)
+        return {
+          type: type,
+          amount: formatEther(event.args.amount),
+          time: new Date(block.timestamp * 1000),
+          txHash: event.transactionHash,
+        }
+      }
 
-      addToast("Contract data loaded!", "success")
+      const allEventsPromises = [
+        ...depositEvents.map((event) => processEvent(event, "Deposit")),
+        ...rewardsWithdrawEvents.map((event) => processEvent(event, "Rewards Withdrawn")),
+        ...referralWithdrawEvents.map((event) => processEvent(event, "Referral Withdrawal")),
+      ]
+
+      const processedEvents = await Promise.all(allEventsPromises)
+
+      processedEvents.sort((a, b) => b.time.getTime() - a.time.getTime())
+      setHistory(processedEvents)
+    } catch (error) {
+      console.error("Error loading transaction history:", error)
+      setHistory([])
+    }
+  }
+
+  const loadContractData = async (vault = contract, usdt = usdtContract) => {
+    if (!vault || !provider || !account || !usdt) {
+      console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt })
+      return
+    }
+
+    console.log("Loading contract data for account:", account)
+    try {
+      const userBnbBalance = await provider.getBalance(account)
+      setBalance(formatEther(userBnbBalance))
+      console.log("Fetched BNB balance:", formatEther(userBnbBalance))
+
+      const userUsdtBalance = await usdt.balanceOf(account)
+      setUsdtBalance(formatEther(userUsdtBalance))
+      console.log("Fetched USDT balance:", formatEther(userUsdtBalance))
+
+      const allowance = await usdt.allowance(account, CONTRACT_ADDRESS)
+      setUsdtAllowance(formatEther(allowance))
+      console.log("Fetched USDT allowance:", formatEther(allowance), "USDT")
+
+      try {
+        const vaultData = await vault.getUserVault(account)
+        setRewards(formatEther(vaultData.pendingRewards))
+        setVaultActiveAmount(formatEther(vaultData.activeAmount))
+        console.log("Fetched vault rewards:", formatEther(vaultData.pendingRewards))
+        console.log("Fetched vault active amount:", formatEther(vaultData.activeAmount))
+      } catch (error) {
+        console.log("No vault data found for user", error)
+        setRewards("0")
+        setVaultActiveAmount("0")
+      }
+
+      try {
+        const refData = await vault.getUserReferralData(account)
+        setReferralRewards(formatEther(refData.availableRewards))
+        setReferralCount(refData.referredCount.toString())
+        console.log("Fetched referral data:", {
+          availableRewards: formatEther(refData.availableRewards),
+          referredCount: refData.referredCount.toString(),
+        })
+      } catch (error) {
+        console.log("No referral rewards found for user", error)
+        setReferralRewards("0")
+        setReferralCount("0")
+      }
+
+      if (referralAddress && referralAddress !== "0x0000000000000000000000000000000000000000") {
+        try {
+          const bonusInfo = await vault.getReferralBonusInfo(referralAddress, account)
+          setReferralBonusesRemaining(bonusInfo.bonusesRemaining.toString())
+          console.log("Fetched referral bonus info:", {
+            bonusesUsed: bonusInfo.bonusesUsed.toString(),
+            bonusesRemaining: bonusInfo.bonusesRemaining.toString(),
+          })
+        } catch (error) {
+          console.log("No referral bonus info found", error)
+          setReferralBonusesRemaining("3")
+        }
+      }
+
+      try {
+        const minDepositValue = await vault.MIN_DEPOSIT()
+        setMinDeposit(formatEther(minDepositValue))
+        console.log("Fetched MIN_DEPOSIT:", formatEther(minDepositValue), "USDT")
+      } catch (error) {
+        console.error("Error fetching MIN_DEPOSIT:", error)
+        setMinDeposit("0")
+      }
+
+      try {
+        const dailyRateValue = await vault.DAILY_RATE()
+        setDailyRate(dailyRateValue.toString())
+        console.log("Fetched DAILY_RATE:", dailyRateValue.toString())
+      } catch (error) {
+        console.error("Error fetching DAILY_RATE:", error)
+        setDailyRate("0")
+      }
+
+      try {
+        const timeRemaining = await vault.getTimeUntilNextCycle()
+        setTimeUntilNextCycle(Number(timeRemaining.toString()))
+        console.log("Fetched time until next cycle:", timeRemaining.toString(), "seconds")
+      } catch (error) {
+        console.error("Error fetching time until next cycle:", error)
+        setTimeUntilNextCycle(0)
+      }
+
+      await loadTransactionHistory(vault, usdt)
     } catch (error) {
       console.error("Error loading contract data:", error)
-      addToast("Failed to load contract data.", "error")
+      addToast("Error loading data from contract", "error")
+    }
+  }
+
+  useEffect(() => {
+    let timerInterval
+    if (account && timeUntilNextCycle > 0) {
+      timerInterval = setInterval(() => {
+        setTimeUntilNextCycle((prevTime) => {
+          if (prevTime <= 1) {
+            clearInterval(timerInterval)
+            loadContractData()
+            return 0
+          }
+          return prevTime - 1
+        })
+      }, 1000)
+    } else if (timeUntilNextCycle === 0 && account) {
+      loadContractData()
+    }
+
+    return () => clearInterval(timerInterval)
+  }, [account, timeUntilNextCycle])
+
+  const connectWallet = async () => {
+    if (loading) return
+
+    setLoading(true)
+    try {
+      isManuallyDisconnected.current = false
+
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      console.log("Attempting to connect wallet...")
+      const conn = await connectInjected()
+
+      console.log("Connection successful:", conn.account)
+      setProvider(conn.provider)
+      setSigner(conn.signer)
+      setAccount(conn.account)
+
+      addToast("Wallet connected successfully!", "success")
+    } catch (error) {
+      console.error("Connection failed:", error)
+
+      let errorMessage = "Failed to connect wallet"
+
+      if (error) {
+        if (typeof error === "string") {
+          errorMessage = error
+        } else if (error.message) {
+          errorMessage = error.message
+        } else if (error.code) {
+          errorMessage = `Wallet error (code: ${error.code})`
+        }
+      }
+
+      if (errorMessage.includes("not supported chainID") || errorMessage.includes("chainId")) {
+        errorMessage = "BSC Mainnet not configured. Please add BSC network manually or try MetaMask."
+      } else if (errorMessage.includes("No wallet found")) {
+        errorMessage = "Please use Trust Wallet's in-app browser or install MetaMask"
+      } else if (errorMessage.includes("rejected") || errorMessage.includes("cancelled")) {
+        errorMessage = "Connection cancelled. Please try again and approve the connection."
+      } else if (errorMessage.includes("pending")) {
+        errorMessage = "Connection already in progress. Please check your wallet app."
+      }
+
+      addToast(errorMessage, "error")
     } finally {
       setLoading(false)
     }
   }
 
-  const loadTransactionHistory = async (blackVaultContract) => {
+  const approveUsdt = async () => {
+    if (!usdtContract || txLoading || Number.parseFloat(depositAmount) <= 0) return
+
+    setTxLoading(true)
     try {
-      const filterDeposited = blackVaultContract.filters.Deposited(account, null, null, null)
-      const filterRewardsWithdrawn = blackVaultContract.filters.RewardsWithdrawn(account, null, null)
-      const filterReferralRewardsWithdrawn = blackVaultContract.filters.ReferralRewardsWithdrawn(account, null)
+      addToast("Approving USDT...", "info")
+      const amountToApprove = parseEther(depositAmount)
 
-      const [depositedEvents, rewardsWithdrawnEvents, referralRewardsWithdrawnEvents] = await Promise.all([
-        blackVaultContract.queryFilter(filterDeposited),
-        blackVaultContract.queryFilter(filterRewardsWithdrawn),
-        blackVaultContract.queryFilter(filterReferralRewardsWithdrawn),
-      ])
-
-      const formattedHistory = [
-        ...depositedEvents.map((event) => ({
-          type: "Deposit",
-          amount: formatEther(event.args.amount),
-          timestamp: new Date(event.block.timestamp * 1000).toLocaleString(),
-          txHash: event.transactionHash,
-        })),
-        ...rewardsWithdrawnEvents.map((event) => ({
-          type: "Rewards Withdrawal",
-          amount: formatEther(event.args.amount),
-          timestamp: new Date(event.block.timestamp * 1000).toLocaleString(),
-          txHash: event.transactionHash,
-        })),
-        ...referralRewardsWithdrawnEvents.map((event) => ({
-          type: "Referral Rewards Withdrawal",
-          amount: formatEther(event.args.amount),
-          timestamp: new Date(event.block.timestamp * 1000).toLocaleString(),
-          txHash: event.transactionHash,
-        })),
-      ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-
-      setHistory(formattedHistory)
-      addToast("Transaction history loaded!", "success")
+      const tx = await usdtContract.approve(CONTRACT_ADDRESS, amountToApprove)
+      addToast("Approval transaction submitted. Waiting for confirmation...", "info")
+      await tx.wait()
+      addToast("USDT approved successfully!", "success")
+      await loadContractData()
     } catch (error) {
-      console.error("Error loading transaction history:", error)
-      addToast("Failed to load transaction history.", "error")
+      console.error("USDT approval failed:", error)
+      if (error && error.code === 4001) {
+        addToast("Transaction cancelled by user", "warning")
+      } else {
+        addToast("USDT approval failed. Please try again.", "error")
+      }
+    } finally {
+      setTxLoading(false)
+    }
+  }
+
+  const deposit = async () => {
+    if (!contract || !depositAmount || txLoading || Number.parseFloat(depositAmount) <= 0) return
+
+    if (Number.parseFloat(usdtAllowance) < Number.parseFloat(depositAmount)) {
+      addToast("Please approve USDT first.", "error")
+      return
+    }
+
+    setTxLoading(true)
+    try {
+      addToast("Processing deposit...", "info")
+
+      const value = parseEther(depositAmount)
+      console.log("Attempting to deposit amount (wei):", value.toString())
+
+      let tx
+
+      if (referralAddress && referralAddress !== "0x0000000000000000000000000000000000000000") {
+        console.log("Calling depositWithReferrer with:", value.toString(), referralAddress)
+        tx = await contract.depositWithReferrer(value, referralAddress)
+      } else {
+        console.log("Calling deposit with:", value.toString())
+        tx = await contract.deposit(value)
+      }
+
+      console.log("Transaction sent, hash:", tx.hash)
+      addToast("Transaction submitted. Waiting for confirmation...", "info")
+
+      const receipt = await tx.wait()
+      console.log("Transaction receipt:", receipt)
+
+      if (receipt.status === 1) {
+        addToast("Deposit successful!", "success")
+        setDepositAmount("")
+        await loadContractData()
+      } else {
+        console.error("Transaction failed on-chain:", receipt)
+        addToast("Deposit transaction failed on-chain. Check explorer for details.", "error")
+      }
+    } catch (error) {
+      console.error("Deposit failed during submission or confirmation:", error)
+      if (error && error.code === 4001) {
+        addToast("Transaction cancelled by user", "warning")
+      } else if (error && error.data && error.data.message) {
+        addToast(`Deposit failed: ${error.data.message}`, "error")
+      } else if (error && error.message) {
+        addToast(`Deposit failed: ${error.message}`, "error")
+      } else {
+        addToast("Deposit failed. Please try again.", "error")
+      }
+    } finally {
+      setTxLoading(false)
+    }
+  }
+
+  const withdraw = async () => {
+    if (!contract || txLoading) return
+
+    setTxLoading(true)
+    try {
+      addToast("Processing withdrawal...", "info")
+      const tx = await contract.withdrawRewards()
+
+      addToast("Transaction submitted. Waiting for confirmation...", "info")
+      await tx.wait()
+
+      addToast("Rewards withdrawn successfully!", "success")
+      await loadContractData()
+    } catch (error) {
+      console.error("Withdraw failed:", error)
+      if (error && error.code === 4001) {
+        addToast("Transaction cancelled by user", "warning")
+      } else {
+        addToast("Withdrawal failed. Please try again.", "error")
+      }
+    } finally {
+      setTxLoading(false)
+    }
+  }
+
+  const withdrawReferral = async () => {
+    if (!contract || txLoading) return
+
+    setTxLoading(true)
+    try {
+      addToast("Processing referral withdrawal...", "info")
+      const tx = await contract.withdrawReferralRewards()
+
+      addToast("Transaction submitted. Waiting for confirmation...", "info")
+      await tx.wait()
+
+      addToast("Referral rewards withdrawn successfully!", "success")
+      await loadContractData()
+    } catch (error) {
+      console.error("Referral withdraw failed:", error)
+      if (error && error.code === 4001) {
+        addToast("Transaction cancelled by user", "warning")
+      } else {
+        addToast("Referral withdrawal failed. Please try again.", "error")
+      }
+    } finally {
+      setTxLoading(false)
     }
   }
 
   const disconnect = () => {
-    setAccount("")
+    isManuallyDisconnected.current = true
+    setProvider(null)
     setSigner(null)
+    setAccount("")
     setContract(null)
     setUsdtContract(null)
-    setBalance("0.0")
-    setRewards("0.0")
-    setReferralRewards("0.0")
-    setReferralCount("0")
-    setMinDeposit("0.0")
-    setUsdtAllowance("0.0")
-    setVaultActiveAmount("0.0")
-    setDailyRate("0")
-    setTimeUntilNextCycle(0)
+    setBalance("0")
+    setUsdtBalance("0")
+    setUsdtAllowance("0")
+    setRewards("0")
+    setReferralRewards("0")
     setHistory([])
-    setLoading(false)
-    setDepositAmount("")
-    setReferralAddress("")
-    setReferralBonusesRemaining("0")
-    addToast("Wallet disconnected!", "info")
+    setReferralCount("0")
+    setMinDeposit("0")
+    setVaultActiveAmount("0")
+    setReferralBonusesRemaining("3")
+    setShowReferralsModal(false)
+    addToast("Wallet disconnected", "info")
+  }
+
+  const formatAddress = (addr) => {
+    if (!addr) return ""
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+  }
+
+  const formatAmount = (amount) => {
+    const num = Number.parseFloat(amount)
+    if (num === 0) return "0"
+    if (num < 0.0001) return "< 0.0001"
+    return Number.parseFloat(num.toFixed(6)).toString()
+  }
+
+  const formatCountdown = (seconds) => {
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    const s = seconds % 60
+    return [h, m, s].map((v) => (v < 10 ? "0" + v : v)).join(":")
+  }
+
+  const handleMaxDeposit = () => {
+    const maxAmount = Number.parseFloat(usdtBalance)
+    if (maxAmount > 0) {
+      setDepositAmount(maxAmount.toString())
+    }
+  }
+
+  const getReferralLink = () => {
+    const baseUrl = window.location.origin + window.location.pathname
+    return `${baseUrl}?ref=${account}`
+  }
+
+  const copyReferralLink = () => {
+    const link = getReferralLink()
+    navigator.clipboard.writeText(link)
+    addToast("Referral link copied to clipboard!", "success")
+  }
+
+  const needsApproval =
+    Number.parseFloat(depositAmount) > 0 && Number.parseFloat(usdtAllowance) < Number.parseFloat(depositAmount)
+
+  if (!account) {
+    return (
+      <div className="app-container">
+        <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+        <div className="connect-screen">
+          <div className="connect-content">
+            <div className="logo-container">
+              <div className="premium-logo-wrapper">
+                <img src="/logo2.svg" alt="Black Vault Logo" className="premium-logo-img" />
+                <div className="logo-glow"></div>
+              </div>
+            </div>
+
+            <h1 className="app-title">
+              <span className="title-black">BLACK</span>
+              <span className="title-vault">VAULT</span>
+            </h1>
+
+            <p className="app-subtitle">Premium USDT Staking Platform on Binance Smart Chain</p>
+
+            <button className="connect-button premium-button" onClick={connectWallet} disabled={loading}>
+              {loading ? (
+                <>
+                  <div className="loading-spinner"></div>
+                  Connecting...
+                </>
+              ) : (
+                "Connect Wallet"
+              )}
+            </button>
+
+            <button className="discreet-button" onClick={() => setShowTroubleshootingModal(true)}>
+              Troubleshooting & Network Info
+            </button>
+          </div>
+        </div>
+
+        <TroubleshootingModal isOpen={showTroubleshootingModal} onClose={() => setShowTroubleshootingModal(false)} />
+      </div>
+    )
   }
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>Black Vault</h1>
-        <button className="connect-button" onClick={account ? disconnect : connectWallet}>
-          {account ? "Disconnect Wallet" : "Connect Wallet"}
-        </button>
-        {account && <p>Account: {account}</p>}
-      </header>
-      <div className="App-body">
-        {loading && <div className="loader">Loading...</div>}
+    <div className="app-container">
+      <div className="premium-background">
+        <div className="bg-grid"></div>
+        <div className="bg-gradient-1"></div>
+        <div className="bg-gradient-2"></div>
+        <div className="bg-particles"></div>
+      </div>
 
-        {account ? (
-          <>
-            <div className="balances">
-              <div className="balance-item">
-                <h2>Vault Balance</h2>
-                <p>{balance} USDT</p>
-              </div>
-              <div className="balance-item">
-                <h2>Active Amount</h2>
-                <p>{vaultActiveAmount} USDT</p>
-              </div>
-              <div className="balance-item">
-                <h2>Rewards</h2>
-                <p>{rewards} USDT</p>
-              </div>
-              <div className="balance-item">
-                <h2>Referral Rewards</h2>
-                <p>{referralRewards} USDT</p>
-              </div>
-            </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
 
-            <div className="stats">
-              <div className="stat-item">
-                <p>Minimum Deposit: {minDeposit} USDT</p>
-              </div>
-              <div className="stat-item">
-                <p>USDT Allowance: {usdtAllowance} USDT</p>
-              </div>
-              <div className="stat-item">
-                <p>Daily Rate: {dailyRate}%</p>
-              </div>
-              <div className="stat-item">
-                <p>Time Until Next Cycle: {timeUntilNextCycle} seconds</p>
-              </div>
-              <div className="stat-item">
-                <p>Referral Count: {referralCount}</p>
-              </div>
-              <div className="stat-item">
-                <p>Referral Bonuses Remaining: {referralBonusesRemaining}</p>
-              </div>
-            </div>
+      <div className="main-interface">
+        <div className="header">
+          <div className="header-logo">
+            <img src="/logo2.svg" alt="Black Vault" className="mini-logo-img" />
+            <span className="header-title">BLACK VAULT</span>
+          </div>
+          <div className="header-account">
+            <span className="account-label">Connected</span>
+            <span className="account-address">{formatAddress(account)}</span>
+          </div>
+        </div>
 
-            <div className="deposit-section">
-              <h2>Deposit USDT</h2>
-              <input
-                type="number"
-                placeholder="Enter deposit amount"
-                value={depositAmount}
-                onChange={(e) => setDepositAmount(e.target.value)}
-              />
-              <input
-                type="text"
-                placeholder="Enter referral address (optional)"
-                value={referralAddress}
-                onChange={(e) => setReferralAddress(e.target.value)}
-              />
-              <button>Deposit</button>
-            </div>
-
-            <div className="history-section">
-              <h2>Transaction History</h2>
-              {history.length > 0 ? (
-                <table className="history-table">
-                  <thead>
-                    <tr>
-                      <th>Type</th>
-                      <th>Amount</th>
-                      <th>Timestamp</th>
-                      <th>Transaction Hash</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {history.map((item, index) => (
-                      <tr key={index}>
-                        <td>{item.type}</td>
-                        <td>{item.amount}</td>
-                        <td>{item.timestamp}</td>
-                        <td>
-                          <a href={`https://etherscan.io/tx/${item.txHash}`} target="_blank" rel="noopener noreferrer">
-                            View on Etherscan
-                          </a>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p>No transaction history available.</p>
+        <div className="vault-interface">
+          <div className="vault-card premium-card">
+            <h3 className="card-title">Vault Balance</h3>
+            <div className="balance-grid">
+              <div className="balance-item">
+                <span className="balance-label">USDT Balance</span>
+                <span className="balance-value">{formatAmount(vaultActiveAmount)} USDT</span>
+              </div>
+              {Number.parseFloat(vaultActiveAmount) > 0 && dailyRate !== "0" && (
+                <div className="balance-item">
+                  <span className="balance-label">Projected Daily Rewards</span>
+                  <span className="balance-value">
+                    {formatAmount(
+                      ((Number.parseFloat(vaultActiveAmount) * Number.parseFloat(dailyRate)) / 1000).toString(),
+                    )}{" "}
+                    USDT
+                  </span>
+                </div>
+              )}
+              {Number.parseFloat(vaultActiveAmount) > 0 && timeUntilNextCycle > 0 && (
+                <div className="balance-item">
+                  <span className="balance-label">Next Accrual In</span>
+                  <span className="balance-value">{formatCountdown(timeUntilNextCycle)}</span>
+                </div>
               )}
             </div>
-          </>
-        ) : (
-          <p>Please connect your wallet to view your vault.</p>
-        )}
-      </div>
+          </div>
 
-      {/* Custom Toast Container */}
-      <div className="toast-container">
-        {toasts.map((toast) => (
-          <div key={toast.id} className={`toast ${toast.type}`}>
-            <span>{toast.message}</span>
-            <button className="toast-close" onClick={() => removeToast(toast.id)}>
-              ×
+          <div className="vault-card premium-card">
+            <h3 className="card-title">
+              <span className="card-icon">💰</span>
+              Make Deposit
+            </h3>
+
+            {referralAddress !== "0x0000000000000000000000000000000000000000" && (
+              <div className="referral-info">
+                <span className="referral-label">Referral:</span>
+                <span className="referral-address">{formatAddress(referralAddress)}</span>
+              </div>
+            )}
+
+            <div className="wallet-balance">
+              <span className="balance-label">Wallet Balance:</span>
+              <span className="balance-value">{formatAmount(usdtBalance)} USDT</span>
+              <button className="max-button" onClick={handleMaxDeposit}>
+                Max
+              </button>
+            </div>
+
+            {showDisclaimer && (
+              <div className="disclaimer-box">
+                <button
+                  className="disclaimer-close"
+                  onClick={() => setShowDisclaimer(false)}
+                  aria-label="Hide disclaimer"
+                >
+                  ×
+                </button>
+                <p className="disclaimer-title">IMPORTANT DISCLAIMER</p>
+                <p className="disclaimer-text">
+                  This platform exclusively uses <strong>USDT (BEP-20)</strong> on the{" "}
+                  <strong>Binance Smart Chain (BSC)</strong>. Depositing any other token or using a different network
+                  will result in permanent loss of funds. Ensure your wallet is connected to the BSC Mainnet and you are
+                  depositing BEP-20 USDT.
+                </p>
+              </div>
+            )}
+
+            <div className="input-group">
+              <input
+                type="number"
+                id="deposit-amount"
+                name="deposit-amount"
+                required
+                className="vault-input premium-input"
+                placeholder={
+                  minDeposit !== "0" ? `Min. deposit ${formatAmount(minDeposit)} USDT` : "Min. deposit: 50 USDT"
+                }
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value)}
+                step="0.001"
+                min="0"
+              />
+
+              <button
+                className="vault-button premium-button primary"
+                onClick={approveUsdt}
+                disabled={txLoading || !depositAmount || Number.parseFloat(depositAmount) <= 0}
+              >
+                {txLoading ? (
+                  <>
+                    <div className="loading-spinner"></div>
+                    Approving USDT...
+                  </>
+                ) : (
+                  "Approve USDT"
+                )}
+              </button>
+              <button
+                className="vault-button premium-button primary"
+                onClick={deposit}
+                disabled={txLoading || !depositAmount || Number.parseFloat(depositAmount) <= 0 || needsApproval}
+              >
+                {txLoading ? (
+                  <>
+                    <div className="loading-spinner"></div>
+                    Processing...
+                  </>
+                ) : (
+                  "Deposit USDT"
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="vault-card premium-card">
+            <h3 className="card-title">
+              <span className="card-icon">🎁</span>
+              Vault Rewards
+            </h3>
+            <div className="reward-display">
+              <span className="reward-amount">{formatAmount(rewards)} USDT</span>
+              <span className="reward-label">Available to withdraw</span>
+            </div>
+            <button
+              className="vault-button premium-button success"
+              onClick={withdraw}
+              disabled={txLoading || Number.parseFloat(rewards) === 0}
+            >
+              {txLoading ? "Processing..." : "Withdraw Rewards"}
             </button>
           </div>
-        ))}
+
+          <div className="vault-card premium-card">
+            <h3 className="card-title">
+              <span className="card-icon">👥</span>
+              Referral Rewards
+            </h3>
+            <div className="reward-display">
+              <span className="reward-amount purple">{formatAmount(referralRewards)} USDT</span>
+              <span className="reward-label">From referrals</span>
+            </div>
+            <div className="referral-stats">
+              <span className="referral-label">Referrals:</span>
+              <span className="referral-value">{referralCount}</span>
+            </div>
+
+            <div className="referral-actions">
+              <button className="copy-link-button" onClick={copyReferralLink}>
+                Copy Referral Link
+              </button>
+              <button className="see-referrals-button" onClick={() => setShowReferralsModal(true)}>
+                See Referrals
+              </button>
+            </div>
+
+            <button
+              className="vault-button premium-button purple"
+              onClick={withdrawReferral}
+              disabled={txLoading || Number.parseFloat(referralRewards) === 0}
+            >
+              {txLoading ? "Processing..." : "Withdraw Referral"}
+            </button>
+          </div>
+
+          <div className="vault-card premium-card">
+            <h3 className="card-title">
+              <span className="card-icon">📊</span>
+              Transaction History
+            </h3>
+
+            {history.length === 0 ? (
+              <div className="empty-state">
+                <p className="empty-message">No transactions yet</p>
+                <p className="empty-submessage">Your deposits and withdrawals will appear here</p>
+              </div>
+            ) : (
+              <div className="history-list">
+                {history.map((item, index) => (
+                  <div key={index} className="history-item">
+                    <div className="history-info">
+                      <div className={`history-dot ${item.type.toLowerCase().replace(/\s+/g, "-")}`}></div>
+                      <div className="history-details">
+                        <span className="history-type">{item.type}</span>
+                        <span className="history-time">
+                          {item.time.toLocaleDateString()} {item.time.toLocaleTimeString()}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="history-amount">
+                      <span className="amount-value">{formatAmount(item.amount)} USDT</span>
+                      <a
+                        href={`${config.blockExplorer}/tx/${item.txHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="view-tx"
+                      >
+                        View
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="vault-card premium-card">
+            <div className="text-center p-4 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black rounded-lg mb-4">
+              🎉 Weekly USDT Giveaway for Top 3 referrers is coming soon! Stay Tuned.
+            </div>
+          </div>
+
+          <Leaderboard />
+
+          <HowItWorks />
+
+          <div className="disconnect-section">
+            <button onClick={disconnect} className="disconnect-button">
+              Disconnect Wallet
+            </button>
+          </div>
+        </div>
       </div>
+
+      <ReferralsModal
+        isOpen={showReferralsModal}
+        onClose={() => setShowReferralsModal(false)}
+        contract={contract}
+        account={account}
+        formatAddress={formatAddress}
+      />
     </div>
   )
 }
-
-export default App
