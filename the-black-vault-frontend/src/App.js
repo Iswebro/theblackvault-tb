@@ -110,10 +110,21 @@ export default function App() {
   const initializeContracts = async () => {
     if (!signer) return
     try {
-      console.log("Initializing contracts...")
+      console.log("=== CONTRACT DEBUGGING ===")
       console.log("CONTRACT_ADDRESS:", CONTRACT_ADDRESS)
       console.log("USDT_ADDRESS:", USDT_ADDRESS)
       console.log("OLD_CONTRACT_ADDRESS:", process.env.REACT_APP_OLD_CONTRACT_ADDRESS)
+      console.log("Expected new contract:", "0xa5C6a3b80Eb1cF0c4A4ca4Ded8b0D17895775956")
+      console.log("Expected old contract:", "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1")
+
+      // Check if CONTRACT_ADDRESS is correct
+      if (CONTRACT_ADDRESS !== "0xa5C6a3b80Eb1cF0c4A4ca4Ded8b0D17895775956") {
+        console.error(
+          "❌ WRONG CONTRACT ADDRESS! Expected: 0xa5C6a3b80Eb1cF0c4A4ca4Ded8b0D17895775956, Got:",
+          CONTRACT_ADDRESS,
+        )
+        addToast("Wrong contract address configured!", "error")
+      }
 
       const vault = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
       setContract(vault)
@@ -128,17 +139,40 @@ export default function App() {
       console.log("BlackVault V1 Contract initialized:", oldVault)
 
       // Test if the main contract has the expected functions
-      console.log("Testing main contract functions...")
+      console.log("=== TESTING CONTRACT FUNCTIONS ===")
       try {
         const minDeposit = await vault.MIN_DEPOSIT()
-        console.log("MIN_DEPOSIT from main contract:", minDeposit.toString())
+        console.log("✅ MIN_DEPOSIT from main contract:", minDeposit.toString())
       } catch (error) {
-        console.error("Error calling MIN_DEPOSIT on main contract:", error)
+        console.error("❌ Error calling MIN_DEPOSIT on main contract:", error)
+      }
+
+      try {
+        const dailyRate = await vault.DAILY_RATE()
+        console.log("✅ DAILY_RATE from main contract:", dailyRate.toString())
+      } catch (error) {
+        console.error("❌ Error calling DAILY_RATE on main contract:", error)
+      }
+
+      // Test withdraw functions exist
+      try {
+        console.log("✅ withdrawRewards function exists:", typeof vault.withdrawRewards === "function")
+        console.log("✅ withdrawReferralRewards function exists:", typeof vault.withdrawReferralRewards === "function")
+      } catch (error) {
+        console.error("❌ Error checking withdraw functions:", error)
+      }
+
+      // Test if we can read user data
+      try {
+        const vaultData = await vault.getUserVault(account)
+        console.log("✅ getUserVault works, pending rewards:", formatEther(vaultData.pendingRewards))
+      } catch (error) {
+        console.error("❌ Error calling getUserVault:", error)
       }
 
       await loadContractData(vault, usdt)
     } catch (error) {
-      console.error("Error initializing contracts:", error)
+      console.error("❌ Error initializing contracts:", error)
       addToast("Error connecting to contracts", "error")
     }
   }
@@ -424,30 +458,48 @@ export default function App() {
   }
 
   const withdraw = async () => {
-    if (!contract || txLoading) return
+    console.log("=== WITHDRAW BUTTON CLICKED ===")
+    console.log("Contract exists:", !!contract)
+    console.log("txLoading:", txLoading)
+    console.log("Rewards value:", rewards)
+    console.log("Rewards parsed:", Number.parseFloat(rewards))
 
-    console.log("Withdraw function called")
-    console.log("Contract:", contract)
-    console.log("Account:", account)
-    console.log("Current rewards:", rewards)
+    if (!contract) {
+      console.log("❌ No contract available")
+      addToast("Contract not initialized", "error")
+      return
+    }
+
+    if (txLoading) {
+      console.log("❌ Transaction already in progress")
+      return
+    }
+
+    console.log("✅ Proceeding with withdrawal...")
 
     setTxLoading(true)
     try {
       addToast("Processing withdrawal...", "info")
 
-      // Add more debugging
       console.log("Calling withdrawRewards on contract...")
+      console.log("Contract address:", contract.address)
+
+      // Check if function exists
+      if (!contract.withdrawRewards) {
+        throw new Error("withdrawRewards function not found on contract")
+      }
+
       const tx = await contract.withdrawRewards()
-      console.log("Transaction created:", tx)
+      console.log("✅ Transaction created:", tx)
 
       addToast("Transaction submitted. Waiting for confirmation...", "info")
       const receipt = await tx.wait()
-      console.log("Transaction receipt:", receipt)
+      console.log("✅ Transaction receipt:", receipt)
 
       addToast("Rewards withdrawn successfully!", "success")
       await loadContractData()
     } catch (error) {
-      console.error("Withdraw failed:", error)
+      console.error("❌ Withdraw failed:", error)
       console.error("Error details:", {
         code: error.code,
         message: error.message,
@@ -470,29 +522,48 @@ export default function App() {
   }
 
   const withdrawReferral = async () => {
-    if (!contract || txLoading) return
+    console.log("=== REFERRAL WITHDRAW BUTTON CLICKED ===")
+    console.log("Contract exists:", !!contract)
+    console.log("txLoading:", txLoading)
+    console.log("Referral rewards value:", referralRewards)
+    console.log("Referral rewards parsed:", Number.parseFloat(referralRewards))
 
-    console.log("Withdraw referral function called")
-    console.log("Contract:", contract)
-    console.log("Account:", account)
-    console.log("Current referral rewards:", referralRewards)
+    if (!contract) {
+      console.log("❌ No contract available")
+      addToast("Contract not initialized", "error")
+      return
+    }
+
+    if (txLoading) {
+      console.log("❌ Transaction already in progress")
+      return
+    }
+
+    console.log("✅ Proceeding with referral withdrawal...")
 
     setTxLoading(true)
     try {
       addToast("Processing referral withdrawal...", "info")
 
       console.log("Calling withdrawReferralRewards on contract...")
+      console.log("Contract address:", contract.address)
+
+      // Check if function exists
+      if (!contract.withdrawReferralRewards) {
+        throw new Error("withdrawReferralRewards function not found on contract")
+      }
+
       const tx = await contract.withdrawReferralRewards()
-      console.log("Transaction created:", tx)
+      console.log("✅ Transaction created:", tx)
 
       addToast("Transaction submitted. Waiting for confirmation...", "info")
       const receipt = await tx.wait()
-      console.log("Transaction receipt:", receipt)
+      console.log("✅ Transaction receipt:", receipt)
 
       addToast("Referral rewards withdrawn successfully!", "success")
       await loadContractData()
     } catch (error) {
-      console.error("Referral withdraw failed:", error)
+      console.error("❌ Referral withdraw failed:", error)
       console.error("Error details:", {
         code: error.code,
         message: error.message,
@@ -816,11 +887,7 @@ export default function App() {
               <span className="reward-amount">{formatAmount(rewards)} USDT</span>
               <span className="reward-label">Available to withdraw</span>
             </div>
-            <button
-              className="vault-button premium-button success"
-              onClick={withdraw}
-              disabled={txLoading || Number.parseFloat(rewards) === 0}
-            >
+            <button className="vault-button premium-button success" onClick={withdraw} disabled={txLoading}>
               {txLoading ? "Processing..." : "Withdraw Rewards"}
             </button>
             <button
@@ -855,11 +922,7 @@ export default function App() {
               </button>
             </div>
 
-            <button
-              className="vault-button premium-button purple"
-              onClick={withdrawReferral}
-              disabled={txLoading || Number.parseFloat(referralRewards) === 0}
-            >
+            <button className="vault-button premium-button purple" onClick={withdrawReferral} disabled={txLoading}>
               {txLoading ? "Processing..." : "Withdraw Referral"}
             </button>
             <button
