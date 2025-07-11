@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import { Contract, formatEther, parseEther } from "ethers"
-import { autoReconnect, disconnectWallet, getReferralFromURL } from "./connectWallet"
+import { connectInjected, getReferralFromURL } from "./connectWallet"
 import { useToast, ToastContainer } from "./components/Toast"
 import BlackVaultAbi from "./contract/BlackVaultABI.json"
 import ERC20Abi from "./contract/ERC20Abi.json"
@@ -53,27 +53,6 @@ export default function App() {
     const refFromURL = getReferralFromURL()
     setReferralAddress(refFromURL)
   }, [])
-
-  useEffect(() => {
-    const tryAutoReconnect = async () => {
-      setLoading(true)
-      try {
-        const conn = await autoReconnect()
-        if (conn) {
-          setProvider(conn.provider)
-          setSigner(conn.signer)
-          setAccount(conn.account)
-          addToast("Auto-reconnected successfully!", "success")
-        }
-      } catch (error) {
-        console.error("Auto-reconnect failed:", error)
-        addToast("Auto-reconnect failed. Please connect manually.", "error")
-      } finally {
-        setLoading(false)
-      }
-    }
-    tryAutoReconnect()
-  }, []) // Run only once on component mount
 
   // Initialize contracts when wallet connects
   useEffect(() => {
@@ -359,7 +338,7 @@ export default function App() {
       await new Promise((resolve) => setTimeout(resolve, 100))
 
       console.log("Attempting to connect wallet...")
-      const conn = await connectWallet()
+      const conn = await connectInjected()
 
       console.log("Connection successful:", conn.account)
       setProvider(conn.provider)
@@ -824,10 +803,8 @@ export default function App() {
     }
   }
 
-  const disconnect = async () => {
-    // Make it async
-    await disconnectWallet() // Call the new utility function
-    // Clear your local state
+  const disconnect = () => {
+    isManuallyDisconnected.current = true
     setProvider(null)
     setSigner(null)
     setAccount("")
@@ -913,7 +890,7 @@ export default function App() {
 
             <p className="app-subtitle">Premium USDT Staking Platform on Binance Smart Chain</p>
 
-            <button className="connect-button premium-button" onClick={() => connectWallet()} disabled={loading}>
+            <button className="connect-button premium-button" onClick={connectWallet} disabled={loading}>
               {loading ? (
                 <>
                   <div className="loading-spinner"></div>
