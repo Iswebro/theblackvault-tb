@@ -1086,11 +1086,7 @@ export default function App() {
             </div>
 
             <div className="referral-actions">
-              <button
-                className="copy-link-button"
-                onClick={copyReferralLink}
-                disabled={Number.parseFloat(vaultActiveAmount) === 0}
-              >
+              <button className="copy-link-button" onClick={copyReferralLink}>
                 Copy Referral Link
               </button>
               <button className="see-referrals-button" onClick={() => setShowReferralsModal(true)}>
