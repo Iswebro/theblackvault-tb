@@ -857,6 +857,10 @@ export default function App() {
   }
 
   const copyReferralLink = () => {
+    if (Number.parseFloat(vaultActiveAmount) === 0) {
+      addToast("To be eligible for referral rewards, you must have deposited at least once.", "warning")
+      return
+    }
     const link = getReferralLink()
     navigator.clipboard.writeText(link)
     addToast("Referral link copied to clipboard!", "success")
