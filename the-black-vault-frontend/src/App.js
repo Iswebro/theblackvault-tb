@@ -115,7 +115,7 @@ export default function App() {
       console.log("CONTRACT_ADDRESS:", CONTRACT_ADDRESS)
       console.log("USDT_ADDRESS:", USDT_ADDRESS)
       console.log("OLD_CONTRACT_ADDRESS:", process.env.REACT_APP_OLD_CONTRACT_ADDRESS)
-      console.log("Expected new contract:", "0xa5C6a3b80Eb1cF0c4A4ca4Ded8b0D17895775956")
+      console.log("Expected new contract:", "0xDe58F2cb3Bc62dfb9963f422d0DB079B2407a719")
       console.log("Expected old contract:", "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1")
 
       const vault = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
