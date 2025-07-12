@@ -43,6 +43,7 @@ export default function App() {
   const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false)
   const [dailyRate, setDailyRate] = useState("0")
   const [timeUntilNextCycle, setTimeUntilNextCycle] = useState(0)
+  const [queuedBalance, setQueuedBalance] = useState("0")
 
   const { toasts, addToast, removeToast } = useToast()
   const isManuallyDisconnected = useRef(false)
@@ -238,6 +239,8 @@ export default function App() {
         const vaultData = await vault.getUserVault(account)
         setRewards(formatEther(vaultData.pendingRewards))
         setVaultActiveAmount(formatEther(vaultData.activeAmount))
+        setQueuedBalance(formatEther(vaultData.queuedAmount))
+        console.log("Fetched vault queued amount:", formatEther(vaultData.queuedAmount))
         console.log("Fetched vault rewards:", formatEther(vaultData.pendingRewards))
         console.log("Fetched vault active amount:", formatEther(vaultData.activeAmount))
       } catch (error) {
@@ -943,6 +946,12 @@ export default function App() {
                 <span className="balance-label">USDT Balance</span>
                 <span className="balance-value">{formatAmount(vaultActiveAmount)} USDT</span>
               </div>
+              {Number.parseFloat(queuedBalance) > 0 && (
+                <div className="balance-item">
+                  <span className="balance-label">Queued Balance</span>
+                  <span className="balance-value">{formatAmount(queuedBalance)} USDT</span>
+                </div>
+              )}
               {Number.parseFloat(vaultActiveAmount) > 0 && dailyRate !== "0" && (
                 <div className="balance-item">
                   <span className="balance-label">Projected Daily Rewards</span>
