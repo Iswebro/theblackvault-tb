@@ -237,13 +237,19 @@ export default function App() {
 
       try {
         const vaultData = await vault.getUserVault(account)
-        console.log("Raw vaultData from contract:", vaultData) // Log raw data
-        setRewards(formatEther(vaultData.pending)) // Corrected to .pending
-        setVaultActiveAmount(formatEther(vaultData.activeAmt)) // Corrected to .activeAmt
-        setQueuedBalance(formatEther(vaultData.queuedAmt)) // Corrected to .queuedAmt
-        console.log("Fetched vault queued amount (queuedAmt):", formatEther(vaultData.queuedAmt))
-        console.log("Fetched vault rewards (pending):", formatEther(vaultData.pending))
-        console.log("Fetched vault active amount (activeAmt):", formatEther(vaultData.activeAmt))
+        console.log("Raw vaultData from contract:", vaultData)
+        console.log("vaultData.totalDeposited (raw):", vaultData.totalDeposited.toString())
+        console.log("vaultData.activeAmt (raw):", vaultData.activeAmt.toString())
+        console.log("vaultData.queuedAmt (raw):", vaultData.queuedAmt.toString())
+        console.log("vaultData.pending (raw):", vaultData.pending.toString())
+
+        setRewards(formatEther(vaultData.pending))
+        setVaultActiveAmount(formatEther(vaultData.activeAmt))
+        setQueuedBalance(formatEther(vaultData.queuedAmt))
+
+        console.log("Set rewards to:", formatEther(vaultData.pending))
+        console.log("Set vaultActiveAmount to:", formatEther(vaultData.activeAmt))
+        console.log("Set queuedBalance to:", formatEther(vaultData.queuedAmt))
       } catch (error) {
         console.log("No vault data found for user or error fetching vault data:", error)
         setRewards("0")
