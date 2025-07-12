@@ -1,19 +1,21 @@
 // src/lib/config.ts
-
+// Network configuration
 export const config = {
-  contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!,
-  usdtAddress:    process.env.NEXT_PUBLIC_USDT_ADDRESS!,
+  contractAddress: process.env.REACT_APP_CONTRACT_ADDRESS!,
+  oldContractAddress: process.env.REACT_APP_OLD_CONTRACT_ADDRESS!,
+  usdtAddress: process.env.REACT_APP_USDT_ADDRESS!,
 
-  chainId:        Number.parseInt(process.env.NEXT_PUBLIC_CHAIN_ID!, 10),
-  chainName:      process.env.NEXT_PUBLIC_CHAIN_NAME!,
-  rpcUrl:         process.env.NEXT_PUBLIC_RPC_URL!,
-  blockExplorer:  process.env.NEXT_PUBLIC_BLOCK_EXPLORER!,
+  chainId: Number.parseInt(process.env.REACT_APP_CHAIN_ID!),
+  chainName: process.env.REACT_APP_CHAIN_NAME!,
+  rpcUrl: process.env.REACT_APP_RPC_URL!,
+  blockExplorer: process.env.REACT_APP_BLOCK_EXPLORER!,
 
-  walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
+  walletConnectProjectId: process.env.REACT_APP_WALLETCONNECT_PROJECT_ID!,
 
-  isTestnet(): boolean {
+  isTestnet() {
     return this.chainId === 97;
   },
+
   getExplorerUrl(txHash: string) {
     return `${this.blockExplorer}/tx/${txHash}`;
   },
@@ -22,8 +24,10 @@ export const config = {
   },
 };
 
+// convenience exports
 export const {
   contractAddress,
+  oldContractAddress,
   usdtAddress,
   chainId,
   chainName,
