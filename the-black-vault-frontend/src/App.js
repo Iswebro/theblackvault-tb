@@ -4,17 +4,18 @@ import { useEffect, useState, useRef } from "react"
 import { Contract, formatEther, parseEther } from "ethers"
 import { connectInjected, getReferralFromURL } from "./connectWallet"
 import { useToast, ToastContainer } from "./components/Toast"
-import BlackVaultAbi from "./contract/BlackVaultABI.json"
-import ERC20Abi from "./contract/ERC20Abi.json"
+import { abi as BlackVaultAbi }   from "./contract/BlackVaultABI.json"
+import { abi as ERC20Abi }        from "./contract/ERC20Abi.json"
 import "./App.css"
 import { config } from "./lib/config.ts"
 import HowItWorks from "./components/HowItWorks"
 import Leaderboard from "./components/Leaderboard"
 import ReferralsModal from "./components/ReferralsModal"
 import TroubleshootingModal from "./components/TroubleshootingModal"
-import BlackVaultV1Abi from "./contract/BlackVaultV1ABI.json"
+import { abi as BlackVaultV1Abi } from "./contract/BlackVaultV1ABI.json"
 
 const CONTRACT_ADDRESS = config.contractAddress
+const OLD_CONTRACT_ADDRESS = process.env.REACT_APP_OLD_CONTRACT_ADDRESS
 const USDT_ADDRESS = config.usdtAddress
 
 export default function App() {
@@ -126,7 +127,7 @@ export default function App() {
       setUsdtContract(usdt)
       console.log("USDT Contract initialized:", usdt)
 
-      const oldVault = new Contract(process.env.REACT_APP_OLD_CONTRACT_ADDRESS, BlackVaultV1Abi, signer)
+      const oldVault = new Contract(OLD_CONTRACT_ADDRESS,BlackVaultV1Abi,signer)
       setOldVaultContract(oldVault)
       console.log("BlackVault V1 Contract initialized:", oldVault)
 
