@@ -1,32 +1,33 @@
-// Network configuration
+// src/lib/config.ts
+
 export const config = {
-  // Contract settings for BSC Testnet
-  contractAddress: process.env.REACT_APP_CONTRACT_ADDRESS!,
-  usdtAddress: process.env.REACT_APP_USDT_ADDRESS!,
+  contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!,
+  usdtAddress:    process.env.NEXT_PUBLIC_USDT_ADDRESS!,
 
-  // Network settings for BSC Testnet
-  chainId: Number.parseInt(process.env.REACT_APP_CHAIN_ID!),
-  chainName: process.env.REACT_APP_CHAIN_NAME!,
-  rpcUrl: process.env.REACT_APP_RPC_URL!,
-  blockExplorer: process.env.REACT_APP_BLOCK_EXPLORER!,
+  chainId:        Number.parseInt(process.env.NEXT_PUBLIC_CHAIN_ID!, 10),
+  chainName:      process.env.NEXT_PUBLIC_CHAIN_NAME!,
+  rpcUrl:         process.env.NEXT_PUBLIC_RPC_URL!,
+  blockExplorer:  process.env.NEXT_PUBLIC_BLOCK_EXPLORER!,
 
-  // WalletConnect
-  walletConnectProjectId: process.env.REACT_APP_WALLETCONNECT_PROJECT_ID!,
+  walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
 
-  // Helper functions
-  isTestnet: function () {
-    return this.chainId === 97
+  isTestnet(): boolean {
+    return this.chainId === 97;
   },
-
-  getExplorerUrl: function (txHash: string) {
-    return `${this.blockExplorer}/tx/${txHash}`
+  getExplorerUrl(txHash: string) {
+    return `${this.blockExplorer}/tx/${txHash}`;
   },
-
-  getAddressUrl: function (address: string) {
-    return `${this.blockExplorer}/address/${address}`
+  getAddressUrl(address: string) {
+    return `${this.blockExplorer}/address/${address}`;
   },
-}
+};
 
-// Export individual values for convenience
-export const { contractAddress, usdtAddress, chainId, chainName, rpcUrl, blockExplorer, walletConnectProjectId } =
-  config
+export const {
+  contractAddress,
+  usdtAddress,
+  chainId,
+  chainName,
+  rpcUrl,
+  blockExplorer,
+  walletConnectProjectId,
+} = config;
