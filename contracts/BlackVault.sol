@@ -185,7 +185,6 @@ contract BlackVaultV2 {
         u.queuedAmount += net;
         u.queuedCycle = nextCycle;
         totalDeposited += amount;
-        totalActiveAmount += net;
         emit Deposited(msg.sender, amount, address(0), nextCycle);
     }
 
@@ -222,7 +221,6 @@ contract BlackVaultV2 {
         referrals[referrer].referredCount++;
         referrals[referrer].totalReferredVolume += amount;
         totalDeposited += amount;
-        totalActiveAmount += net;
         emit Deposited(msg.sender, amount, referrer, nextCycle);
     }
 
@@ -258,9 +256,11 @@ contract BlackVaultV2 {
         UserVault storage u = vaults[user];
         uint256 curr = getCurrentCycle();
         if (u.queuedAmount > 0 && u.queuedCycle <= curr) {
+            uint256 amountToActivate = u.queuedAmount;
             u.activeAmount += u.queuedAmount;
             u.queuedAmount = 0;
             u.queuedCycle = 0;
+            totalActiveAmount += amountToActivate;
         }
     }
 

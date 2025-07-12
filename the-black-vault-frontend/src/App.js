@@ -118,15 +118,6 @@ export default function App() {
       console.log("Expected new contract:", "0xa5C6a3b80Eb1cF0c4A4ca4Ded8b0D17895775956")
       console.log("Expected old contract:", "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1")
 
-      // Check if CONTRACT_ADDRESS is correct
-      if (CONTRACT_ADDRESS !== "0xc189b62d826eb8EFB0c846c8Cb1F623DeCD6E915") {
-        console.error(
-          "❌ WRONG CONTRACT ADDRESS! Expected: 0xc189b62d826eb8EFB0c846c8Cb1F623DeCD6E915, Got:",
-          CONTRACT_ADDRESS,
-        )
-        addToast("Wrong contract address configured!", "error")
-      }
-
       const vault = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
       setContract(vault)
       console.log("BlackVault Contract initialized:", vault)
