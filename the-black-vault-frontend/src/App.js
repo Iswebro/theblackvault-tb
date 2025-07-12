@@ -247,6 +247,7 @@ export default function App() {
         console.log("No vault data found for user", error)
         setRewards("0")
         setVaultActiveAmount("0")
+        setQueuedBalance("0") // Ensure queuedBalance is reset if no vault data
       }
 
       try {
@@ -948,7 +949,7 @@ export default function App() {
               </div>
               {Number.parseFloat(queuedBalance) > 0 && (
                 <div className="balance-item">
-                  <span className="balance-label">Queued Balance</span>
+                  <span className="balance-label">Queued for Accrual</span>
                   <span className="balance-value">{formatAmount(queuedBalance)} USDT</span>
                 </div>
               )}
