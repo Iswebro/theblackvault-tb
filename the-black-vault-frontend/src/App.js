@@ -1,113 +1,35 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useRef } from "react"
-import { Contract, formatEther, parseEther } from "ethers"
-import { connectInjected, getReferralFromURL } from "./connectWallet"
-import { useToast, ToastContainer } from "./components/Toast"
-import { abi as BlackVaultAbi }   from "./contract/BlackVaultABI.json"
-import { abi as ERC20Abi }        from "./contract/ERC20Abi.json"
-import "./App.css"
-import { config } from "./lib/config.ts"
-import HowItWorks from "./components/HowItWorks"
-import Leaderboard from "./components/Leaderboard"
-import ReferralsModal from "./components/ReferralsModal"
-import TroubleshootingModal from "./components/TroubleshootingModal"
-import { abi as BlackVaultV1Abi } from "./contract/BlackVaultV1ABI.json"
+import { useEffect, useState, useRef } from "react";
+import { Contract, formatEther, parseEther } from "ethers";
+import { connectInjected, getReferralFromURL } from "./connectWallet";
+import { useToast, ToastContainer } from "./components/Toast";
 
-const CONTRACT_ADDRESS = config.contractAddress
-const OLD_CONTRACT_ADDRESS = process.env.REACT_APP_OLD_CONTRACT_ADDRESS
-const USDT_ADDRESS = config.usdtAddress
+// Import the JSON and pull out the `.abi` field
+import BlackVaultJSON   from "./contract/BlackVaultABI.json";
+import ERC20JSON        from "./contract/ERC20Abi.json";
+import BlackVaultV1JSON from "./contract/BlackVaultV1ABI.json";
+
+const BlackVaultAbi   = BlackVaultJSON.abi;
+const ERC20Abi        = ERC20JSON.abi;
+const BlackVaultV1Abi = BlackVaultV1JSON.abi;
+
+import "./App.css";
+import { config } from "./lib/config.ts";
+import HowItWorks from "./components/HowItWorks";
+import Leaderboard from "./components/Leaderboard";
+import ReferralsModal from "./components/ReferralsModal";
+import TroubleshootingModal from "./components/TroubleshootingModal";
+
+// Addresses from your config / env
+const CONTRACT_ADDRESS     = config.contractAddress;
+const OLD_CONTRACT_ADDRESS = process.env.REACT_APP_OLD_CONTRACT_ADDRESS;
+const USDT_ADDRESS         = config.usdtAddress;
 
 export default function App() {
-  const [provider, setProvider] = useState(null)
-  const [signer, setSigner] = useState(null)
-  const [account, setAccount] = useState("")
-  const [contract, setContract] = useState(null)
-  const [usdtContract, setUsdtContract] = useState(null)
-  const [oldVaultContract, setOldVaultContract] = useState(null)
-
-  const [balance, setBalance] = useState("0")
-  const [usdtBalance, setUsdtBalance] = useState("0")
-  const [depositAmount, setDepositAmount] = useState("")
-  const [rewards, setRewards] = useState("0")
-  const [referralRewards, setReferralRewards] = useState("0")
-  const [referralAddress, setReferralAddress] = useState("")
-  const [history, setHistory] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [txLoading, setTxLoading] = useState(false)
-  const [referralCount, setReferralCount] = useState(0)
-  const [minDeposit, setMinDeposit] = useState("0")
-  const [usdtAllowance, setUsdtAllowance] = useState("0")
-  const [vaultActiveAmount, setVaultActiveAmount] = useState("0")
-  const [referralBonusesRemaining, setReferralBonusesRemaining] = useState(3)
-  const [showReferralsModal, setShowReferralsModal] = useState(false)
-  const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false)
-  const [dailyRate, setDailyRate] = useState("0")
-  const [timeUntilNextCycle, setTimeUntilNextCycle] = useState(0)
-  const [queuedBalance, setQueuedBalance] = useState("0")
-
-  const { toasts, addToast, removeToast } = useToast()
-  const isManuallyDisconnected = useRef(false)
-  const [showDisclaimer, setShowDisclaimer] = useState(true)
-
-  // Get referral from URL on component mount
-  useEffect(() => {
-    const refFromURL = getReferralFromURL()
-    setReferralAddress(refFromURL)
-  }, [])
-
-  // Initialize contracts when wallet connects
-  useEffect(() => {
-    if (signer && account && provider) {
-      console.log("Initializing contracts for account:", account)
-      initializeContracts()
-    }
-  }, [signer, account, provider])
-
-  // Listen for account changes
-  useEffect(() => {
-    if (window.ethereum) {
-      const handleAccountsChanged = async (accounts) => {
-        console.log("Accounts changed event received:", accounts)
-        if (accounts.length === 0) {
-          console.log("No accounts found, disconnecting.")
-          if (!isManuallyDisconnected.current) {
-            disconnect()
-          }
-        } else if (account && accounts[0].toLowerCase() !== account.toLowerCase()) {
-          if (!isManuallyDisconnected.current) {
-            console.log("Account switched from", account, "to", accounts[0])
-            setAccount(accounts[0])
-            addToast("Account switched", "info")
-          }
-        } else if (!account && accounts.length > 0 && !isManuallyDisconnected.current) {
-          console.log("Initial account detected:", accounts[0])
-          setAccount(accounts[0])
-          addToast("Wallet connected successfully!", "success")
-        }
-      }
-
-      const handleChainChanged = () => {
-        console.log("Chain changed, reloading page.")
-        window.location.reload()
-      }
-
-      window.ethereum.on("accountsChanged", handleAccountsChanged)
-      window.ethereum.on("chainChanged", handleChainChanged)
-
-      window.ethereum
-        .request({ method: "eth_accounts" })
-        .then(handleAccountsChanged)
-        .catch((err) => console.error("Error getting initial accounts:", err))
-
-      return () => {
-        if (window.ethereum.removeListener) {
-          window.ethereum.removeListener("accountsChanged", handleAccountsChanged)
-          window.ethereum.removeListener("chainChanged", handleChainChanged)
-        }
-      }
-    }
-  }, [account, addToast])
+  // …the rest of your component
+}
+  // … your hooks and state
 
   const initializeContracts = async () => {
     if (!signer) return
@@ -115,22 +37,28 @@ export default function App() {
       console.log("=== CONTRACT DEBUGGING ===")
       console.log("CONTRACT_ADDRESS:", CONTRACT_ADDRESS)
       console.log("USDT_ADDRESS:", USDT_ADDRESS)
-      console.log("OLD_CONTRACT_ADDRESS:", process.env.REACT_APP_OLD_CONTRACT_ADDRESS)
+      console.log("OLD_CONTRACT_ADDRESS:", OLD_CONTRACT_ADDRESS)
       console.log("Expected new contract:", "0xDe58F2cb3Bc62dfb9963f422d0DB079B2407a719")
       console.log("Expected old contract:", "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1")
 
-      const vault = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
+      const vault    = new Contract(CONTRACT_ADDRESS,     BlackVaultAbi,   signer)
       setContract(vault)
       console.log("BlackVault Contract initialized:", vault)
 
-      const usdt = new Contract(USDT_ADDRESS, ERC20Abi, signer)
+      const usdt     = new Contract(USDT_ADDRESS,          ERC20Abi,        signer)
       setUsdtContract(usdt)
       console.log("USDT Contract initialized:", usdt)
 
-      const oldVault = new Contract(OLD_CONTRACT_ADDRESS,BlackVaultV1Abi,signer)
+      const oldVault = new Contract(OLD_CONTRACT_ADDRESS,  BlackVaultV1Abi, signer)
       setOldVaultContract(oldVault)
       console.log("BlackVault V1 Contract initialized:", oldVault)
 
+      // … rest of your initialization
+    } catch (error) {
+      console.error("❌ Error initializing contracts:", error)
+      addToast("Error connecting to contracts", "error")
+    }
+  }
       // Test if the main contract has the expected functions
       console.log("=== TESTING CONTRACT FUNCTIONS ===")
       try {
@@ -163,12 +91,13 @@ export default function App() {
         console.error("❌ Error calling getUserVault:", error)
       }
 
+    try {
       await loadContractData(vault, usdt)
     } catch (error) {
       console.error("❌ Error initializing contracts:", error)
       addToast("Error connecting to contracts", "error")
     }
-  }
+  
 
   const loadTransactionHistory = async (vault, usdt) => {
     if (!vault || !provider || !account) {
@@ -1181,4 +1110,4 @@ export default function App() {
       />
     </div>
   )
-}
+
