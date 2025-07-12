@@ -2,12 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import { Contract, formatEther, parseEther } from "ethers"
-import {
-  connectWallet as connectWalletUtil,
-  autoReconnect,
-  disconnectWallet as disconnectWalletUtil,
-  getReferralFromURL,
-} from "./connectWallet"
+import { connectInjected, getReferralFromURL } from "./connectWallet"
 import { useToast, ToastContainer } from "./components/Toast"
 import BlackVaultAbi from "./contract/BlackVaultABI.json"
 import ERC20Abi from "./contract/ERC20Abi.json"
@@ -112,27 +107,6 @@ export default function App() {
     }
   }, [account, addToast])
 
-  useEffect(() => {
-    const tryAutoReconnect = async () => {
-      setLoading(true)
-      try {
-        const conn = await autoReconnect() // Use the autoReconnect from connectWallet.js
-        if (conn) {
-          setProvider(conn.provider)
-          setSigner(conn.signer)
-          setAccount(conn.account)
-          addToast("Auto-reconnected successfully!", "success")
-        }
-      } catch (error) {
-        console.error("Auto-reconnect failed:", error)
-        addToast("Auto-reconnect failed. Please connect manually.", "error")
-      } finally {
-        setLoading(false)
-      }
-    }
-    tryAutoReconnect()
-  }, [])
-
   const initializeContracts = async () => {
     if (!signer) return
     try {
@@ -140,7 +114,7 @@ export default function App() {
       console.log("CONTRACT_ADDRESS:", CONTRACT_ADDRESS)
       console.log("USDT_ADDRESS:", USDT_ADDRESS)
       console.log("OLD_CONTRACT_ADDRESS:", process.env.REACT_APP_OLD_CONTRACT_ADDRESS)
-      console.log("Expected new contract:", "0xc189b62d826eb8EFB0c846c8Cb1F623DeCD6E915")
+      console.log("Expected new contract:", "0xa5C6a3b80Eb1cF0c4A4ca4Ded8b0D17895775956")
       console.log("Expected old contract:", "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1")
 
       // Check if CONTRACT_ADDRESS is correct
@@ -364,7 +338,7 @@ export default function App() {
       await new Promise((resolve) => setTimeout(resolve, 100))
 
       console.log("Attempting to connect wallet...")
-      const conn = await connectWalletUtil() // Call the new utility function
+      const conn = await connectInjected()
 
       console.log("Connection successful:", conn.account)
       setProvider(conn.provider)
@@ -829,10 +803,8 @@ export default function App() {
     }
   }
 
-  const disconnect = async () => {
-    // Make it async
+  const disconnect = () => {
     isManuallyDisconnected.current = true
-    await disconnectWalletUtil() // Call the new utility function
     setProvider(null)
     setSigner(null)
     setAccount("")
