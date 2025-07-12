@@ -166,7 +166,7 @@ export default function App() {
       // Test if we can read user data
       try {
         const vaultData = await vault.getUserVault(account)
-        console.log("✅ getUserVault works, pending rewards:", formatEther(vaultData.pendingRewards))
+        console.log("✅ getUserVault works, pending rewards:", formatEther(vaultData.pending)) // Corrected to .pending
       } catch (error) {
         console.error("❌ Error calling getUserVault:", error)
       }
@@ -237,17 +237,18 @@ export default function App() {
 
       try {
         const vaultData = await vault.getUserVault(account)
-        setRewards(formatEther(vaultData.pendingRewards))
-        setVaultActiveAmount(formatEther(vaultData.activeAmount))
-        setQueuedBalance(formatEther(vaultData.queuedAmount))
-        console.log("Fetched vault queued amount:", formatEther(vaultData.queuedAmount))
-        console.log("Fetched vault rewards:", formatEther(vaultData.pendingRewards))
-        console.log("Fetched vault active amount:", formatEther(vaultData.activeAmount))
+        console.log("Raw vaultData from contract:", vaultData) // Log raw data
+        setRewards(formatEther(vaultData.pending)) // Corrected to .pending
+        setVaultActiveAmount(formatEther(vaultData.activeAmt)) // Corrected to .activeAmt
+        setQueuedBalance(formatEther(vaultData.queuedAmt)) // Corrected to .queuedAmt
+        console.log("Fetched vault queued amount (queuedAmt):", formatEther(vaultData.queuedAmt))
+        console.log("Fetched vault rewards (pending):", formatEther(vaultData.pending))
+        console.log("Fetched vault active amount (activeAmt):", formatEther(vaultData.activeAmt))
       } catch (error) {
-        console.log("No vault data found for user", error)
+        console.log("No vault data found for user or error fetching vault data:", error)
         setRewards("0")
         setVaultActiveAmount("0")
-        setQueuedBalance("0") // Ensure queuedBalance is reset if no vault data
+        setQueuedBalance("0")
       }
 
       try {
