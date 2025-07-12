@@ -24,7 +24,7 @@ async function main() {
 
   // Deploy the contract
   console.log("⏳ Deploying BlackVault contract...")
-  const BlackVault = await hre.ethers.getContractFactory("BlackVault")
+  const BlackVault = await hre.ethers.getContractFactory("BlackVaultV2")
   const blackVault = await BlackVault.deploy(usdtAddress, feeWallet)
 
   await blackVault.waitForDeployment()
