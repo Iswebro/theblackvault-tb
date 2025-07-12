@@ -947,12 +947,10 @@ export default function App() {
                 <span className="balance-label">USDT Balance</span>
                 <span className="balance-value">{formatAmount(vaultActiveAmount)} USDT</span>
               </div>
-              {Number.parseFloat(queuedBalance) > 0 && (
-                <div className="balance-item">
-                  <span className="balance-label">Queued for Accrual</span>
-                  <span className="balance-value">{formatAmount(queuedBalance)} USDT</span>
-                </div>
-              )}
+              <div className="balance-item">
+                <span className="balance-label">Queued for Accrual</span>
+                <span className="balance-value">{formatAmount(queuedBalance)} USDT</span>
+              </div>
               {Number.parseFloat(vaultActiveAmount) > 0 && dailyRate !== "0" && (
                 <div className="balance-item">
                   <span className="balance-label">Projected Daily Rewards</span>
