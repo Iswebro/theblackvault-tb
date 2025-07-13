@@ -230,83 +230,82 @@ export default function App() {
     }
   }
 
-   // ─────────── loadContractData ───────────
-   const loadContractData = async (vault = contract, usdt = usdtContract) => {
-     if (!vault || !provider || !account || !usdt) {
-       console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt })
-       return
-     }
+      const loadContractData = async (vault = contract, usdt = usdtContract) => {
+    if (!vault || !provider || !account || !usdt) {
+      console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt });
+      return;
+    }
  
-     try {
-   const vaultData        = await vault.getUserVault(account);
-   const totalDeposited   = vaultData.totalDeposited;
-   const activeAmount     = vaultData.activeAmount;
-   const pendingRewards   = vaultData.pendingRewards;
+    try {
+      // ─────────── ON-CHAIN VAULT DATA ───────────
+      const vaultData      = await vault.getUserVault(account);
+      const totalDep       = vaultData.totalDep;
+      const activeAmt      = vaultData.activeAmt;
+      const queuedAmt      = vaultData.queuedAmt;
+      const pendingRewards = vaultData.pending;
  
-   // if you still want a “queued” number, you can compute:
-   // queued = totalDeposited - activeAmount
-   const queuedForAccrual = totalDeposited.sub(activeAmount);
+      setVaultActiveAmount(formatEther(activeAmt));
+      setQueuedBalance   (formatEther(queuedAmt));
+      setRewards         (formatEther(pendingRewards));
  
-   setVaultActiveAmount(formatEther(activeAmount));
-   setQueuedBalance   (formatEther(queuedForAccrual));
-   setRewards         (formatEther(pendingRewards));
+      console.log("Vault Active Amount:", formatEther(activeAmt));
+      console.log("Queued for Accrual:",   formatEther(queuedAmt));
+      console.log("Pending Rewards:",      formatEther(pendingRewards));
  
-   console.log("Vault Active Amount:", formatEther(activeAmount));
-   console.log("Queued for Accrual:",  formatEther(queuedForAccrual));
-   console.log("Pending Rewards:",     formatEther(pendingRewards));
+      // ─────────── REFERRAL DATA ───────────
+      const refData = await vault.getUserReferralData(account);
+      setReferralRewards(formatEther(refData.availableRewards));
+      setReferralCount  (refData.referredCount.toString());
  
-       console.log("Vault Active Amount:", formatEther(active))
-       console.log("Queued for Accrual:",   formatEther(queued))
-       console.log("Pending Rewards:",      formatEther(pending))
+      // ─────────── CONSTANTS & TIMING ───────────
+      const [minDep, dRate, timeRem] = await Promise.all([
+        vault.MIN_DEPOSIT(),
+        vault.DAILY_RATE(),
+        vault.getTimeUntilNextCycle(),
+      ]);
+      setMinDeposit         (formatEther(minDep));
+      setDailyRate          (dRate.toString());
+      setTimeUntilNextCycle (Number(timeRem.toString()));
+
+      // ─────────── TRANSACTION HISTORY ───────────
+      await loadTransactionHistory(vault, usdt);
  
-       // ─────────── REFERRAL + CONSTANTS + TIMING + HISTORY ───────────
-       // …your existing code here (unchanged) …
-       await loadTransactionHistory(vault, usdt)
+    } catch (error) {
+      console.error("Error loading contract data:", error);
+       addToast("Error loading data from contract", "error");
+     // on error, reset displays
+      setVaultActiveAmount       ("0");
+      setQueuedBalance           ("0");
+      setRewards                 ("0");
+    }
+  };
  
-     } catch (error) {
-       console.error("Error loading contract data:", error)
-       addToast("Error loading data from contract", "error")
+  // ─── Re-load whenever provider or account changes ───
+  useEffect(() => {
+    if (provider && account) {
+      loadContractData();
+    }
+  }, [provider, account]);
  
-       // reset UI on error
-       setVaultActiveAmount("0")
-       setQueuedBalance("0")
-       setRewards("0")
-       setReferralRewards("0")
-       setReferralCount("0")
-       setReferralBonusesRemaining("0")
-       setMinDeposit("0")
-       setDailyRate("0")
-       setTimeUntilNextCycle(0)
-       setHistory([])
-     }
-   }  // ←–– CLOSE loadContractData here
- 
-   // ─── Re-load whenever provider or account changes ───
-   useEffect(() => {
-     if (provider && account) {
-       loadContractData()
-     }
-   }, [provider, account])
- 
-   // ─── Countdown timer / auto-refresh ───
-   useEffect(() => {
-     let timer
-     if (account && timeUntilNextCycle > 0) {
-       timer = setInterval(() => {
-         setTimeUntilNextCycle(prev => {
-           if (prev <= 1) {
-             clearInterval(timer)
-             if (provider && account) loadContractData()
-             return 0
-           }
-           return prev - 1
-         })
-       }, 1000)
-     } else if (timeUntilNextCycle === 0 && provider && account) {
-       loadContractData()
-     }
-     return () => clearInterval(timer)
-   }, [provider, account, timeUntilNextCycle])
+  // ─── Countdown timer / auto-refresh ───
+  useEffect(() => {
+    let timer;
+    if (account && timeUntilNextCycle > 0) {
+      timer = setInterval(() => {
+        setTimeUntilNextCycle(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            if (provider && account) loadContractData();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else if (timeUntilNextCycle === 0 && provider && account) {
+      loadContractData();
+    }
+    return () => clearInterval(timer);
+  }, [provider, account, timeUntilNextCycle]);
 
   const formatAddress = (addr) => {
     if (!addr) return ""
