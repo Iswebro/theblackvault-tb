@@ -14,11 +14,6 @@ import Leaderboard from "./components/Leaderboard"
 import ReferralsModal from "./components/ReferralsModal"
 import TroubleshootingModal from "./components/TroubleshootingModal"
 
-const BlackVaultAbi = BlackVaultJSON.abi
-const ERC20Abi = ERC20JSON.abi
-const BlackVaultV1Abi = BlackVaultV1JSON.abi
-
-
 // pull out the `.abi` arrays
 const CONTRACT_ADDRESS = config.contractAddress
 const USDT_ADDRESS = config.usdtAddress
