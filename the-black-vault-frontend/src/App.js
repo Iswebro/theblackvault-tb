@@ -237,30 +237,32 @@ export default function App() {
   }
 
   console.log("Loading contract data for account:", account)
-  console.log("▶ loadContractData:", { vault, provider, account, usdt })
-    try {
-          // ←── A: old vaultData fetch starts here
-    try {
-  const vaultData = await vault.getUserVault(account);
-  // ethers.js Result has both array and named keys:
-  const activeAmt = vaultData.activeAmt;    // currently earning
-  const queuedAmt = vaultData.queuedAmt;    // waiting to start earning
-  const pending   = vaultData.pending;      // rewards ready to withdraw
+try {
+  // ── 1) Fetch & set your USDT wallet balance & allowance ──
+  const userUsdtBalance = await usdt.balanceOf(account)
+  setUsdtBalance(formatEther(userUsdtBalance))
+  console.log("Fetched USDT wallet balance:", formatEther(userUsdtBalance))
 
-  setVaultActiveAmount(formatEther(activeAmt));
-  setQueuedBalance(formatEther(queuedAmt));
-  setRewards(formatEther(pending));
+  const userAllowance = await usdt.allowance(account, CONTRACT_ADDRESS)
+  setUsdtAllowance(formatEther(userAllowance))
+  console.log("Fetched USDT allowance:", formatEther(userAllowance))
 
-  console.log("Fetched active amount:    ", formatEther(activeAmt));
-  console.log("Fetched queued for accrual:", formatEther(queuedAmt));
-  console.log("Fetched pending rewards:  ", formatEther(pending));
-} catch (err) {
-  console.error("Failed to load vault data:", err);
-  setVaultActiveAmount("0");
-  setQueuedBalance("0");
-  setRewards("0");
-}
-  // ── B: old vaultData fetch ends here
+  // ── 2) Now fetch your on-chain vault info ──
+  // ←── A: vaultData fetch starts here
+  const vaultData = await vault.getUserVault(account)
+  const activeAmt = vaultData.activeAmt    // currently earning
+  const queuedAmt = vaultData.queuedAmt    // waiting to start
+  const pending   = vaultData.pending      // rewards ready
+
+  setVaultActiveAmount(formatEther(activeAmt))
+  setQueuedBalance(formatEther(queuedAmt))
+  setRewards(formatEther(pending))
+
+  console.log("Fetched active:",    formatEther(activeAmt))
+  console.log("Fetched queued:",    formatEther(queuedAmt))
+  console.log("Fetched pending:",   formatEther(pending))
+  // ── B: vaultData fetch ends here
+
 
       try {
         const refData = await vault.getUserReferralData(account)
