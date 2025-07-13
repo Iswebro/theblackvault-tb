@@ -252,15 +252,16 @@ export default function App() {
      console.log("USDT allowance:",       formatEther(allowance))
  
      // ─────────── ON-CHAIN VAULT DATA ───────────
-     const vaultData      = await vault.getUserVault(account)
-     const activeAmount   = vaultData.activeAmount
-     const queuedAmount   = vaultData.queuedAmount
-     const pendingRewards = vaultData.pendingRewards
- 
+     // BlackVault.sol getUserVault returns: [totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined]
+     const vaultData = await vault.getUserVault(account)
+     const activeAmount   = vaultData[1] // activeAmt
+     const queuedAmount   = vaultData[2] // queuedAmt
+     const pendingRewards = vaultData[3] // pending
+
      setVaultActiveAmount(formatEther(activeAmount))
      setQueuedBalance    (formatEther(queuedAmount))
      setRewards          (formatEther(pendingRewards))
- 
+
      console.log("Vault Active Amount:", formatEther(activeAmount))
      console.log("Queued for Accrual:",   formatEther(queuedAmount))
      console.log("Pending Rewards:",      formatEther(pendingRewards))
