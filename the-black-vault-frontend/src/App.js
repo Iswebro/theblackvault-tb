@@ -119,9 +119,9 @@ export default function App() {
       console.log("Expected old contract:", "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1")
 
       // Check if CONTRACT_ADDRESS is correct
-      if (CONTRACT_ADDRESS !== "0xc189b62d826eb8EFB0c846c8Cb1F623DeCD6E915") {
+      if (CONTRACT_ADDRESS !== "0xDe58F2cb3Bc62dfb9963f422d0DB079B2407a719") {
         console.error(
-          "❌ WRONG CONTRACT ADDRESS! Expected: 0xc189b62d826eb8EFB0c846c8Cb1F623DeCD6E915, Got:",
+          "❌ WRONG CONTRACT ADDRESS! Expected: 0xDe58F2cb3Bc62dfb9963f422d0DB079B2407a719, Got:",
           CONTRACT_ADDRESS,
         )
         addToast("Wrong contract address configured!", "error")
