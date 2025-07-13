@@ -1,5 +1,6 @@
 "use client"
-
+// App.js
+import { getUserInfo, deposit, withdrawRewards, withdrawReferralRewards } from "./useBlackVault";
 import { useToast, ToastContainer, ToastProvider } from "./components/Toast";
 import { useEffect, useState, useRef } from "react"
 import { Contract, formatEther, parseEther } from "ethers"
@@ -240,21 +241,20 @@ export default function App() {
     try {
           // ←── A: old vaultData fetch starts here
     try {
-         // getUserVault returns [ totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined ]
-      const vaultData = await vault.getUserVault(account)
+         // call our helper
+      console.log("📡 getUserInfo…", { provider, account })
+      const info = await getUserInfo(provider, account)
+      console.log("🎯 Vault info:", info)
 
-  // ethers.js returns: [ totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined ]
-      const active  = vaultData.activeAmt
-      const queued  = vaultData.queuedAmt
-      const pending = vaultData.pending
+  // info.activeAmount, info.queuedAmount, info.pendingRewards are strings already
+      setVaultActiveAmount(info.activeAmount)
+      setQueuedBalance   (info.queuedAmount)
+      setRewards         (info.pendingRewards)
 
       setVaultActiveAmount(formatEther(active))
       setQueuedBalance   (formatEther(queued))
       setRewards         (formatEther(pending))
 
-      console.log("Fetched vault active amount:",   formatEther(active))
-      console.log("Fetched queued for accrual:",     formatEther(queued))
-      console.log("Fetched pending rewards:",        formatEther(pending))
     } catch (error) {
       console.log("No vault data found for user", error)
       setVaultActiveAmount("0")
@@ -324,7 +324,12 @@ export default function App() {
       addToast("Error loading data from contract", "error")
     }
   }
-
+  // Re-run loadContractData whenever provider or account updates
+  useEffect(() => {
+  if (provider && account) {
+    loadContractData()
+  }
+}, [provider, account])
   useEffect(() => {
   let timerInterval
   if (account && timeUntilNextCycle > 0) {
