@@ -47,6 +47,8 @@ export default function App() {
   const [showReferralsModal, setShowReferralsModal] = useState(false)
   const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false)
   const [dailyRate, setDailyRate] = useState("0")
+  const [cycleStartTime, setCycleStartTime] = useState(0)
+  const [cycleDuration, setCycleDuration] = useState(0)
   const [timeUntilNextCycle, setTimeUntilNextCycle] = useState(0)
 
   const { toasts, addToast, removeToast } = useToast()
@@ -232,54 +234,91 @@ export default function App() {
     }
   }
 
-       // ─────────── loadContractData ───────────
-    const loadContractData = async (vault = contract, usdt = usdtContract) => {
-  if (!vault || !provider || !account || !usdt) {
-     console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt })
-     return
-   }
- 
-  try {
-     // ─────────── WALLET BALANCES ───────────
-     const [ethBal, usdtBal, allowance] = await Promise.all([
-       provider.getBalance(account),
-       usdt.balanceOf(account),
-       usdt.allowance(account, CONTRACT_ADDRESS),
-     ])
-     setBalance      (formatEther(ethBal))
-     setUsdtBalance  (formatEther(usdtBal))
-     setUsdtAllowance(formatEther(allowance))
-     console.log("Wallet ETH balance:",   formatEther(ethBal))
-     console.log("Wallet USDT balance:",  formatEther(usdtBal))
-     console.log("USDT allowance:",       formatEther(allowance))
- 
-     // ─────────── ON-CHAIN VAULT DATA ───────────
-     // BlackVault.sol getUserVault returns: [totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined]
-     const vaultData = await vault.getUserVault(account)
-     const activeAmount   = vaultData[1] // activeAmt
-     const queuedAmount   = vaultData[2] // queuedAmt
-     const pendingRewards = vaultData[3] // pending
+  // ─────────── loadContractData ───────────
+  const loadContractData = async (vault = contract, usdt = usdtContract) => {
+    if (!vault || !provider || !account || !usdt) {
+      console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt })
+      return
+    }
 
-     setVaultActiveAmount(formatEther(activeAmount))
-     setQueuedBalance    (formatEther(queuedAmount))
-     setRewards          (formatEther(pendingRewards))
+    try {
+      // ─────────── WALLET BALANCES ───────────
+      const [ethBal, usdtBal, allowance] = await Promise.all([
+        provider.getBalance(account),
+        usdt.balanceOf(account),
+        usdt.allowance(account, CONTRACT_ADDRESS),
+      ])
+      setBalance      (formatEther(ethBal))
+      setUsdtBalance  (formatEther(usdtBal))
+      setUsdtAllowance(formatEther(allowance))
+      console.log("Wallet ETH balance:",   formatEther(ethBal))
+      console.log("Wallet USDT balance:",  formatEther(usdtBal))
+      console.log("USDT allowance:",       formatEther(allowance))
 
-     console.log("Vault Active Amount:", formatEther(activeAmount))
-     console.log("Queued for Accrual:",   formatEther(queuedAmount))
-     console.log("Pending Rewards:",      formatEther(pendingRewards))
- 
-     // ─────────── YOUR REFERRAL + CONSTANTS + TIMING + HISTORY FOLLOWS ───────────
-     // …leave your existing code here unchanged…
-     await loadTransactionHistory(vault, usdt)
-   } catch (error) {
-     console.error("Error loading contract data:", error)
-     addToast("Error loading data from contract", "error")
-     // reset just these three so UI doesn’t hang
-     setVaultActiveAmount("0")
-     setQueuedBalance    ("0")
-     setRewards          ("0")
-   }
- }
+      // ─────────── ON-CHAIN VAULT DATA ───────────
+      // BlackVault.sol getUserVault returns: [totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined]
+      const vaultData = await vault.getUserVault(account)
+      const activeAmount   = vaultData[1] // activeAmt
+      const queuedAmount   = vaultData[2] // queuedAmt
+      const pendingRewards = vaultData[3] // pending
+
+      setVaultActiveAmount(formatEther(activeAmount))
+      setQueuedBalance    (formatEther(queuedAmount))
+      setRewards          (formatEther(pendingRewards))
+
+      console.log("Vault Active Amount:", formatEther(activeAmount))
+      console.log("Queued for Accrual:",   formatEther(queuedAmount))
+      console.log("Pending Rewards:",      formatEther(pendingRewards))
+
+      // ─────────── CYCLE TIMING ───────────
+      // Fetch cycle start time and duration from contract
+      let cycleStart = 0;
+      let cycleDur = 0;
+      try {
+        cycleStart = Number(await vault.CYCLE_START_TIME());
+        setCycleStartTime(cycleStart);
+      } catch (e) {
+        console.error("Error fetching CYCLE_START_TIME:", e);
+      }
+      try {
+        cycleDur = Number(await vault.CYCLE_DURATION());
+        setCycleDuration(cycleDur);
+      } catch (e) {
+        console.error("Error fetching CYCLE_DURATION:", e);
+      }
+
+      // Calculate time until next accrual if user has active balance
+      if ((Number(activeAmount) > 0 || Number(queuedAmount) > 0) && cycleStart > 0 && cycleDur > 0) {
+        // Get current block timestamp
+        let now = 0;
+        try {
+          const block = await provider.getBlock("latest");
+          now = block.timestamp;
+        } catch (e) {
+          now = Math.floor(Date.now() / 1000);
+        }
+        // How many cycles since launch?
+        const cyclesSinceLaunch = Math.floor((now - cycleStart) / cycleDur);
+        const nextCycleTime = cycleStart + (cyclesSinceLaunch + 1) * cycleDur;
+        const secondsLeft = nextCycleTime - now;
+        setTimeUntilNextCycle(secondsLeft > 0 ? secondsLeft : 0);
+      } else {
+        setTimeUntilNextCycle(0);
+      }
+
+      // ─────────── YOUR REFERRAL + CONSTANTS + TIMING + HISTORY FOLLOWS ───────────
+      // …leave your existing code here unchanged…
+      await loadTransactionHistory(vault, usdt)
+    } catch (error) {
+      console.error("Error loading contract data:", error)
+      addToast("Error loading data from contract", "error")
+      // reset just these three so UI doesn’t hang
+      setVaultActiveAmount("0")
+      setQueuedBalance    ("0")
+      setRewards          ("0")
+      setTimeUntilNextCycle(0)
+    }
+  }
  
   // ─── Re-load whenever provider or account changes ───
   useEffect(() => {
@@ -621,10 +660,10 @@ export default function App() {
                   </span>
                 </div>
               )}
-              {Number.parseFloat(vaultActiveAmount) > 0 && timeUntilNextCycle > 0 && (
+              {(Number.parseFloat(vaultActiveAmount) > 0 || Number.parseFloat(queuedBalance) > 0) && (
                 <div className="balance-item">
                   <span className="balance-label">Next Accrual In</span>
-                  <span className="balance-value">{formatCountdown(timeUntilNextCycle)}</span>
+                  <span className="balance-value">{timeUntilNextCycle > 0 ? formatCountdown(timeUntilNextCycle) : "00:00:00"}</span>
                 </div>
               )}
             </div>
