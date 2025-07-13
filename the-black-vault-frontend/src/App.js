@@ -225,26 +225,27 @@ export default function App() {
     try {
           // ←── A: old vaultData fetch starts here
     try {
+         // getUserVault returns [ totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined ]
       const vaultData = await vault.getUserVault(account)
 
   // ethers.js returns: [ totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined ]
-     const active  = vaultData.activeAmt
-     const queued  = vaultData.queuedAmt
-     const pending = vaultData.pending
+      const active  = vaultData.activeAmt
+      const queued  = vaultData.queuedAmt
+      const pending = vaultData.pending
 
-     setVaultActiveAmount(formatEther(active))
-     setQueuedBalance   (formatEther(queued))
-     setRewards         (formatEther(pending))
+      setVaultActiveAmount(formatEther(active))
+      setQueuedBalance   (formatEther(queued))
+      setRewards         (formatEther(pending))
 
-     console.log("Fetched vault active amount:", formatEther(active))
-     console.log("Fetched queued for accrual:",   formatEther(queued))
-     console.log("Fetched pending rewards:",      formatEther(pending))
-   } catch (error) {
-     console.log("No vault data found for user", error)
-     setRewards("0")
-     setVaultActiveAmount("0")
-     setQueuedBalance("0")
-  }
+      console.log("Fetched vault active amount:",   formatEther(active))
+      console.log("Fetched queued for accrual:",     formatEther(queued))
+      console.log("Fetched pending rewards:",        formatEther(pending))
+    } catch (error) {
+      console.log("No vault data found for user", error)
+      setVaultActiveAmount("0")
+      setQueuedBalance("0")
+      setRewards("0")
+    }
   // ── B: old vaultData fetch ends here
 
       try {
