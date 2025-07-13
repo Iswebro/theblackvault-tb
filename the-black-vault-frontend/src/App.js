@@ -230,55 +230,53 @@ export default function App() {
     }
   }
 
-      const loadContractData = async (vault = contract, usdt = usdtContract) => {
-    if (!vault || !provider || !account || !usdt) {
-      console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt });
-      return;
-    }
+       // ─────────── loadContractData ───────────
+    const loadContractData = async (vault = contract, usdt = usdtContract) => {
+  if (!vault || !provider || !account || !usdt) {
+     console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt })
+     return
+   }
  
-    try {
-      // ─────────── ON-CHAIN VAULT DATA ───────────
-      const vaultData      = await vault.getUserVault(account);
-      const totalDep       = vaultData.totalDep;
-      const activeAmt      = vaultData.activeAmt;
-      const queuedAmt      = vaultData.queuedAmt;
-      const pendingRewards = vaultData.pending;
+  try {
+     // ─────────── WALLET BALANCES ───────────
+     const [ethBal, usdtBal, allowance] = await Promise.all([
+       provider.getBalance(account),
+       usdt.balanceOf(account),
+       usdt.allowance(account, CONTRACT_ADDRESS),
+     ])
+     setBalance      (formatEther(ethBal))
+     setUsdtBalance  (formatEther(usdtBal))
+     setUsdtAllowance(formatEther(allowance))
+     console.log("Wallet ETH balance:",   formatEther(ethBal))
+     console.log("Wallet USDT balance:",  formatEther(usdtBal))
+     console.log("USDT allowance:",       formatEther(allowance))
  
-      setVaultActiveAmount(formatEther(activeAmt));
-      setQueuedBalance   (formatEther(queuedAmt));
-      setRewards         (formatEther(pendingRewards));
+     // ─────────── ON-CHAIN VAULT DATA ───────────
+     const vaultData      = await vault.getUserVault(account)
+     const activeAmount   = vaultData.activeAmount
+     const queuedAmount   = vaultData.queuedAmount
+     const pendingRewards = vaultData.pendingRewards
  
-      console.log("Vault Active Amount:", formatEther(activeAmt));
-      console.log("Queued for Accrual:",   formatEther(queuedAmt));
-      console.log("Pending Rewards:",      formatEther(pendingRewards));
+     setVaultActiveAmount(formatEther(activeAmount))
+     setQueuedBalance    (formatEther(queuedAmount))
+     setRewards          (formatEther(pendingRewards))
  
-      // ─────────── REFERRAL DATA ───────────
-      const refData = await vault.getUserReferralData(account);
-      setReferralRewards(formatEther(refData.availableRewards));
-      setReferralCount  (refData.referredCount.toString());
+     console.log("Vault Active Amount:", formatEther(activeAmount))
+     console.log("Queued for Accrual:",   formatEther(queuedAmount))
+     console.log("Pending Rewards:",      formatEther(pendingRewards))
  
-      // ─────────── CONSTANTS & TIMING ───────────
-      const [minDep, dRate, timeRem] = await Promise.all([
-        vault.MIN_DEPOSIT(),
-        vault.DAILY_RATE(),
-        vault.getTimeUntilNextCycle(),
-      ]);
-      setMinDeposit         (formatEther(minDep));
-      setDailyRate          (dRate.toString());
-      setTimeUntilNextCycle (Number(timeRem.toString()));
-
-      // ─────────── TRANSACTION HISTORY ───────────
-      await loadTransactionHistory(vault, usdt);
- 
-    } catch (error) {
-      console.error("Error loading contract data:", error);
-       addToast("Error loading data from contract", "error");
-     // on error, reset displays
-      setVaultActiveAmount       ("0");
-      setQueuedBalance           ("0");
-      setRewards                 ("0");
-    }
-  };
+     // ─────────── YOUR REFERRAL + CONSTANTS + TIMING + HISTORY FOLLOWS ───────────
+     // …leave your existing code here unchanged…
+     await loadTransactionHistory(vault, usdt)
+   } catch (error) {
+     console.error("Error loading contract data:", error)
+     addToast("Error loading data from contract", "error")
+     // reset just these three so UI doesn’t hang
+     setVaultActiveAmount("0")
+     setQueuedBalance    ("0")
+     setRewards          ("0")
+   }
+ }
  
   // ─── Re-load whenever provider or account changes ───
   useEffect(() => {
