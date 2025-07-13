@@ -1,10 +1,10 @@
 "use client"
 // App.js
 import { ethers } from "ethers"
+import { Contract, formatEther, parseEther } from "ethers"
 import { getUserInfo as fetchVaultInfo } from "./useBlackVault"
 import { useToast, ToastContainer, ToastProvider } from "./components/Toast";
 import { useEffect, useState, useRef } from "react"
-import { Contract, formatEther, parseEther } from "ethers"
 import { connectInjected, getReferralFromURL } from "./connectWallet"
 import BlackVaultAbi   from "./contract/BlackVaultABI.json"
 import ERC20Abi        from "./contract/ERC20Abi.json"
