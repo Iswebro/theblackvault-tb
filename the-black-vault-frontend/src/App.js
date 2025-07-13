@@ -1,7 +1,6 @@
 "use client"
-// App.js
-import { ethers } from "ethers"
-import { Contract, formatEther, parseEther } from "ethers"
+// src/App.js
+import { ethers, Contract, formatEther, parseEther } from "ethers"
 import { getUserInfo as fetchVaultInfo } from "./useBlackVault"
 import { useToast, ToastContainer, ToastProvider } from "./components/Toast";
 import { useEffect, useState, useRef } from "react"
@@ -231,632 +230,76 @@ export default function App() {
     }
   }
 
-  const loadContractData = async (vault = contract, usdt = usdtContract) => {
-  if (!vault || !provider || !account || !usdt) {
-    console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt })
-    return
-  }
-
-  console.log("Loading contract data for account:", account)
-try {
-  // ── 1) Fetch & set your USDT wallet balance & allowance ──
-  const userUsdtBalance = await usdt.balanceOf(account)
-  setUsdtBalance(formatEther(userUsdtBalance))
-  console.log("Fetched USDT wallet balance:", formatEther(userUsdtBalance))
-
-  const userAllowance = await usdt.allowance(account, CONTRACT_ADDRESS)
-  setUsdtAllowance(formatEther(userAllowance))
-  console.log("Fetched USDT allowance:", formatEther(userAllowance))
-
-  // ── 2) Now fetch your on-chain vault info ──
-// ←── A: fetch the full struct from the public mapping
-try {
-  const structData = await vault.vaults(account)
-  const { activeAmount, queuedAmount, pendingRewards } = structData
-
-  setVaultActiveAmount(ethers.formatEther(activeAmount))
-  setQueuedBalance   (ethers.formatEther(queuedAmount))
-  setRewards         (ethers.formatEther(pendingRewards))
-
-  console.log("Fetched vault active amount:", ethers.formatEther(activeAmount))
-  console.log("Fetched queued for accrual:",   ethers.formatEther(queuedAmount))
-  console.log("Fetched pending rewards:",      ethers.formatEther(pendingRewards))
-} catch (err) {
-  console.error("Error fetching vault struct:", err)
-  setVaultActiveAmount("0")
-  setQueuedBalance("0")
-  setRewards("0")
-}
-  // ── B: vaultData fetch ends here
-
-
-      try {
-        const refData = await vault.getUserReferralData(account)
-        setReferralRewards(formatEther(refData.availableRewards))
-        setReferralCount(refData.referredCount.toString())
-        console.log("Fetched referral data:", {
-          availableRewards: formatEther(refData.availableRewards),
-          referredCount: refData.referredCount.toString(),
-        })
-      } catch (error) {
-        console.log("No referral rewards found for user", error)
-        setReferralRewards("0")
-        setReferralCount("0")
-      }
-
-      if (referralAddress && referralAddress !== "0x0000000000000000000000000000000000000000") {
-        try {
-          const bonusInfo = await vault.getReferralBonusInfo(referralAddress, account)
-          setReferralBonusesRemaining(bonusInfo.bonusesRemaining.toString())
-          console.log("Fetched referral bonus info:", {
-            bonusesUsed: bonusInfo.bonusesUsed.toString(),
-            bonusesRemaining: bonusInfo.bonusesRemaining.toString(),
-          })
-        } catch (error) {
-          console.log("No referral bonus info found", error)
-          setReferralBonusesRemaining("3")
-        }
-      }
-
-      try {
-        const minDepositValue = await vault.MIN_DEPOSIT()
-        setMinDeposit(formatEther(minDepositValue))
-        console.log("Fetched MIN_DEPOSIT:", formatEther(minDepositValue), "USDT")
-      } catch (error) {
-        console.error("Error fetching MIN_DEPOSIT:", error)
-        setMinDeposit("0")
-      }
-
-      try {
-        const dailyRateValue = await vault.DAILY_RATE()
-        setDailyRate(dailyRateValue.toString())
-        console.log("Fetched DAILY_RATE:", dailyRateValue.toString())
-      } catch (error) {
-        console.error("Error fetching DAILY_RATE:", error)
-        setDailyRate("0")
-      }
-
-      try {
-        const timeRemaining = await vault.getTimeUntilNextCycle()
-        setTimeUntilNextCycle(Number(timeRemaining.toString()))
-        console.log("Fetched time until next cycle:", timeRemaining.toString(), "seconds")
-      } catch (error) {
-        console.error("Error fetching time until next cycle:", error)
-        setTimeUntilNextCycle(0)
-      }
-
-      await loadTransactionHistory(vault, usdt)
-    } catch (error) {
-      console.error("Error loading contract data:", error)
-      addToast("Error loading data from contract", "error")
-    }
-  }
-  // Re-run loadContractData whenever provider or account updates
-  useEffect(() => {
-  if (provider && account) {
-    loadContractData()
-  }
-}, [provider, account])
-  useEffect(() => {
-  let timerInterval
-  if (account && timeUntilNextCycle > 0) {
-    timerInterval = setInterval(() => {
-      setTimeUntilNextCycle((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerInterval)
-          // only call after both contracts are initialised
-          if (contract && usdtContract) {
-            loadContractData(contract, usdtContract)
-          }
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-  } else if (timeUntilNextCycle === 0 && account && contract && usdtContract) {
-    // first-time fetch, now that contract & usdtContract are set
-    loadContractData(contract, usdtContract)
-  }
-
-  return () => clearInterval(timerInterval)
-}, [account, timeUntilNextCycle, contract, usdtContract])
-
-  const connectWallet = async () => {
-    if (loading) return
-
-    setLoading(true)
-    try {
-      isManuallyDisconnected.current = false
-
-      await new Promise((resolve) => setTimeout(resolve, 100))
-
-      console.log("Attempting to connect wallet...")
-      const conn = await connectInjected()
-
-      console.log("Connection successful:", conn.account)
-      setProvider(conn.provider)
-      setSigner(conn.signer)
-      setAccount(conn.account)
-
-      addToast("Wallet connected successfully!", "success")
-    } catch (error) {
-      console.error("Connection failed:", error)
-
-      let errorMessage = "Failed to connect wallet"
-
-      if (error) {
-        if (typeof error === "string") {
-          errorMessage = error
-        } else if (error.message) {
-          errorMessage = error.message
-        } else if (error.code) {
-          errorMessage = `Wallet error (code: ${error.code})`
-        }
-      }
-
-      if (errorMessage.includes("not supported chainID") || errorMessage.includes("chainId")) {
-        errorMessage = "BSC Mainnet not configured. Please add BSC network manually or try MetaMask."
-      } else if (errorMessage.includes("No wallet found")) {
-        errorMessage = "Please use Trust Wallet's in-app browser or install MetaMask"
-      } else if (errorMessage.includes("rejected") || errorMessage.includes("cancelled")) {
-        errorMessage = "Connection cancelled. Please try again and approve the connection."
-      } else if (errorMessage.includes("pending")) {
-        errorMessage = "Connection already in progress. Please check your wallet app."
-      }
-
-      addToast(errorMessage, "error")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const approveUsdt = async () => {
-    if (!usdtContract || txLoading || Number.parseFloat(depositAmount) <= 0) return
-
-    setTxLoading(true)
-    try {
-      addToast("Approving USDT...", "info")
-      const amountToApprove = parseEther(depositAmount)
-
-      const tx = await usdtContract.approve(CONTRACT_ADDRESS, amountToApprove)
-      addToast("Approval transaction submitted. Waiting for confirmation...", "info")
-      await tx.wait()
-      addToast("USDT approved successfully!", "success")
-      await loadContractData(contract, usdtContract)
-    } catch (error) {
-      console.error("USDT approval failed:", error)
-      if (error && error.code === 4001) {
-        addToast("Transaction cancelled by user", "warning")
-      } else {
-        addToast("USDT approval failed. Please try again.", "error")
-      }
-    } finally {
-      setTxLoading(false)
-    }
-  }
-
-  const deposit = async () => {
-    if (!contract || !depositAmount || txLoading || Number.parseFloat(depositAmount) <= 0) return
-
-    if (Number.parseFloat(usdtAllowance) < Number.parseFloat(depositAmount)) {
-      addToast("Please approve USDT first.", "error")
-      return
-    }
-
-    setTxLoading(true)
-    try {
-      addToast("Processing deposit...", "info")
-
-      const value = parseEther(depositAmount)
-      console.log("Attempting to deposit amount (wei):", value.toString())
-
-      let tx
-
-      if (referralAddress && referralAddress !== "0x0000000000000000000000000000000000000000") {
-        console.log("Calling depositWithReferrer with:", value.toString(), referralAddress)
-        tx = await contract.depositWithReferrer(value, referralAddress)
-      } else {
-        console.log("Calling deposit with:", value.toString())
-        tx = await contract.deposit(value)
-      }
-
-      console.log("Transaction sent, hash:", tx.hash)
-      addToast("Transaction submitted. Waiting for confirmation...", "info")
-
-      const receipt = await tx.wait()
-      console.log("Transaction receipt:", receipt)
-
-      if (receipt.status === 1) {
-        addToast("Deposit successful!", "success")
-        setDepositAmount("")
-        await loadContractData(contract, usdtContract)
-      } else {
-        console.error("Transaction failed on-chain:", receipt)
-        addToast("Deposit transaction failed on-chain. Check explorer for details.", "error")
-      }
-    } catch (error) {
-      console.error("Deposit failed during submission or confirmation:", error)
-      if (error && error.code === 4001) {
-        addToast("Transaction cancelled by user", "warning")
-      } else if (error && error.data && error.data.message) {
-        addToast(`Deposit failed: ${error.data.message}`, "error")
-      } else if (error && error.message) {
-        addToast(`Deposit failed: ${error.message}`, "error")
-      } else {
-        addToast("Deposit failed. Please try again.", "error")
-      }
-    } finally {
-      setTxLoading(false)
-    }
-  }
-
-  const withdraw = async () => {
-    console.log("=== WITHDRAW BUTTON CLICKED ===")
-    console.log("Contract exists:", !!contract)
-    console.log("txLoading:", txLoading)
-    console.log("Rewards value:", rewards)
-    console.log("Rewards parsed:", Number.parseFloat(rewards))
-
-    if (!contract) {
-      console.log("❌ No contract available")
-      addToast("Contract not initialized", "error")
-      return
-    }
-
-    if (txLoading) {
-      console.log("❌ Transaction already in progress")
-      return
-    }
-
-    // Check if user has rewards before attempting withdrawal
-    if (Number.parseFloat(rewards) === 0) {
-      addToast("No rewards available to withdraw", "warning")
-      return
-    }
-
-    console.log("✅ Proceeding with withdrawal...")
-
-    setTxLoading(true)
-    try {
-      addToast("Processing withdrawal...", "info")
-
-      console.log("Calling withdrawRewards on contract...")
-      console.log("Contract address:", contract.address)
-
-      // Check if function exists
-      if (!contract.withdrawRewards) {
-        throw new Error("withdrawRewards function not found on contract")
-      }
-
-      // First try to estimate gas to catch revert early
-      try {
-        await contract.withdrawRewards.estimateGas()
-      } catch (estimateError) {
-        console.error("Gas estimation failed:", estimateError)
-
-        // Handle common revert reasons
-        if (
-          estimateError.message.includes("missing revert data") ||
-          estimateError.message.includes("CALL_EXCEPTION") ||
-          estimateError.code === "CALL_EXCEPTION"
-        ) {
-          throw new Error("No rewards available to withdraw")
-        } else if (estimateError.reason) {
-          throw new Error(estimateError.reason)
-        } else {
-          throw new Error("Transaction would fail - likely no rewards available")
-        }
-      }
-
-      const tx = await contract.withdrawRewards()
-      console.log("✅ Transaction created:", tx)
-
-      addToast("Transaction submitted. Waiting for confirmation...", "info")
-      const receipt = await tx.wait()
-      console.log("✅ Transaction receipt:", receipt)
-
-      addToast("Rewards withdrawn successfully!", "success")
-      await loadContractData(contract, usdtContract)
-    } catch (error) {
-      console.error("❌ Withdraw failed:", error)
-      console.error("Error details:", {
-        code: error.code,
-        message: error.message,
-        data: error.data,
-        reason: error.reason,
-      })
-
-      // User-friendly error handling
-      if (error && error.code === 4001) {
-        addToast("Transaction cancelled by user", "warning")
-      } else if (
-        error.message.includes("No rewards available") ||
-        error.message.includes("missing revert data") ||
-        error.message.includes("CALL_EXCEPTION")
-      ) {
-        addToast("No rewards available to withdraw", "warning")
-      } else if (error.reason) {
-        addToast(`Withdrawal failed: ${error.reason}`, "error")
-      } else if (error.message) {
-        // Clean up technical error messages for mobile
-        let cleanMessage = error.message
-        if (cleanMessage.includes("missing revert data")) {
-          cleanMessage = "No rewards available to withdraw"
-        } else if (cleanMessage.includes("CALL_EXCEPTION")) {
-          cleanMessage = "Transaction failed - likely no rewards available"
-        } else if (cleanMessage.length > 100) {
-          cleanMessage = "Withdrawal failed - please try again"
-        }
-        addToast(`Withdrawal failed: ${cleanMessage}`, "error")
-      } else {
-        addToast("Withdrawal failed. Please try again.", "error")
-      }
-    } finally {
-      setTxLoading(false)
-    }
-  }
-
-  const withdrawReferral = async () => {
-    console.log("=== REFERRAL WITHDRAW BUTTON CLICKED ===")
-    console.log("Contract exists:", !!contract)
-    console.log("txLoading:", txLoading)
-    console.log("Referral rewards value:", referralRewards)
-    console.log("Referral rewards parsed:", Number.parseFloat(referralRewards))
-
-    if (!contract) {
-      console.log("❌ No contract available")
-      addToast("Contract not initialized", "error")
-      return
-    }
-
-    if (txLoading) {
-      console.log("❌ Transaction already in progress")
-      return
-    }
-
-    // Check if user has referral rewards before attempting withdrawal
-    if (Number.parseFloat(referralRewards) === 0) {
-      addToast("No referral rewards available to withdraw", "warning")
-      return
-    }
-
-    console.log("✅ Proceeding with referral withdrawal...")
-
-    setTxLoading(true)
-    try {
-      addToast("Processing referral withdrawal...", "info")
-
-      console.log("Calling withdrawReferralRewards on contract...")
-      console.log("Contract address:", contract.address)
-
-      // Check if function exists
-      if (!contract.withdrawReferralRewards) {
-        throw new Error("withdrawReferralRewards function not found on contract")
-      }
-
-      // First try to estimate gas to catch revert early
-      try {
-        await contract.withdrawReferralRewards.estimateGas()
-      } catch (estimateError) {
-        console.error("Gas estimation failed:", estimateError)
-
-        // Handle common revert reasons
-        if (
-          estimateError.message.includes("missing revert data") ||
-          estimateError.message.includes("CALL_EXCEPTION") ||
-          estimateError.code === "CALL_EXCEPTION"
-        ) {
-          throw new Error("No referral rewards available to withdraw")
-        } else if (estimateError.reason) {
-          throw new Error(estimateError.reason)
-        } else {
-          throw new Error("Transaction would fail - likely no referral rewards available")
-        }
-      }
-
-      const tx = await contract.withdrawReferralRewards()
-      console.log("✅ Transaction created:", tx)
-
-      addToast("Transaction submitted. Waiting for confirmation...", "info")
-      const receipt = await tx.wait()
-      console.log("✅ Transaction receipt:", receipt)
-
-      addToast("Referral rewards withdrawn successfully!", "success")
-      await loadContractData(contract, usdtContract)
-    } catch (error) {
-      console.error("❌ Referral withdraw failed:", error)
-      console.error("Error details:", {
-        code: error.code,
-        message: error.message,
-        data: error.data,
-        reason: error.reason,
-      })
-
-      // User-friendly error handling
-      if (error && error.code === 4001) {
-        addToast("Transaction cancelled by user", "warning")
-      } else if (
-        error.message.includes("No referral rewards available") ||
-        error.message.includes("missing revert data") ||
-        error.message.includes("CALL_EXCEPTION")
-      ) {
-        addToast("No referral rewards available to withdraw", "warning")
-      } else if (error.reason) {
-        addToast(`Referral withdrawal failed: ${error.reason}`, "error")
-      } else if (error.message) {
-        // Clean up technical error messages for mobile
-        let cleanMessage = error.message
-        if (cleanMessage.includes("missing revert data")) {
-          cleanMessage = "No referral rewards available to withdraw"
-        } else if (cleanMessage.includes("CALL_EXCEPTION")) {
-          cleanMessage = "Transaction failed - likely no referral rewards available"
-        } else if (cleanMessage.length > 100) {
-          cleanMessage = "Referral withdrawal failed - please try again"
-        }
-        addToast(`Referral withdrawal failed: ${cleanMessage}`, "error")
-      } else {
-        addToast("Referral withdrawal failed. Please try again.", "error")
-      }
-    } finally {
-      setTxLoading(false)
-    }
-  }
-
-  const withdrawOldVaultRewards = async () => {
-    if (!oldVaultContract || txLoading) return
-
-    setTxLoading(true)
-    try {
-      addToast("Withdrawing V1 vault rewards...", "info")
-
-      // First try to estimate gas to catch revert early
-      try {
-        await oldVaultContract.withdrawRewards.estimateGas()
-      } catch (estimateError) {
-        console.error("V1 vault gas estimation failed:", estimateError)
-
-        // Handle common revert reasons
-        if (
-          estimateError.message.includes("missing revert data") ||
-          estimateError.message.includes("CALL_EXCEPTION") ||
-          estimateError.code === "CALL_EXCEPTION"
-        ) {
-          throw new Error("No V1 vault rewards available to withdraw")
-        } else if (estimateError.reason) {
-          throw new Error(estimateError.reason)
-        } else {
-          throw new Error("Transaction would fail - likely no V1 vault rewards available")
-        }
-      }
-
-      const tx = await oldVaultContract.withdrawRewards()
-
-      addToast("Transaction submitted. Waiting for confirmation...", "info")
-      await tx.wait()
-
-      addToast("V1 vault rewards withdrawn!", "success")
-      await loadContractData(contract, usdtContract)
-    } catch (error) {
-      console.error("V1 vault withdraw failed:", error)
-
-      // User-friendly error handling
-      if (error && error.code === 4001) {
-        addToast("Transaction cancelled by user", "warning")
-      } else if (
-        error.message.includes("No V1 vault rewards available") ||
-        error.message.includes("missing revert data") ||
-        error.message.includes("CALL_EXCEPTION")
-      ) {
-        addToast("No V1 vault rewards available to withdraw", "warning")
-      } else if (error.reason) {
-        addToast(`V1 vault withdrawal failed: ${error.reason}`, "error")
-      } else if (error.message) {
-        // Clean up technical error messages for mobile
-        let cleanMessage = error.message
-        if (cleanMessage.includes("missing revert data")) {
-          cleanMessage = "No V1 vault rewards available to withdraw"
-        } else if (cleanMessage.includes("CALL_EXCEPTION")) {
-          cleanMessage = "Transaction failed - likely no V1 vault rewards available"
-        } else if (cleanMessage.length > 100) {
-          cleanMessage = "V1 vault withdrawal failed - please try again"
-        }
-        addToast(`V1 vault withdrawal failed: ${cleanMessage}`, "error")
-      } else {
-        addToast("V1 vault withdrawal failed. Please try again.", "error")
-      }
-    } finally {
-      setTxLoading(false)
-    }
-  }
-
-  const withdrawOldReferralRewards = async () => {
-    if (!oldVaultContract || txLoading) return
-
-    setTxLoading(true)
-    try {
-      addToast("Withdrawing V1 referral rewards...", "info")
-
-      // First try to estimate gas to catch revert early
-      try {
-        await oldVaultContract.withdrawReferralRewards.estimateGas()
-      } catch (estimateError) {
-        console.error("V1 referral gas estimation failed:", estimateError)
-
-        // Handle common revert reasons
-        if (
-          estimateError.message.includes("missing revert data") ||
-          estimateError.message.includes("CALL_EXCEPTION") ||
-          estimateError.code === "CALL_EXCEPTION"
-        ) {
-          throw new Error("No V1 referral rewards available to withdraw")
-        } else if (estimateError.reason) {
-          throw new Error(estimateError.reason)
-        } else {
-          throw new Error("Transaction would fail - likely no V1 referral rewards available")
-        }
-      }
-
-      const tx = await oldVaultContract.withdrawReferralRewards()
-
-      addToast("Transaction submitted. Waiting for confirmation...", "info")
-      await tx.wait()
-
-      addToast("V1 referral rewards withdrawn!", "success")
-      await loadContractData(contract, usdtContract)
-    } catch (error) {
-      console.error("V1 referral withdraw failed:", error)
-
-      // User-friendly error handling
-      if (error && error.code === 4001) {
-        addToast("Transaction cancelled by user", "warning")
-      } else if (
-        error.message.includes("No V1 referral rewards available") ||
-        error.message.includes("missing revert data") ||
-        error.message.includes("CALL_EXCEPTION")
-      ) {
-        addToast("No V1 referral rewards available to withdraw", "warning")
-      } else if (error.reason) {
-        addToast(`V1 referral withdrawal failed: ${error.reason}`, "error")
-      } else if (error.message) {
-        // Clean up technical error messages for mobile
-        let cleanMessage = error.message
-        if (cleanMessage.includes("missing revert data")) {
-          cleanMessage = "No V1 referral rewards available to withdraw"
-        } else if (cleanMessage.includes("CALL_EXCEPTION")) {
-          cleanMessage = "Transaction failed - likely no V1 referral rewards available"
-        } else if (cleanMessage.length > 100) {
-          cleanMessage = "V1 referral withdrawal failed - please try again"
-        }
-        addToast(`V1 referral withdrawal failed: ${cleanMessage}`, "error")
-      } else {
-        addToast("V1 referral withdrawal failed. Please try again.", "error")
-      }
-    } finally {
-      setTxLoading(false)
-    }
-  }
-
-  const disconnect = () => {
-    isManuallyDisconnected.current = true
-    setProvider(null)
-    setSigner(null)
-    setAccount("")
-    setContract(null)
-    setUsdtContract(null)
-    setOldVaultContract(null)
-    setBalance("0")
-    setUsdtBalance("0")
-    setUsdtAllowance("0")
-    setRewards("0")
-    setReferralRewards("0")
-    setHistory([])
-    setReferralCount("0")
-    setMinDeposit("0")
-    setVaultActiveAmount("0")
-    setReferralBonusesRemaining("3")
-    setShowReferralsModal(false)
-    addToast("Wallet disconnected", "info")
-  }
+   // ─────────── loadContractData ───────────
+   const loadContractData = async (vault = contract, usdt = usdtContract) => {
+     if (!vault || !provider || !account || !usdt) {
+       console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt })
+       return
+     }
+ 
+     try {
+       // ─────────── ON-CHAIN VAULT DATA ───────────
+       const vaultData = await vault.getUserVault(account)
+       const active  = vaultData.activeAmt
+       const queued  = vaultData.queuedAmt
+       const pending = vaultData.pending
+ 
+       setVaultActiveAmount(formatEther(active))
+       setQueuedBalance   (formatEther(queued))
+       setRewards         (formatEther(pending))
+ 
+       console.log("Vault Active Amount:", formatEther(active))
+       console.log("Queued for Accrual:",   formatEther(queued))
+       console.log("Pending Rewards:",      formatEther(pending))
+ 
+       // ─────────── REFERRAL + CONSTANTS + TIMING + HISTORY ───────────
+       // …your existing code here (unchanged) …
+       await loadTransactionHistory(vault, usdt)
+ 
+     } catch (error) {
+       console.error("Error loading contract data:", error)
+       addToast("Error loading data from contract", "error")
+ 
+       // reset UI on error
+       setVaultActiveAmount("0")
+       setQueuedBalance("0")
+       setRewards("0")
+       setReferralRewards("0")
+       setReferralCount("0")
+       setReferralBonusesRemaining("0")
+       setMinDeposit("0")
+       setDailyRate("0")
+       setTimeUntilNextCycle(0)
+       setHistory([])
+     }
+   }  // ←–– CLOSE loadContractData here
+ 
+   // ─── Re-load whenever provider or account changes ───
+   useEffect(() => {
+     if (provider && account) {
+       loadContractData()
+     }
+   }, [provider, account])
+ 
+   // ─── Countdown timer / auto-refresh ───
+   useEffect(() => {
+     let timer
+     if (account && timeUntilNextCycle > 0) {
+       timer = setInterval(() => {
+         setTimeUntilNextCycle(prev => {
+           if (prev <= 1) {
+             clearInterval(timer)
+             if (provider && account) loadContractData()
+             return 0
+           }
+           return prev - 1
+         })
+       }, 1000)
+     } else if (timeUntilNextCycle === 0 && provider && account) {
+       loadContractData()
+     }
+     return () => clearInterval(timer)
+   }, [provider, account, timeUntilNextCycle])
 
   const formatAddress = (addr) => {
     if (!addr) return ""
@@ -901,6 +344,185 @@ try {
 
   const needsApproval =
     Number.parseFloat(depositAmount) > 0 && Number.parseFloat(usdtAllowance) < Number.parseFloat(depositAmount)
+ 
+       // ─── Insert wallet/contract action handlers here ────────────────────────────
+  const connectWallet = async () => {
+     if (loading) return
+ 
+     setLoading(true)
+     try {
+       isManuallyDisconnected.current = false
+       // small delay to let metamask UI settle
+       await new Promise(r => setTimeout(r, 100))
+       console.log("Attempting to connect wallet…")
+       const { provider: p, signer: s, account: a } = await connectInjected()
+       setProvider(p)
+       setSigner(s)
+       setAccount(a)
+       addToast("Wallet connected successfully!", "success")
+     } catch (error) {
+       console.error("Connection failed:", error)
+       let msg = error?.message || "Failed to connect wallet"
+       if (msg.includes("chainId")) {
+         msg = "BSC Mainnet not configured. Please add BSC or use MetaMask."
+       } else if (msg.includes("No wallet found")) {
+         msg = "Please install MetaMask or use Trust Wallet's in-app browser."
+       } else if (msg.includes("rejected")) {
+         msg = "Connection cancelled. Please approve the request."
+       }
+       addToast(msg, "error")
+     } finally {
+       setLoading(false)
+     }
+   }
+ 
+   const approveUsdt = async () => {
+     if (!usdtContract || txLoading || Number.parseFloat(depositAmount) <= 0) return
+     setTxLoading(true)
+     try {
+       addToast("Approving USDT…", "info")
+       const tx = await usdtContract.approve(CONTRACT_ADDRESS, parseEther(depositAmount))
+       await tx.wait()
+       addToast("USDT approved!", "success")
+       await loadContractData(contract, usdtContract)
+     } catch (error) {
+       console.error("Approval failed:", error)
+       addToast(error.code === 4001 ? "Transaction cancelled" : "Approval failed", error.code === 4001 ? "warning" : "error")
+     } finally {
+       setTxLoading(false)
+     }
+   }
+ 
+   const deposit = async () => {
+     if (!contract || txLoading || Number.parseFloat(depositAmount) <= 0) return
+     if (Number.parseFloat(usdtAllowance) < Number.parseFloat(depositAmount)) {
+       return addToast("Please approve USDT first", "error")
+     }
+     setTxLoading(true)
+     try {
+       addToast("Processing deposit…", "info")
+       const value = parseEther(depositAmount)
+       let tx
+       if (referralAddress && referralAddress !== ethers.ZeroAddress) {
+         tx = await contract.depositWithReferrer(value, referralAddress)
+       } else {
+         tx = await contract.deposit(value)
+       }
+       const receipt = await tx.wait()
+       if (receipt.status === 1) {
+         addToast("Deposit successful!", "success")
+         setDepositAmount("")
+         await loadContractData(contract, usdtContract)
+       } else {
+         addToast("Deposit failed on-chain", "error")
+       }
+     } catch (error) {
+       console.error("Deposit error:", error)
+       const msg = error.data?.message || error.message || "Deposit failed"
+       addToast(msg, error.code === 4001 ? "warning" : "error")
+     } finally {
+       setTxLoading(false)
+     }
+   }
+ 
+   const withdraw = async () => {
+     if (!contract || txLoading || Number.parseFloat(rewards) === 0) {
+       if (!contract) addToast("Contract not initialized", "error")
+       else if (Number.parseFloat(rewards) === 0) addToast("No rewards to withdraw", "warning")
+       return
+     }
+     setTxLoading(true)
+     try {
+       addToast("Withdrawing rewards…", "info")
+       await contract.withdrawRewards()
+       addToast("Rewards withdrawn!", "success")
+       await loadContractData(contract, usdtContract)
+     } catch (error) {
+       console.error("Withdraw error:", error)
+       const msg = error.message.includes("CALL_EXCEPTION") ? "No rewards available" : error.reason || "Withdrawal failed"
+       addToast(msg, error.code === 4001 ? "warning" : "error")
+     } finally {
+       setTxLoading(false)
+     }
+   }
+ 
+   const withdrawOldVaultRewards = async () => {
+     if (!oldVaultContract || txLoading) return
+     setTxLoading(true)
+     try {
+       addToast("Withdrawing V1 vault rewards…", "info")
+       await oldVaultContract.withdrawRewards()
+       addToast("V1 vault rewards withdrawn!", "success")
+       await loadContractData(contract, usdtContract)
+     } catch (error) {
+       console.error("V1 vault withdraw error:", error)
+       const msg = error.message.includes("CALL_EXCEPTION") ? "No V1 rewards" : error.reason || "V1 withdrawal failed"
+       addToast(msg, error.code === 4001 ? "warning" : "error")
+     } finally {
+       setTxLoading(false)
+     }
+   }
+ 
+   const withdrawReferral = async () => {
+     if (!contract || txLoading || Number.parseFloat(referralRewards) === 0) {
+       if (!contract) addToast("Contract not initialized", "error")
+       else addToast("No referral rewards", "warning")
+       return
+     }
+     setTxLoading(true)
+     try {
+       addToast("Withdrawing referral rewards…", "info")
+       await contract.withdrawReferralRewards()
+       addToast("Referral rewards withdrawn!", "success")
+       await loadContractData(contract, usdtContract)
+     } catch (error) {
+       console.error("Referral withdraw error:", error)
+       const msg = error.message.includes("CALL_EXCEPTION") ? "No referral rewards" : error.reason || "Referral withdrawal failed"
+       addToast(msg, error.code === 4001 ? "warning" : "error")
+     } finally {
+       setTxLoading(false)
+     }
+   }
+ 
+   const withdrawOldReferralRewards = async () => {
+     if (!oldVaultContract || txLoading) return
+     setTxLoading(true)
+     try {
+       addToast("Withdrawing V1 referral rewards…", "info")
+       await oldVaultContract.withdrawReferralRewards()
+       addToast("V1 referral rewards withdrawn!", "success")
+       await loadContractData(contract, usdtContract)
+     } catch (error) {
+       console.error("V1 referral withdraw error:", error)
+       const msg = error.message.includes("CALL_EXCEPTION") ? "No V1 referral rewards" : error.reason || "V1 referral withdrawal failed"
+       addToast(msg, error.code === 4001 ? "warning" : "error")
+     } finally {
+       setTxLoading(false)
+     }
+   }
+ 
+   const disconnect = () => {
+     isManuallyDisconnected.current = true
+     setProvider(null)
+     setSigner(null)
+     setAccount("")
+     setContract(null)
+     setUsdtContract(null)
+     setOldVaultContract(null)
+     setBalance("0")
+     setUsdtBalance("0")
+     setUsdtAllowance("0")
+     setRewards("0")
+     setReferralRewards("0")
+     setHistory([])
+     setReferralCount("0")
+     setMinDeposit("0")
+     setVaultActiveAmount("0")
+     setReferralBonusesRemaining("3")
+     addToast("Wallet disconnected", "info")
+   }
+   // ─────────────────────────────────────────────────────────────────────────────
+
 
   if (!account) {
     return (
