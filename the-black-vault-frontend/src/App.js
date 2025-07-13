@@ -27,6 +27,7 @@ export default function App() {
 
   const [balance, setBalance] = useState("0")
   const [usdtBalance, setUsdtBalance] = useState("0")
+  const [queuedBalance, setQueuedBalance] = useState("0")
   const [depositAmount, setDepositAmount] = useState("")
   const [rewards, setRewards] = useState("0")
   const [referralRewards, setReferralRewards] = useState("0")
@@ -114,7 +115,7 @@ export default function App() {
       console.log("CONTRACT_ADDRESS:", CONTRACT_ADDRESS)
       console.log("USDT_ADDRESS:", USDT_ADDRESS)
       console.log("OLD_CONTRACT_ADDRESS:", process.env.REACT_APP_OLD_CONTRACT_ADDRESS)
-      console.log("Expected new contract:", "0xa5C6a3b80Eb1cF0c4A4ca4Ded8b0D17895775956")
+      console.log("Expected new contract:", "0xDe58F2cb3Bc62dfb9963f422d0DB079B2407a719")
       console.log("Expected old contract:", "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1")
 
       // Check if CONTRACT_ADDRESS is correct
@@ -222,29 +223,29 @@ export default function App() {
 
     console.log("Loading contract data for account:", account)
     try {
-      const userBnbBalance = await provider.getBalance(account)
-      setBalance(formatEther(userBnbBalance))
-      console.log("Fetched BNB balance:", formatEther(userBnbBalance))
+          // ←── A: old vaultData fetch starts here
+    try {
+      const vaultData = await vault.getUserVault(account)
 
-      const userUsdtBalance = await usdt.balanceOf(account)
-      setUsdtBalance(formatEther(userUsdtBalance))
-      console.log("Fetched USDT balance:", formatEther(userUsdtBalance))
+  // ethers.js returns: [ totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined ]
+     const active  = vaultData.activeAmt
+     const queued  = vaultData.queuedAmt
+     const pending = vaultData.pending
 
-      const allowance = await usdt.allowance(account, CONTRACT_ADDRESS)
-      setUsdtAllowance(formatEther(allowance))
-      console.log("Fetched USDT allowance:", formatEther(allowance), "USDT")
+     setVaultActiveAmount(formatEther(active))
+     setQueuedBalance   (formatEther(queued))
+     setRewards         (formatEther(pending))
 
-      try {
-        const vaultData = await vault.getUserVault(account)
-        setRewards(formatEther(vaultData.pendingRewards))
-        setVaultActiveAmount(formatEther(vaultData.activeAmount))
-        console.log("Fetched vault rewards:", formatEther(vaultData.pendingRewards))
-        console.log("Fetched vault active amount:", formatEther(vaultData.activeAmount))
-      } catch (error) {
-        console.log("No vault data found for user", error)
-        setRewards("0")
-        setVaultActiveAmount("0")
-      }
+     console.log("Fetched vault active amount:", formatEther(active))
+     console.log("Fetched queued for accrual:",   formatEther(queued))
+     console.log("Fetched pending rewards:",      formatEther(pending))
+   } catch (error) {
+     console.log("No vault data found for user", error)
+     setRewards("0")
+     setVaultActiveAmount("0")
+     setQueuedBalance("0")
+  }
+  // ── B: old vaultData fetch ends here
 
       try {
         const refData = await vault.getUserReferralData(account)
@@ -943,6 +944,11 @@ export default function App() {
                 <span className="balance-label">USDT Balance</span>
                 <span className="balance-value">{formatAmount(vaultActiveAmount)} USDT</span>
               </div>
+              <div className="balance-item">
+                <span className="balance-label">Queued for Accrual</span>
+                <span className="balance-value">{formatAmount(queuedBalance)} USDT</span>
+              </div>
+
               {Number.parseFloat(vaultActiveAmount) > 0 && dailyRate !== "0" && (
                 <div className="balance-item">
                   <span className="balance-label">Projected Daily Rewards</span>
