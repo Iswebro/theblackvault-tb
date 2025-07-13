@@ -238,15 +238,22 @@ export default function App() {
      }
  
      try {
-       // ─────────── ON-CHAIN VAULT DATA ───────────
-       const vaultData = await vault.getUserVault(account)
-       const active  = vaultData.activeAmt
-       const queued  = vaultData.queuedAmt
-       const pending = vaultData.pending
+   const vaultData        = await vault.getUserVault(account);
+   const totalDeposited   = vaultData.totalDeposited;
+   const activeAmount     = vaultData.activeAmount;
+   const pendingRewards   = vaultData.pendingRewards;
  
-       setVaultActiveAmount(formatEther(active))
-       setQueuedBalance   (formatEther(queued))
-       setRewards         (formatEther(pending))
+   // if you still want a “queued” number, you can compute:
+   // queued = totalDeposited - activeAmount
+   const queuedForAccrual = totalDeposited.sub(activeAmount);
+ 
+   setVaultActiveAmount(formatEther(activeAmount));
+   setQueuedBalance   (formatEther(queuedForAccrual));
+   setRewards         (formatEther(pendingRewards));
+ 
+   console.log("Vault Active Amount:", formatEther(activeAmount));
+   console.log("Queued for Accrual:",  formatEther(queuedForAccrual));
+   console.log("Pending Rewards:",     formatEther(pendingRewards));
  
        console.log("Vault Active Amount:", formatEther(active))
        console.log("Queued for Accrual:",   formatEther(queued))
