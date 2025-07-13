@@ -5,8 +5,8 @@ import { getUserInfo as fetchVaultInfo } from "./useBlackVault"
 import { useToast, ToastContainer, ToastProvider } from "./components/Toast";
 import { useEffect, useState, useRef } from "react"
 import { connectInjected, getReferralFromURL } from "./connectWallet"
-import BlackVaultAbi   from "./contract/BlackVaultABI.json"
-import ERC20Abi        from "./contract/ERC20Abi.json"
+import BlackVaultArtifact from "./contract/BlackVaultABI.json"
+import ERC20Artifact      from "./contract/ERC20Abi.json"
 import BlackVaultV1Abi from "./contract/BlackVaultV1ABI.json"
 import "./App.css"
 import { config } from "./lib/config.ts"
@@ -15,9 +15,11 @@ import Leaderboard from "./components/Leaderboard"
 import ReferralsModal from "./components/ReferralsModal"
 import TroubleshootingModal from "./components/TroubleshootingModal"
 
-// pull out the `.abi` arrays
-const CONTRACT_ADDRESS = config.contractAddress
-const USDT_ADDRESS = config.usdtAddress
+// Use .abi if present (Hardhat/Truffle artifact), else use as array
+const BlackVaultAbi = BlackVaultArtifact.abi || BlackVaultArtifact;
+const ERC20Abi = ERC20Artifact.abi || ERC20Artifact;
+const CONTRACT_ADDRESS = config.contractAddress;
+const USDT_ADDRESS = config.usdtAddress;
 
 export default function App() {
   const [provider, setProvider] = useState(null)
