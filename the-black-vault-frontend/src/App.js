@@ -15,12 +15,11 @@ import TroubleshootingModal from "./components/TroubleshootingModal"
 import BlackVaultV1JSON from "./contract/BlackVaultV1ABI.json"
 
 // pull out the `.abi` arrays
-const CONTRACT_ADDRESS = config.contractAddress
-const USDT_ADDRESS = config.usdtAddress
 const BlackVaultAbi   = BlackVaultJSON.abi
 const ERC20Abi        = ERC20JSON.abi
 const BlackVaultV1Abi = BlackVaultV1JSON.abi
-
+const CONTRACT_ADDRESS = config.contractAddress
+const USDT_ADDRESS = config.usdtAddress
 
 export default function App() {
   const [provider, setProvider] = useState(null)
@@ -70,48 +69,61 @@ export default function App() {
 
   // Listen for account changes
   useEffect(() => {
-    if (window.ethereum) {
-      const handleAccountsChanged = async (accounts) => {
-        console.log("Accounts changed event received:", accounts)
-        if (accounts.length === 0) {
-          console.log("No accounts found, disconnecting.")
-          if (!isManuallyDisconnected.current) {
-            disconnect()
-          }
-        } else if (account && accounts[0].toLowerCase() !== account.toLowerCase()) {
-          if (!isManuallyDisconnected.current) {
-            console.log("Account switched from", account, "to", accounts[0])
-            setAccount(accounts[0])
-            addToast("Account switched", "info")
-          }
-        } else if (!account && accounts.length > 0 && !isManuallyDisconnected.current) {
-          console.log("Initial account detected:", accounts[0])
-          setAccount(accounts[0])
-          addToast("Wallet connected successfully!", "success")
-        }
+  if (!window.ethereum) return;
+
+  const handleChainChanged = () => {
+    console.log("Chain changed, reloading page.");
+    window.location.reload();
+  };
+
+  const handleAccountsChanged = async (accounts) => {
+    console.log("Accounts changed event received:", accounts);
+
+    // no accounts → disconnect
+    if (accounts.length === 0) {
+      console.log("No accounts found, disconnecting.");
+      if (!isManuallyDisconnected.current) {
+        disconnect();
       }
+      return;
+    }
 
-      const handleChainChanged = () => {
-        console.log("Chain changed, reloading page.")
-        window.location.reload()
-      }
+    // got an account
+    const newAccount = accounts[0];
 
-      window.ethereum.on("accountsChanged", handleAccountsChanged)
-      window.ethereum.on("chainChanged", handleChainChanged)
-
-      window.ethereum
-        .request({ method: "eth_accounts" })
-        .then(handleAccountsChanged)
-        .catch((err) => console.error("Error getting initial accounts:", err))
-
-      return () => {
-        if (window.ethereum.removeListener) {
-          window.ethereum.removeListener("accountsChanged", handleAccountsChanged)
-          window.ethereum.removeListener("chainChanged", handleChainChanged)
-        }
+    // if it’s a different account (or initial connect) AND we're not manually disconnected:
+    if (!isManuallyDisconnected.current && newAccount.toLowerCase() !== account.toLowerCase()) {
+      console.log("Connecting to account:", newAccount);
+      try {
+        // grab provider + signer + account in one go
+        const { provider: p, signer: s, account: a } = await connectInjected();
+        setProvider(p);
+        setSigner(s);
+        setAccount(a);
+        addToast("Wallet connected successfully!", "success");
+      } catch (err) {
+        console.error("Auto-connect failed:", err);
+        addToast(err.message || "Failed to connect wallet", "error");
       }
     }
-  }, [account, addToast])
+  };
+
+  window.ethereum.on("accountsChanged", handleAccountsChanged);
+  window.ethereum.on("chainChanged", handleChainChanged);
+
+  // trigger once on mount to pick up any already-connected wallet
+  window.ethereum
+    .request({ method: "eth_accounts" })
+    .then(handleAccountsChanged)
+    .catch((err) => console.error("Error getting initial accounts:", err));
+
+  return () => {
+    if (window.ethereum.removeListener) {
+      window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+      window.ethereum.removeListener("chainChanged", handleChainChanged);
+    }
+  };
+}, [account, addToast, disconnect]);
 
   const initializeContracts = async () => {
     if (!signer) return
