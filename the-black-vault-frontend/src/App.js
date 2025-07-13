@@ -4,16 +4,20 @@ import { useEffect, useState, useRef } from "react"
 import { Contract, formatEther, parseEther } from "ethers"
 import { connectInjected, getReferralFromURL } from "./connectWallet"
 import { useToast, ToastContainer } from "./components/Toast"
-import BlackVaultAbi from "./contract/BlackVaultABI.json"
-import ERC20Abi from "./contract/ERC20Abi.json"
+import BlackVaultJson   from "./contract/BlackVaultABI.json"
+import ERC20Json        from "./contract/ERC20Abi.json"
 import "./App.css"
 import { config } from "./lib/config.ts"
 import HowItWorks from "./components/HowItWorks"
 import Leaderboard from "./components/Leaderboard"
 import ReferralsModal from "./components/ReferralsModal"
 import TroubleshootingModal from "./components/TroubleshootingModal"
-import BlackVaultV1Abi from "./contract/BlackVaultV1ABI.json"
+import BlackVaultV1Json from "./contract/BlackVaultV1ABI.json"
 
+// pull out the `.abi` arrays
+const BlackVaultAbi   = BlackVaultJson.abi
+const ERC20Abi        = ERC20Json.abi
+const BlackVaultV1Abi = BlackVaultV1Json.abi
 const CONTRACT_ADDRESS = config.contractAddress
 const USDT_ADDRESS = config.usdtAddress
 
@@ -216,12 +220,13 @@ export default function App() {
   }
 
   const loadContractData = async (vault = contract, usdt = usdtContract) => {
-    if (!vault || !provider || !account || !usdt) {
-      console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt })
-      return
-    }
+  if (!vault || !provider || !account || !usdt) {
+    console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt })
+    return
+  }
 
-    console.log("Loading contract data for account:", account)
+  console.log("Loading contract data for account:", account)
+  console.log("▶ loadContractData:", { vault, provider, account, usdt })
     try {
           // ←── A: old vaultData fetch starts here
     try {
@@ -311,24 +316,28 @@ export default function App() {
   }
 
   useEffect(() => {
-    let timerInterval
-    if (account && timeUntilNextCycle > 0) {
-      timerInterval = setInterval(() => {
-        setTimeUntilNextCycle((prevTime) => {
-          if (prevTime <= 1) {
-            clearInterval(timerInterval)
-            loadContractData()
-            return 0
+  let timerInterval
+  if (account && timeUntilNextCycle > 0) {
+    timerInterval = setInterval(() => {
+      setTimeUntilNextCycle((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerInterval)
+          // only call after both contracts are initialised
+          if (contract && usdtContract) {
+            loadContractData(contract, usdtContract)
           }
-          return prevTime - 1
-        })
-      }, 1000)
-    } else if (timeUntilNextCycle === 0 && account) {
-      loadContractData()
-    }
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  } else if (timeUntilNextCycle === 0 && account && contract && usdtContract) {
+    // first-time fetch, now that contract & usdtContract are set
+    loadContractData(contract, usdtContract)
+  }
 
-    return () => clearInterval(timerInterval)
-  }, [account, timeUntilNextCycle])
+  return () => clearInterval(timerInterval)
+}, [account, timeUntilNextCycle, contract, usdtContract])
 
   const connectWallet = async () => {
     if (loading) return
@@ -391,7 +400,7 @@ export default function App() {
       addToast("Approval transaction submitted. Waiting for confirmation...", "info")
       await tx.wait()
       addToast("USDT approved successfully!", "success")
-      await loadContractData()
+      await loadContractData(contract, usdtContract)
     } catch (error) {
       console.error("USDT approval failed:", error)
       if (error && error.code === 4001) {
@@ -438,7 +447,7 @@ export default function App() {
       if (receipt.status === 1) {
         addToast("Deposit successful!", "success")
         setDepositAmount("")
-        await loadContractData()
+        await loadContractData(contract, usdtContract)
       } else {
         console.error("Transaction failed on-chain:", receipt)
         addToast("Deposit transaction failed on-chain. Check explorer for details.", "error")
@@ -525,7 +534,7 @@ export default function App() {
       console.log("✅ Transaction receipt:", receipt)
 
       addToast("Rewards withdrawn successfully!", "success")
-      await loadContractData()
+      await loadContractData(contract, usdtContract)
     } catch (error) {
       console.error("❌ Withdraw failed:", error)
       console.error("Error details:", {
@@ -631,7 +640,7 @@ export default function App() {
       console.log("✅ Transaction receipt:", receipt)
 
       addToast("Referral rewards withdrawn successfully!", "success")
-      await loadContractData()
+      await loadContractData(contract, usdtContract)
     } catch (error) {
       console.error("❌ Referral withdraw failed:", error)
       console.error("Error details:", {
@@ -704,7 +713,7 @@ export default function App() {
       await tx.wait()
 
       addToast("V1 vault rewards withdrawn!", "success")
-      await loadContractData()
+      await loadContractData(contract, usdtContract)
     } catch (error) {
       console.error("V1 vault withdraw failed:", error)
 
@@ -771,7 +780,7 @@ export default function App() {
       await tx.wait()
 
       addToast("V1 referral rewards withdrawn!", "success")
-      await loadContractData()
+      await loadContractData(contract, usdtContract)
     } catch (error) {
       console.error("V1 referral withdraw failed:", error)
 
@@ -942,7 +951,7 @@ export default function App() {
             <h3 className="card-title">Vault Balance</h3>
             <div className="balance-grid">
               <div className="balance-item">
-                <span className="balance-label">USDT Balance</span>
+                <span className="balance-label">Active Balance</span>
                 <span className="balance-value">{formatAmount(vaultActiveAmount)} USDT</span>
               </div>
               <div className="balance-item">
