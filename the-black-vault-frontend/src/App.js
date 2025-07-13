@@ -248,19 +248,26 @@ try {
   console.log("Fetched USDT allowance:", formatEther(userAllowance))
 
   // ── 2) Now fetch your on-chain vault info ──
-  // ←── A: vaultData fetch starts here
-  const vaultData = await vault.getUserVault(account)
-  const activeAmt = vaultData.activeAmt    // currently earning
-  const queuedAmt = vaultData.queuedAmt    // waiting to start
-  const pending   = vaultData.pending      // rewards ready
+// ←── A: fetch from the public mapping instead
+try {
+  // vaults(account) returns the full struct, including queuedAmount
+  const structData = await vault.vaults(account)
+  // destructure by field name:
+  const { activeAmount, queuedAmount, pendingRewards } = structData
 
-  setVaultActiveAmount(formatEther(activeAmt))
-  setQueuedBalance(formatEther(queuedAmt))
-  setRewards(formatEther(pending))
+  setVaultActiveAmount(formatEther(activeAmount))
+  setQueuedBalance   (formatEther(queuedAmount))
+  setRewards         (formatEther(pendingRewards))
 
-  console.log("Fetched active:",    formatEther(activeAmt))
-  console.log("Fetched queued:",    formatEther(queuedAmt))
-  console.log("Fetched pending:",   formatEther(pending))
+  console.log("Fetched vault active amount:", formatEther(activeAmount))
+  console.log("Fetched queued for accrual:",    formatEther(queuedAmount))
+  console.log("Fetched pending rewards:",       formatEther(pendingRewards))
+} catch (error) {
+  console.error("Error fetching vault struct:", error)
+  setVaultActiveAmount("0")
+  setQueuedBalance("0")
+  setRewards("0")
+}
   // ── B: vaultData fetch ends here
 
 
