@@ -1,5 +1,6 @@
 "use client"
 // App.js
+import { ethers } from "ethers"
 import { getUserInfo as fetchVaultInfo } from "./useBlackVault"
 import { useToast, ToastContainer, ToastProvider } from "./components/Toast";
 import { useEffect, useState, useRef } from "react"
@@ -248,22 +249,20 @@ try {
   console.log("Fetched USDT allowance:", formatEther(userAllowance))
 
   // ── 2) Now fetch your on-chain vault info ──
-// ←── A: fetch from the public mapping instead
+// ←── A: fetch the full struct from the public mapping
 try {
-  // vaults(account) returns the full struct, including queuedAmount
   const structData = await vault.vaults(account)
-  // destructure by field name:
   const { activeAmount, queuedAmount, pendingRewards } = structData
 
-  setVaultActiveAmount(formatEther(activeAmount))
-  setQueuedBalance   (formatEther(queuedAmount))
-  setRewards         (formatEther(pendingRewards))
+  setVaultActiveAmount(ethers.formatEther(activeAmount))
+  setQueuedBalance   (ethers.formatEther(queuedAmount))
+  setRewards         (ethers.formatEther(pendingRewards))
 
-  console.log("Fetched vault active amount:", formatEther(activeAmount))
-  console.log("Fetched queued for accrual:",    formatEther(queuedAmount))
-  console.log("Fetched pending rewards:",       formatEther(pendingRewards))
-} catch (error) {
-  console.error("Error fetching vault struct:", error)
+  console.log("Fetched vault active amount:", ethers.formatEther(activeAmount))
+  console.log("Fetched queued for accrual:",   ethers.formatEther(queuedAmount))
+  console.log("Fetched pending rewards:",      ethers.formatEther(pendingRewards))
+} catch (err) {
+  console.error("Error fetching vault struct:", err)
   setVaultActiveAmount("0")
   setQueuedBalance("0")
   setRewards("0")
