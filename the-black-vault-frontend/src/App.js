@@ -4,8 +4,10 @@ import { useEffect, useState, useRef } from "react"
 import { Contract, formatEther, parseEther } from "ethers"
 import { connectInjected, getReferralFromURL } from "./connectWallet"
 import { useToast, ToastContainer } from "./components/Toast"
-import BlackVaultJSON   from "./contract/BlackVaultABI.json"
-import ERC20JSON        from "./contract/ERC20Abi.json"
+import BlackVaultJSON from "./contract/BlackVaultABI.json"
+const BlackVaultAbi = BlackVaultJSON.abi
+import ERC20JSON from "./contract/ERC20Abi.json"
+const ERC20Abi = ERC20JSON.abi
 import "./App.css"
 import { config } from "./lib/config.ts"
 import HowItWorks from "./components/HowItWorks"
@@ -13,11 +15,9 @@ import Leaderboard from "./components/Leaderboard"
 import ReferralsModal from "./components/ReferralsModal"
 import TroubleshootingModal from "./components/TroubleshootingModal"
 import BlackVaultV1JSON from "./contract/BlackVaultV1ABI.json"
+const BlackVaultV1Abi = BlackVaultV1JSON.abi
 
 // pull out the `.abi` arrays
-const BlackVaultAbi   = BlackVaultJSON.abi
-const ERC20Abi        = ERC20JSON.abi
-const BlackVaultV1Abi = BlackVaultV1JSON.abi
 const CONTRACT_ADDRESS = config.contractAddress
 const USDT_ADDRESS = config.usdtAddress
 
