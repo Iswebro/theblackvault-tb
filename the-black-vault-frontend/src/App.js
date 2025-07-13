@@ -123,7 +123,7 @@ export default function App() {
       window.ethereum.removeListener("chainChanged", handleChainChanged);
     }
   };
-}, [account, addToast, disconnect]);
+}, [account, addToast]);
 
   const initializeContracts = async () => {
     if (!signer) return
