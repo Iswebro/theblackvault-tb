@@ -4,18 +4,20 @@ import { useEffect, useState, useRef } from "react"
 import { Contract, formatEther, parseEther } from "ethers"
 import { connectInjected, getReferralFromURL } from "./connectWallet"
 import { useToast, ToastContainer } from "./components/Toast"
-import BlackVaultJSON from "./contract/BlackVaultABI.json"
-const BlackVaultAbi = BlackVaultJSON.abi
-import ERC20JSON from "./contract/ERC20Abi.json"
-const ERC20Abi = ERC20JSON.abi
+import { abi as BlackVaultAbi } from "./contract/BlackVaultABI.json"
+import { abi as ERC20Abi      } from "./contract/ERC20Abi.json"
+import { abi as BlackVaultV1Abi } from "./contract/BlackVaultV1ABI.json"
 import "./App.css"
 import { config } from "./lib/config.ts"
 import HowItWorks from "./components/HowItWorks"
 import Leaderboard from "./components/Leaderboard"
 import ReferralsModal from "./components/ReferralsModal"
 import TroubleshootingModal from "./components/TroubleshootingModal"
-import BlackVaultV1JSON from "./contract/BlackVaultV1ABI.json"
+
+const BlackVaultAbi = BlackVaultJSON.abi
+const ERC20Abi = ERC20JSON.abi
 const BlackVaultV1Abi = BlackVaultV1JSON.abi
+
 
 // pull out the `.abi` arrays
 const CONTRACT_ADDRESS = config.contractAddress
