@@ -1,6 +1,6 @@
 "use client"
 // App.js
-import { getUserInfo, deposit, withdrawRewards, withdrawReferralRewards } from "./useBlackVault";
+import { getUserInfo as fetchVaultInfo } from "./useBlackVault"
 import { useToast, ToastContainer, ToastProvider } from "./components/Toast";
 import { useEffect, useState, useRef } from "react"
 import { Contract, formatEther, parseEther } from "ethers"
@@ -241,26 +241,19 @@ export default function App() {
     try {
           // ←── A: old vaultData fetch starts here
     try {
-         // call our helper
-      console.log("📡 getUserInfo…", { provider, account })
-      const info = await getUserInfo(provider, account)
-      console.log("🎯 Vault info:", info)
+     console.log("📡 fetching vault info…", { provider, account })
+     const info = await fetchVaultInfo(provider, account)
+     console.log("🎯 Vault info:", info)
 
-  // info.activeAmount, info.queuedAmount, info.pendingRewards are strings already
-      setVaultActiveAmount(info.activeAmount)
-      setQueuedBalance   (info.queuedAmount)
-      setRewards         (info.pendingRewards)
-
-      setVaultActiveAmount(formatEther(active))
-      setQueuedBalance   (formatEther(queued))
-      setRewards         (formatEther(pending))
-
-    } catch (error) {
-      console.log("No vault data found for user", error)
-      setVaultActiveAmount("0")
-      setQueuedBalance("0")
-      setRewards("0")
-    }
+     setVaultActiveAmount(info.activeAmount)
+     setQueuedBalance   (info.queuedAmount)
+     setRewards         (info.pendingRewards)
+  } catch (error) {
+     console.error("No vault data found for user", error)
+     setVaultActiveAmount("0")
+     setQueuedBalance("0")
+     setRewards("0")
+}
   // ── B: old vaultData fetch ends here
 
       try {
