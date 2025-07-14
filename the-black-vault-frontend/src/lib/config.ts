@@ -3,7 +3,7 @@
 // Hardcoded config for BSC Mainnet (or Testnet if you wish)
 export const config = {
   // Contract settings
-  contractAddress: "0xDe58F2cb3Bc62dfb9963f422d0DB079B2407a719", // <-- set to your deployed contract address
+  contractAddress: "0x72924b49d0384e69c658e1e094c21E089B1081B8", // <-- set to your deployed contract address
   usdtAddress:     "0x55d398326f99059fF775485246999027B3197955", // <-- set to your USDT token address
 
   // Network settings
@@ -13,7 +13,7 @@ export const config = {
   blockExplorer: "https://bscscan.com",
 
   // WalletConnect
-  walletConnectProjectId: "YOUR_WALLETCONNECT_PROJECT_ID", // <-- replace if needed
+  walletConnectProjectId: "ec1a030594f38292648794d4587912f4", // <-- replace if needed
 
   // Helper functions
   isTestnet: function () {

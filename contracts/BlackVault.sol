@@ -286,18 +286,26 @@ contract BlackVaultV2 {
         uint256 joined
     ) {
         UserVault storage u = vaults[user];
-        uint256 owed = u.pendingRewards;
         uint256 curr = getCurrentCycle();
-        if (curr > u.lastAccrualCycle) {
-            owed += (u.activeAmount * DAILY_RATE * (curr - u.lastAccrualCycle)) / 1000;
+        uint256 _activeAmt = u.activeAmount;
+        uint256 _queuedAmt = u.queuedAmount;
+        uint256 _lastCycle = u.lastAccrualCycle;
+        // Simulate queued -> active if cycle has advanced
+        if (_queuedAmt > 0 && u.queuedCycle <= curr) {
+            _activeAmt += _queuedAmt;
+            _queuedAmt = 0;
+        }
+        uint256 owed = u.pendingRewards;
+        if (curr > _lastCycle) {
+            owed += (_activeAmt * DAILY_RATE * (curr - _lastCycle)) / 1000;
         }
         return (
             u.totalDeposited,
-            u.activeAmount,
-            u.queuedAmount,
+            _activeAmt,
+            _queuedAmt,
             owed,
             u.totalRewardsWithdrawn,
-            u.lastAccrualCycle,
+            _lastCycle,
             u.joinedCycle
         );
     }

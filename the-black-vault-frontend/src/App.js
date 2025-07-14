@@ -134,13 +134,13 @@ export default function App() {
       console.log("CONTRACT_ADDRESS:", CONTRACT_ADDRESS)
       console.log("USDT_ADDRESS:", USDT_ADDRESS)
       console.log("OLD_CONTRACT_ADDRESS:", process.env.REACT_APP_OLD_CONTRACT_ADDRESS)
-      console.log("Expected new contract:", "0xDe58F2cb3Bc62dfb9963f422d0DB079B2407a719")
+      console.log("Expected new contract:", "0x72924b49d0384e69c658e1e094c21E089B1081B8")
       console.log("Expected old contract:", "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1")
 
       // Check if CONTRACT_ADDRESS is correct
-      if (CONTRACT_ADDRESS !== "0xDe58F2cb3Bc62dfb9963f422d0DB079B2407a719") {
+      if (CONTRACT_ADDRESS !== "0x72924b49d0384e69c658e1e094c21E089B1081B8") {
         console.error(
-          "❌ WRONG CONTRACT ADDRESS! Expected: 0xDe58F2cb3Bc62dfb9963f422d0DB079B2407a719, Got:",
+          "❌ WRONG CONTRACT ADDRESS! Expected: 0x72924b49d0384e69c658e1e094c21E089B1081B8, Got:",
           CONTRACT_ADDRESS,
         )
         addToast("Wrong contract address configured!", "error")
@@ -343,6 +343,7 @@ export default function App() {
       }, 1000);
     } else if (timeUntilNextCycle === 0 && provider && account) {
       loadContractData();
+      // No automation needed: contract now handles queued-to-active in view logic
     }
     return () => clearInterval(timer);
   }, [provider, account, timeUntilNextCycle]);

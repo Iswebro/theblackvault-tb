@@ -2,7 +2,7 @@
 import { ethers } from "ethers";
 import BlackVaultJSON from "./BlackVaultABI.json";
 
-const CONTRACT_ADDRESS = "0xDe58F2cb3Bc62dfb9963f422d0DB079B2407a719";
+const CONTRACT_ADDRESS = "0x72924b49d0384e69c658e1e094c21E089B1081B8";
 
 export const getContract = (providerOrSigner) => {
   return new ethers.Contract(CONTRACT_ADDRESS, BlackVaultJSON.abi, providerOrSigner);
