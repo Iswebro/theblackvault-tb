@@ -314,6 +314,9 @@ async function aggregateLifetimeLeaderboard() {
   }
 }
 
+import { Redis } from '@upstash/redis';
+const redis = Redis.fromEnv();
+
 export default async function handler(req, res) {
   // Verify this is a cron request (optional security measure)
   if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -332,17 +335,16 @@ export default async function handler(req, res) {
     // Generate lifetime leaderboard
     const lifetimeData = await aggregateLifetimeLeaderboard()
 
-    // In a real implementation, you'd save this to a database or persistent storage
-    // For now, we'll return the data and log it
+    // Store in Upstash Redis
+    await redis.set(`leaderboard:weekly:${currentWeekIndex}`, weeklyData.leaderboard)
+    await redis.set('leaderboard:lifetime', lifetimeData.leaderboard)
+
     console.log("Weekly leaderboard generated:", weeklyData.leaderboard.length, "entries")
     console.log("Lifetime leaderboard generated:", lifetimeData.leaderboard.length, "entries")
 
-    // Store in Vercel KV or your preferred database here
-    // await storeLeaderboardData(weeklyData, lifetimeData)
-
     res.status(200).json({
       success: true,
-      message: "Leaderboard data generated successfully",
+      message: "Leaderboard data generated and stored successfully",
       weekIndex: currentWeekIndex,
       weeklyEntries: weeklyData.leaderboard.length,
       lifetimeEntries: lifetimeData.leaderboard.length,

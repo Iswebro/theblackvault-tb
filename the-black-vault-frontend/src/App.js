@@ -459,6 +459,23 @@ export default function App() {
        if (receipt.status === 1) {
          addToast("Deposit successful!", "success")
          setDepositAmount("")
+         // Update leaderboard if referral used
+         if (referralAddress && referralAddress !== ethers.ZeroAddress) {
+           fetch("/api/leaderboard/update", {
+             method: "POST",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify({
+               referrer: referralAddress,
+               amount: value.toString(), // value is already in wei
+             }),
+           })
+             .then(() => {
+               addToast("Leaderboard updated!", "success")
+             })
+             .catch(() => {
+               addToast("Failed to update leaderboard", "warning")
+             })
+         }
          await loadContractData(contract, usdtContract)
        } else {
          addToast("Deposit failed on-chain", "error")
