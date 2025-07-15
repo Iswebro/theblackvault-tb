@@ -203,40 +203,31 @@ export default function App() {
     }
   }
 
+  // Fetch transaction history from BscScan API proxy (with Redis cache)
   const loadTransactionHistory = async (vault, usdt) => {
-    if (!vault || !provider || !account) {
-      console.log("Skipping loadTransactionHistory: missing vault, provider, or account")
+    if (!vault || !account) {
+      console.log("Skipping loadTransactionHistory: missing vault or account")
       return
     }
-
     try {
-      const depositEvents = await vault.queryFilter(vault.filters.Deposited(account), -10000)
-      const rewardsWithdrawEvents = await vault.queryFilter(vault.filters.RewardsWithdrawn(account), -10000)
-      const referralWithdrawEvents = await vault.queryFilter(vault.filters.ReferralRewardsWithdrawn(account), -10000)
-
-      const processEvent = async (event, type) => {
-        const block = await provider.getBlock(event.blockNumber)
-        return {
-          type: type,
-          amount: formatEther(event.args.amount),
-          time: new Date(block.timestamp * 1000),
-          txHash: event.transactionHash,
-        }
+      const res = await fetch(`/api/bscscan?wallet=${account}&vault=${vault.address}`);
+      const data = await res.json();
+      if (!data.result) {
+        setHistory([]);
+        return;
       }
-
-      const allEventsPromises = [
-        ...depositEvents.map((event) => processEvent(event, "Deposit")),
-        ...rewardsWithdrawEvents.map((event) => processEvent(event, "Rewards Withdrawn")),
-        ...referralWithdrawEvents.map((event) => processEvent(event, "Referral Withdrawal")),
-      ]
-
-      const processedEvents = await Promise.all(allEventsPromises)
-
-      processedEvents.sort((a, b) => b.time.getTime() - a.time.getTime())
-      setHistory(processedEvents)
+      // Map BscScan txs to history format
+      const processedEvents = data.result.map(tx => ({
+        type: tx.methodId === '0xa9059cbb' ? 'Deposit' : 'Transfer', // You may want to improve this logic
+        amount: (parseFloat(tx.value) / Math.pow(10, 18)).toString(),
+        time: new Date(parseInt(tx.timeStamp) * 1000),
+        txHash: tx.hash,
+      }));
+      processedEvents.sort((a, b) => b.time.getTime() - a.time.getTime());
+      setHistory(processedEvents);
     } catch (error) {
-      console.error("Error loading transaction history:", error)
-      setHistory([])
+      console.error("Error loading transaction history:", error);
+      setHistory([]);
     }
   }
 
@@ -700,52 +691,46 @@ export default function App() {
               <div className="balance-item">
                 <span className="balance-label">Queued for Accrual</span>
                 <span className="balance-value">{formatAmount(queuedBalance)} USDT</span>
-                {Number.parseFloat(queuedBalance) > 0 && (
-                  <button
-                    className="vault-button mini-button"
-                    style={{ marginTop: 4, fontSize: 12, padding: '2px 8px' }}
-                    onClick={async () => {
-                      if (!contract) return;
-                      try {
-                        await contract.poke();
-                        addToast("Deposit activation requested. Please wait for confirmation.", "info");
-                        await loadContractData(contract, usdtContract);
-                      } catch (e) {
-                        addToast("Activation failed or rejected.", "error");
-                      }
-                    }}
-                  >
-                    Force Activate Deposit
-                  </button>
-                )}
+                <button
+                  className="vault-button mini-button"
+                  style={{ marginTop: 4, fontSize: 12, padding: '2px 8px' }}
+                  onClick={async () => {
+                    if (!contract) return;
+                    try {
+                      await contract.poke();
+                      addToast("Deposit activation requested. Please wait for confirmation.", "info");
+                      await loadContractData(contract, usdtContract);
+                    } catch (e) {
+                      addToast("Activation failed or rejected.", "error");
+                    }
+                  }}
+                >
+                  Force Activate Deposit
+                </button>
               </div>
 
-              {Number.parseFloat(vaultActiveAmount) > 0 && dailyRate !== "0" && (
-                <div className="balance-item">
-                  <span className="balance-label">Projected Daily Rewards</span>
-                  <span className="balance-value">
-                    {formatAmount(
-                      ((Number.parseFloat(vaultActiveAmount) * Number.parseFloat(dailyRate)) / 1000).toString(),
-                    )} USDT
-                  </span>
-                </div>
-              )}
-              {Number.parseFloat(queuedBalance) > 0 && dailyRate !== "0" && (
-                <div className="balance-item">
-                  <span className="balance-label">Will be earning per day (after activation)</span>
-                  <span className="balance-value">
-                    {formatAmount(
-                      ((Number.parseFloat(queuedBalance) * Number.parseFloat(dailyRate)) / 1000).toString(),
-                    )} USDT
-                  </span>
-                </div>
-              )}
-              {(Number.parseFloat(vaultActiveAmount) > 0 || Number.parseFloat(queuedBalance) > 0) && (
-                <div className="balance-item">
-                  <span className="balance-label">Next Accrual In</span>
-                  <span className="balance-value">{timeUntilNextCycle > 0 ? formatCountdown(timeUntilNextCycle) : "00:00:00"}</span>
-                </div>
-              )}
+              <div className="balance-item">
+                <span className="balance-label">Projected Daily Rewards</span>
+                <span className="balance-value">
+                  {formatAmount(
+                    ((Number.parseFloat(vaultActiveAmount) * Number.parseFloat(dailyRate)) / 1000).toString(),
+                  )} USDT
+                </span>
+              </div>
+
+              <div className="balance-item">
+                <span className="balance-label">Will be earning per day (after activation)</span>
+                <span className="balance-value">
+                  {formatAmount(
+                    ((Number.parseFloat(queuedBalance) * Number.parseFloat(dailyRate)) / 1000).toString(),
+                  )} USDT
+                </span>
+              </div>
+
+              <div className="balance-item">
+                <span className="balance-label">Next Accrual In</span>
+                <span className="balance-value">{timeUntilNextCycle > 0 ? formatCountdown(timeUntilNextCycle) : "00:00:00"}</span>
+              </div>
             </div>
           </div>
 
