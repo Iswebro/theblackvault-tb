@@ -786,7 +786,7 @@ export default function App() {
               Vault Rewards
             </h3>
             <div className="reward-display">
-              <span className="reward-amount">{formatAmount(rewards)} USDT</span>
+              <span className="reward-amount">{(Number(vaultActiveAmount) === 0 && Number(queuedBalance) > 0) ? "0" : formatAmount(rewards)} USDT</span>
               <span className="reward-label">Available to withdraw</span>
             </div>
             <button className="vault-button premium-button success" onClick={withdraw} disabled={txLoading}>
