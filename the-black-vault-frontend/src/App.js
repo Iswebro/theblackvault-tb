@@ -7,13 +7,14 @@ import { useEffect, useState, useRef } from "react"
 import { connectInjected, getReferralFromURL } from "./connectWallet"
 import BlackVaultArtifact from "./contract/BlackVaultABI.json"
 import ERC20Artifact      from "./contract/ERC20Abi.json"
-import BlackVaultV1Abi from "./contract/BlackVaultV1ABI.json"
-import "./App.css"
-import { config } from "./lib/config.ts"
-import HowItWorks from "./components/HowItWorks"
-import Leaderboard from "./components/Leaderboard"
-import ReferralsModal from "./components/ReferralsModal"
-import TroubleshootingModal from "./components/TroubleshootingModal"
+
+import BlackVaultV1Abi from "./contract/BlackVaultV1ABI.json";
+import "./App.css";
+import HowItWorks from "./components/HowItWorks";
+import Leaderboard from "./components/Leaderboard";
+import ReferralsModal from "./components/ReferralsModal";
+import TroubleshootingModal from "./components/TroubleshootingModal";
+import { config } from "./lib/config.js";
 
 // Use .abi if present (Hardhat/Truffle artifact), else use as array
 const BlackVaultAbi = BlackVaultArtifact.abi || BlackVaultArtifact;
@@ -154,9 +155,14 @@ export default function App() {
       setUsdtContract(usdt)
       console.log("USDT Contract initialized:", usdt)
 
-      const oldVault = new Contract(process.env.REACT_APP_OLD_CONTRACT_ADDRESS, BlackVaultV1Abi, signer)
-      setOldVaultContract(oldVault)
-      console.log("BlackVault V1 Contract initialized:", oldVault)
+      const oldAddress = process.env.REACT_APP_OLD_CONTRACT_ADDRESS;
+      if (oldAddress) {
+        const oldVault = new Contract(oldAddress, BlackVaultV1Abi, signer);
+        setOldVaultContract(oldVault);
+        console.log("BlackVault V1 Contract initialized:", oldVault);
+      } else {
+        console.warn("OLD_CONTRACT_ADDRESS is undefined. Skipping old vault contract initialization.");
+      }
 
       // Test if the main contract has the expected functions
       console.log("=== TESTING CONTRACT FUNCTIONS ===")

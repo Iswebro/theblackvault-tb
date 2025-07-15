@@ -2,7 +2,8 @@
 import { Contract, formatEther } from "ethers";
 import BlackVaultABI from "./contract/BlackVaultABI.json";
 
-const CONTRACT_ADDRESS = "0xDe58F2cb3Bc62dfb9963f422d0DB079B2407a719";
+import { contractAddress } from "./lib/config.js";
+const CONTRACT_ADDRESS = contractAddress;
 
 /**
  * @param {import("ethers").Provider|import("ethers").Signer} providerOrSigner
