@@ -134,13 +134,13 @@ export default function App() {
       console.log("CONTRACT_ADDRESS:", CONTRACT_ADDRESS)
       console.log("USDT_ADDRESS:", USDT_ADDRESS)
       console.log("OLD_CONTRACT_ADDRESS:", process.env.REACT_APP_OLD_CONTRACT_ADDRESS)
-      console.log("Expected new contract:", "0x72924b49d0384e69c658e1e094c21E089B1081B8")
+      console.log("Expected new contract:", "0x69945377574869DFDc646070947F759078103a8b")
       console.log("Expected old contract:", "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1")
 
       // Check if CONTRACT_ADDRESS is correct
-      if (CONTRACT_ADDRESS !== "0x72924b49d0384e69c658e1e094c21E089B1081B8") {
+      if (CONTRACT_ADDRESS !== "0x69945377574869DFDc646070947F759078103a8b") {
         console.error(
-          "❌ WRONG CONTRACT ADDRESS! Expected: 0x72924b49d0384e69c658e1e094c21E089B1081B8, Got:",
+          "❌ WRONG CONTRACT ADDRESS! Expected: 0x69945377574869DFDc646070947F759078103a8b, Got:",
           CONTRACT_ADDRESS,
         )
         addToast("Wrong contract address configured!", "error")

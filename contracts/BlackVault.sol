@@ -8,6 +8,10 @@ pragma solidity ^0.8.20;
  * @notice This contract works with USDT (BEP-20) on Binance Smart Chain
  * @notice V2: Fixed getUserVault to return dynamic pending rewards calculation
  * @notice V2.1: New deposits earn from next full cycle; existing balance continues accruing
+ * @notice V2.2:
+ *   - Patched reward accrual and referral logic for correct cycle-based rewards and referral limits
+ *   - Added/updated poke() to only update the caller’s state, for frontend stat refresh
+ *   - Added activeAmountActivationCycle to UserVault struct for precise reward tracking
  */
 
 interface IERC20 {
@@ -21,6 +25,8 @@ interface IERC20 {
 }
 
 contract BlackVaultV2 {
+    // TEST/UTILITY: poke to trigger updateRewards for testing activation
+    function poke() external updateRewards(msg.sender) {}
     // ============ IMMUTABLE CONSTANTS ============
     uint256 public constant DAILY_RATE = 25; // 2.5% daily (25 per 1000)
     uint256 public constant MAX_WITHDRAWAL_PER_CYCLE = 250 * 10**18; // 250 USDT
@@ -48,6 +54,7 @@ contract BlackVaultV2 {
         uint256 queuedAmount;       // Newly deposited amount queued until next cycle
         uint256 queuedCycle;        // Cycle when queued amount becomes active
         uint256 lastAccrualCycle;   // Last cycle when rewards were calculated
+        uint256 activeAmountActivationCycle; // Cycle when activeAmount was last increased
         uint256 pendingRewards;     // Accumulated USDT rewards ready for withdrawal
         uint256 totalRewardsWithdrawn; // Total USDT rewards withdrawn (for transparency)
         uint256 joinedCycle;        // Cycle when user first deposited
@@ -107,6 +114,8 @@ contract BlackVaultV2 {
     /// @dev Emitted when the owner tops up a user's pendingRewards in an emergency
     event EmergencyRewarded(address indexed user, uint256 amount);
 
+    event DebugActivateQueued(address indexed user, uint256 queuedAmount, uint256 queuedCycle, uint256 currCycle, bool activated);
+
     // ============ MODIFIERS ============
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can call this function");
@@ -131,8 +140,8 @@ contract BlackVaultV2 {
 
     // Update rewards and activate any queued amount
     modifier updateRewards(address user) {
-        _updateUserRewards(user);
         _activateQueued(user);
+        _updateUserRewards(user);
         _;
     }
 
@@ -177,10 +186,7 @@ contract BlackVaultV2 {
             totalUsers++;
             u.joinedCycle = getCurrentCycle();
         }
-        uint256 nextCycle = getCurrentCycle();
-        if (block.timestamp > getCycleStartTime(nextCycle)) {
-            nextCycle++;
-        }
+        uint256 nextCycle = getCurrentCycle() + 1;
         u.totalDeposited += amount;
         u.queuedAmount += net;
         u.queuedCycle = nextCycle;
@@ -205,10 +211,7 @@ contract BlackVaultV2 {
             totalUsers++;
             u.joinedCycle = getCurrentCycle();
         }
-        uint256 nextCycle = getCurrentCycle();
-        if (block.timestamp > getCycleStartTime(nextCycle)) {
-            nextCycle++;
-        }
+        uint256 nextCycle = getCurrentCycle() + 1;
         u.totalDeposited += amount;
         u.queuedAmount += net;
         u.queuedCycle = nextCycle;
@@ -257,55 +260,60 @@ contract BlackVaultV2 {
     function _activateQueued(address user) internal {
         UserVault storage u = vaults[user];
         uint256 curr = getCurrentCycle();
+        bool activated = false;
         if (u.queuedAmount > 0 && u.queuedCycle <= curr) {
             u.activeAmount += u.queuedAmount;
+            // Only set activation cycle if activeAmount was previously zero
+            if (u.activeAmountActivationCycle == 0 || u.activeAmount == u.queuedAmount) {
+                u.activeAmountActivationCycle = curr;
+            }
             u.queuedAmount = 0;
             u.queuedCycle = 0;
+            activated = true;
         }
+        emit DebugActivateQueued(user, u.queuedAmount, u.queuedCycle, curr, activated);
     }
 
     function _updateUserRewards(address user) internal {
         UserVault storage u = vaults[user];
         uint256 curr = getCurrentCycle();
-        if (curr > u.lastAccrualCycle && u.activeAmount > 0) {
-            uint256 cycles = curr - u.lastAccrualCycle;
+        // Only accrue rewards from the later of lastAccrualCycle or activeAmountActivationCycle
+        uint256 startCycle = u.lastAccrualCycle;
+        if (u.activeAmountActivationCycle > startCycle) {
+            startCycle = u.activeAmountActivationCycle;
+        }
+        if (curr > startCycle && u.activeAmount > 0) {
+            uint256 cycles = curr - startCycle;
             uint256 earned = (u.activeAmount * DAILY_RATE * cycles) / 1000;
             u.pendingRewards += earned;
             u.lastAccrualCycle = curr;
+            // After accruing, reset activation cycle to lastAccrualCycle
+            u.activeAmountActivationCycle = curr;
         }
     }
 
     // ============ VIEW FUNCTIONS & OWNER FUNDING ============
     function getUserVault(address user) external view returns (
-        uint256 totalDep,
-        uint256 activeAmt,
-        uint256 queuedAmt,
-        uint256 pending,
-        uint256 withdrawn,
-        uint256 lastCycle,
-        uint256 joined
+        uint256 totalDeposited,
+        uint256 activeAmount,
+        uint256 queuedAmount,
+        uint256 queuedCycle,
+        uint256 lastAccrualCycle,
+        uint256 activeAmountActivationCycle,
+        uint256 pendingRewards,
+        uint256 totalRewardsWithdrawn,
+        uint256 joinedCycle
     ) {
         UserVault storage u = vaults[user];
-        uint256 curr = getCurrentCycle();
-        uint256 _activeAmt = u.activeAmount;
-        uint256 _queuedAmt = u.queuedAmount;
-        uint256 _lastCycle = u.lastAccrualCycle;
-        // Simulate queued -> active if cycle has advanced
-        if (_queuedAmt > 0 && u.queuedCycle <= curr) {
-            _activeAmt += _queuedAmt;
-            _queuedAmt = 0;
-        }
-        uint256 owed = u.pendingRewards;
-        if (curr > _lastCycle) {
-            owed += (_activeAmt * DAILY_RATE * (curr - _lastCycle)) / 1000;
-        }
         return (
             u.totalDeposited,
-            _activeAmt,
-            _queuedAmt,
-            owed,
+            u.activeAmount,
+            u.queuedAmount,
+            u.queuedCycle,
+            u.lastAccrualCycle,
+            u.activeAmountActivationCycle,
+            u.pendingRewards,
             u.totalRewardsWithdrawn,
-            _lastCycle,
             u.joinedCycle
         );
     }

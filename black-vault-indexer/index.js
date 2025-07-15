@@ -12,7 +12,7 @@ import ERC20Abi from "./src/contract/ERC20Abi.json" with { type: "json" }
 
 // Configuration (replace with your actual values or use environment variables)
 // For a production setup, use a dedicated .env file and a library like 'dotenv'
-const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS || "0xde58f2cb3bc62dfb9963f422d0db079b2407a719" // Your deployed BlackVault contract address
+const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS || "0x69945377574869DFDc646070947F759078103a8b" // Your deployed BlackVault contract address
 const USDT_ADDRESS = process.env.REACT_APP_USDT_ADDRESS || "0x55d398326f99059fF775485246999027B3197955" // Official USDT (BEP-20) on BSC Mainnet
 const RPC_URL = process.env.REACT_APP_RPC_URL || "https://bsc-dataseed.binance.org/" // BSC Mainnet RPC endpoint
 const START_BLOCK = 0 // The block number from which to start indexing (0 for all history)
