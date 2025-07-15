@@ -196,6 +196,13 @@ export default function App() {
         console.error("❌ Error calling getUserVault:", error)
       }
 
+      // Always call poke to activate queued deposits
+      try {
+        await vault.poke();
+        console.log("poke() called after contract init");
+      } catch (e) {
+        console.warn("poke() failed after contract init", e);
+      }
       await loadContractData(vault, usdt)
     } catch (error) {
       console.error("❌ Error initializing contracts:", error)
@@ -482,6 +489,13 @@ export default function App() {
                addToast("Failed to update leaderboard", "warning")
              })
          }
+         // Always call poke after deposit
+         try {
+           await contract.poke();
+           console.log("poke() called after deposit");
+         } catch (e) {
+           console.warn("poke() failed after deposit", e);
+         }
          await loadContractData(contract, usdtContract)
        } else {
          addToast("Deposit failed on-chain", "error")
@@ -505,6 +519,13 @@ export default function App() {
      try {
        addToast("Withdrawing rewards…", "info")
        await contract.withdrawRewards()
+       // Always call poke after withdraw
+       try {
+         await contract.poke();
+         console.log("poke() called after withdraw");
+       } catch (e) {
+         console.warn("poke() failed after withdraw", e);
+       }
        addToast("Rewards withdrawn!", "success")
        await loadContractData(contract, usdtContract)
      } catch (error) {
@@ -522,6 +543,13 @@ export default function App() {
      try {
        addToast("Withdrawing V1 vault rewards…", "info")
        await oldVaultContract.withdrawRewards()
+       // Always call poke after old vault withdraw
+       try {
+         await contract.poke();
+         console.log("poke() called after old vault withdraw");
+       } catch (e) {
+         console.warn("poke() failed after old vault withdraw", e);
+       }
        addToast("V1 vault rewards withdrawn!", "success")
        await loadContractData(contract, usdtContract)
      } catch (error) {
@@ -543,6 +571,13 @@ export default function App() {
      try {
        addToast("Withdrawing referral rewards…", "info")
        await contract.withdrawReferralRewards()
+       // Always call poke after referral withdraw
+       try {
+         await contract.poke();
+         console.log("poke() called after referral withdraw");
+       } catch (e) {
+         console.warn("poke() failed after referral withdraw", e);
+       }
        addToast("Referral rewards withdrawn!", "success")
        await loadContractData(contract, usdtContract)
      } catch (error) {
