@@ -196,13 +196,6 @@ export default function App() {
         console.error("❌ Error calling getUserVault:", error)
       }
 
-      // Always call poke to activate queued deposits
-      try {
-        await vault.poke();
-        console.log("poke() called after contract init");
-      } catch (e) {
-        console.warn("poke() failed after contract init", e);
-      }
       await loadContractData(vault, usdt)
     } catch (error) {
       console.error("❌ Error initializing contracts:", error)
@@ -703,9 +696,28 @@ export default function App() {
                 <span className="balance-label">Active Balance</span>
                 <span className="balance-value">{formatAmount(vaultActiveAmount)} USDT</span>
               </div>
+
               <div className="balance-item">
                 <span className="balance-label">Queued for Accrual</span>
                 <span className="balance-value">{formatAmount(queuedBalance)} USDT</span>
+                {Number.parseFloat(queuedBalance) > 0 && (
+                  <button
+                    className="vault-button mini-button"
+                    style={{ marginTop: 4, fontSize: 12, padding: '2px 8px' }}
+                    onClick={async () => {
+                      if (!contract) return;
+                      try {
+                        await contract.poke();
+                        addToast("Deposit activation requested. Please wait for confirmation.", "info");
+                        await loadContractData(contract, usdtContract);
+                      } catch (e) {
+                        addToast("Activation failed or rejected.", "error");
+                      }
+                    }}
+                  >
+                    Force Activate Deposit
+                  </button>
+                )}
               </div>
 
               {Number.parseFloat(vaultActiveAmount) > 0 && dailyRate !== "0" && (
@@ -714,8 +726,17 @@ export default function App() {
                   <span className="balance-value">
                     {formatAmount(
                       ((Number.parseFloat(vaultActiveAmount) * Number.parseFloat(dailyRate)) / 1000).toString(),
-                    )}{" "}
-                    USDT
+                    )} USDT
+                  </span>
+                </div>
+              )}
+              {Number.parseFloat(queuedBalance) > 0 && dailyRate !== "0" && (
+                <div className="balance-item">
+                  <span className="balance-label">Will be earning per day (after activation)</span>
+                  <span className="balance-value">
+                    {formatAmount(
+                      ((Number.parseFloat(queuedBalance) * Number.parseFloat(dailyRate)) / 1000).toString(),
+                    )} USDT
                   </span>
                 </div>
               )}
