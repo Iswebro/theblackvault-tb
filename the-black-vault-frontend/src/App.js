@@ -255,31 +255,32 @@ export default function App() {
 
 
       // ─────────── ON-CHAIN VAULT DATA ───────────
+
       // BlackVault.sol getUserVault returns: [totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined]
-      const vaultData = await vault.getUserVault(account)
-      const activeAmount   = vaultData[1] // activeAmt
-      const queuedAmount   = vaultData[2] // queuedAmt
-      const pendingRewards = vaultData[3] // pending
+      const vaultData = await vault.getUserVault(account);
+      const totalDeposited = vaultData[0];
+      const activeAmount   = vaultData[1];
+      const queuedAmount   = vaultData[2];
+      const pendingRewards = vaultData[6]; // pendingRewards
+      const totalRewardsWithdrawn = vaultData[7];
 
-      setVaultActiveAmount(formatEther(activeAmount))
-      setQueuedBalance    (formatEther(queuedAmount))
-      setRewards          (formatEther(pendingRewards))
+      setVaultActiveAmount(formatEther(activeAmount));
+      setQueuedBalance(formatEther(queuedAmount));
+      setRewards(formatEther(pendingRewards));
 
-      console.log("Vault Active Amount:", formatEther(activeAmount))
-      console.log("Queued for Accrual:",   formatEther(queuedAmount))
-      console.log("Pending Rewards:",      formatEther(pendingRewards))
+      console.log("Vault Active Amount:", formatEther(activeAmount));
+      console.log("Queued for Accrual:", formatEther(queuedAmount));
+      console.log("Pending Rewards:", formatEther(pendingRewards));
 
       // ─────────── ALL-TIME ROI ───────────
-      try {
-        const roiData = await vault.getUserROI(account);
-        setRoi({
-          invested: formatEther(roiData[0]),
-          earned: formatEther(roiData[1]),
-          roiBP: roiData[2].toString(),
-        });
-      } catch (e) {
-        setRoi({ invested: "0", earned: "0", roiBP: "0" });
-      }
+      const invested = parseFloat(formatEther(totalDeposited));
+      const earned = parseFloat(formatEther(pendingRewards)) + parseFloat(formatEther(totalRewardsWithdrawn));
+      const roiBP = invested > 0 ? ((earned / invested) * 10000).toFixed(0) : "0";
+      setRoi({
+        invested: invested.toString(),
+        earned: earned.toString(),
+        roiBP: roiBP,
+      });
 
       // ─────────── CYCLE TIMING ───────────
       // Fetch cycle start time and duration from contract
@@ -731,9 +732,7 @@ export default function App() {
               <div className="balance-item">
                 <span className="balance-label">Projected Daily Rewards</span>
                 <span className="balance-value">
-                  {formatAmount(
-                    ((Number.parseFloat(vaultActiveAmount) * Number.parseFloat(dailyRate)) / 1000).toString(),
-                  )} USDT
+                  {formatAmount(((parseFloat(vaultActiveAmount) * parseFloat(dailyRate)) / 1000 + parseFloat(rewards)).toString())} USDT
                 </span>
               </div>
 
