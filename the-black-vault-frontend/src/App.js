@@ -212,7 +212,7 @@ export default function App() {
       return
     }
     try {
-      const res = await fetch(`/api/bscscan?wallet=${account}&vault=${vault.address}`);
+      const res = await fetch(`/api/bscscan?wallet=${account}&vault=${vault?.address || CONTRACT_ADDRESS}`);
       const data = await res.json();
       if (!data.result) {
         setHistory([]);
