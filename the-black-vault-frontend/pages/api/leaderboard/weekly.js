@@ -1,4 +1,3 @@
-
 import { Redis } from '@upstash/redis';
 
 const redis = Redis.fromEnv();
@@ -34,5 +33,42 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("Error reading weekly leaderboard:", error);
     res.status(500).json({ error: "Failed to load weekly leaderboard" });
+  }
+}
+
+// CRON JOB CODE MOVED HERE FROM api/cron/weekly-leaderboard.js
+
+// This function will be called by the cron job
+export async function updateWeeklyLeaderboard() {
+  const currentWeekIndex = getCurrentWeekIndex();
+  const previousWeekIndex = currentWeekIndex - 1;
+
+  try {
+    // Get the leaderboard for the previous week
+    const key = `leaderboard:weekly:${previousWeekIndex}`;
+    let leaderboard = await redis.get(key);
+    if (!leaderboard) {
+      leaderboard = [];
+    }
+
+    // Sort the leaderboard by the number of referrals (assuming higher is better)
+    leaderboard.sort((a, b) => b.referrals - a.referrals);
+
+    // Get the top 10 referrers
+    const topReferrers = leaderboard.slice(0, 10);
+
+    // Prepare the data for the new week
+    const newWeekData = {
+      weekIndex: currentWeekIndex,
+      referrers: topReferrers,
+      generatedAt: Math.floor(Date.now() / 1000),
+    };
+
+    // Save the new week's data to Redis
+    await redis.set(`leaderboard:weekly:${currentWeekIndex}`, newWeekData);
+
+    console.log(`Weekly leaderboard updated for week ${currentWeekIndex}`);
+  } catch (error) {
+    console.error("Error updating weekly leaderboard:", error);
   }
 }
