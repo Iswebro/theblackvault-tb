@@ -254,6 +254,15 @@ export default function App() {
       console.log("USDT allowance:",       formatEther(allowance))
 
 
+      // ─────────── DAILY RATE ───────────
+      try {
+        const rate = await vault.DAILY_RATE();
+        setDailyRate(rate.toString());
+        console.log("Fetched DAILY_RATE:", rate.toString());
+      } catch (e) {
+        console.error("Error fetching DAILY_RATE:", e);
+        setDailyRate("0");
+      }
       // ─────────── ON-CHAIN VAULT DATA ───────────
 
       // BlackVault.sol getUserVault returns: [totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined]
