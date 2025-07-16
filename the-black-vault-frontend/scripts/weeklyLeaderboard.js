@@ -6,8 +6,8 @@ import path from "path"
 import BlackVaultABI from "../src/contract/BlackVaultABI.json" with { type: "json" }
 
 // Configuration
-const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS || "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
-const RPC_URL = process.env.REACT_APP_RPC_URL || "https://bsc-dataseed.binance.org/"
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
+const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://bsc-dataseed.binance.org/"
 const LAUNCH_TIMESTAMP = 1751500800 // 7am Brisbane time 3 July 2025
 const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
 const DATA_DIR = path.resolve("./leaderboard-data")

@@ -99,7 +99,7 @@ async function main() {
   console.log("\n🎉 Deployment Complete!")
   console.log("🔄 Next steps:")
   console.log("1. Update your .env file with:")
-  console.log(`   REACT_APP_CONTRACT_ADDRESS=${contractAddress}`)
+  console.log(`   NEXT_PUBLIC_CONTRACT_ADDRESS=${contractAddress}`)
   console.log(`   NEXT_PUBLIC_CONTRACT_ADDRESS=${contractAddress}`)
   console.log("2. Get some testnet USDT for testing")
   console.log("3. Restart your React app: npm start")

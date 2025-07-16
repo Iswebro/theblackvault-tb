@@ -23,6 +23,11 @@ const CONTRACT_ADDRESS = config.contractAddress;
 const USDT_ADDRESS = config.usdtAddress;
 
 export default function App() {
+
+  // All state hooks first
+  const [history, setHistory] = useState([]);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
   const [showActivationModal, setShowActivationModal] = useState(false);
   const [roi, setRoi] = useState({ invested: "0", earned: "0", roiBP: "0" });
   const [provider, setProvider] = useState(null);
@@ -31,7 +36,6 @@ export default function App() {
   const [contract, setContract] = useState(null);
   const [usdtContract, setUsdtContract] = useState(null);
   const [oldVaultContract, setOldVaultContract] = useState(null);
-
   const [balance, setBalance] = useState("0");
   const [usdtBalance, setUsdtBalance] = useState("0");
   const [queuedBalance, setQueuedBalance] = useState("0");
@@ -39,7 +43,6 @@ export default function App() {
   const [rewards, setRewards] = useState("0");
   const [referralRewards, setReferralRewards] = useState("0");
   const [referralAddress, setReferralAddress] = useState("");
-  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [txLoading, setTxLoading] = useState(false);
   const [referralCount, setReferralCount] = useState(0);
@@ -53,6 +56,21 @@ export default function App() {
   const [cycleStartTime, setCycleStartTime] = useState(0);
   const [cycleDuration, setCycleDuration] = useState(0);
   const [timeUntilNextCycle, setTimeUntilNextCycle] = useState(0);
+
+  // Derived variables (after all state hooks)
+  const pageSize = 10;
+  const totalPages = Math.ceil(history.length / pageSize);
+  const paginatedHistory = history.slice((historyPage - 1) * pageSize, historyPage * pageSize);
+  const closeHistoryToast = () => {
+    setShowAllHistory(false);
+    setHistoryPage(1);
+  };
+  const handlePrevPage = () => {
+    setHistoryPage((p) => (p > 1 ? p - 1 : p));
+  };
+  const handleNextPage = () => {
+    setHistoryPage((p) => (p < totalPages ? p + 1 : p));
+  };
 
   const { toasts, addToast, removeToast } = useToast();
   const isManuallyDisconnected = useRef(false);
@@ -136,7 +154,7 @@ export default function App() {
       console.log("=== CONTRACT DEBUGGING ===")
       console.log("CONTRACT_ADDRESS:", CONTRACT_ADDRESS)
       console.log("USDT_ADDRESS:", USDT_ADDRESS)
-      console.log("OLD_CONTRACT_ADDRESS:", process.env.REACT_APP_OLD_CONTRACT_ADDRESS)
+      console.log("OLD_CONTRACT_ADDRESS:", process.env.NEXT_PUBLIC_OLD_CONTRACT_ADDRESS)
       console.log("Expected new contract:", "0x69945377574869DFDc646070947F759078103a8b")
       console.log("Expected old contract:", "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1")
 
@@ -157,7 +175,7 @@ export default function App() {
       setUsdtContract(usdt)
       console.log("USDT Contract initialized:", usdt)
 
-      const oldAddress = process.env.REACT_APP_OLD_CONTRACT_ADDRESS;
+      const oldAddress = process.env.NEXT_PUBLIC_OLD_CONTRACT_ADDRESS;
       if (oldAddress) {
         const oldVault = new Contract(oldAddress, BlackVaultV1Abi, signer);
         setOldVaultContract(oldVault);
@@ -213,11 +231,20 @@ export default function App() {
     }
     try {
       const res = await fetch(`/api/bscscan?wallet=${account}&vault=${vault?.address || CONTRACT_ADDRESS}`);
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        console.error("Transaction history API did not return JSON. Response:", text);
+        addToast("Transaction history API error. See console for details.", "error");
+        setHistory([]);
+        return;
+      }
       let data;
       try {
         data = await res.json();
       } catch (jsonError) {
-        console.error("Transaction history API did not return valid JSON:", jsonError);
+        console.error("Transaction history API returned invalid JSON:", jsonError);
+        addToast("Transaction history API returned invalid JSON.", "error");
         setHistory([]);
         return;
       }
@@ -236,6 +263,7 @@ export default function App() {
       setHistory(processedEvents);
     } catch (error) {
       console.error("Error loading transaction history:", error);
+      addToast("Error loading transaction history.", "error");
       setHistory([]);
     }
   }
@@ -898,46 +926,123 @@ export default function App() {
             </button>
           </div>
 
+
           <div className="vault-card premium-card">
             <h3 className="card-title">
               <span className="card-icon">📊</span>
               Transaction History
             </h3>
-
             {history.length === 0 ? (
               <div className="empty-state">
                 <p className="empty-message">No transactions yet</p>
                 <p className="empty-submessage">Your deposits and withdrawals will appear here</p>
               </div>
             ) : (
-              <div className="history-list">
-                {history.map((item, index) => (
-                  <div key={index} className="history-item">
-                    <div className="history-info">
-                      <div className={`history-dot ${item.type.toLowerCase().replace(/\s+/g, "-")}`}></div>
-                      <div className="history-details">
-                        <span className="history-type">{item.type}</span>
-                        <span className="history-time">
-                          {item.time.toLocaleDateString()} {item.time.toLocaleTimeString()}
-                        </span>
+              <>
+                <div className="history-list">
+                  {history.slice(0, 3).map((item) => (
+                    <div key={`${item.txHash}-${item.time.getTime()}`} className="history-item">
+                      <div className="history-info">
+                        <div className={`history-dot ${item.type.toLowerCase().replace(/\s+/g, "-")}`}></div>
+                        <div className="history-details">
+                          <span className="history-type">{item.type}</span>
+                          <span className="history-time">
+                            {item.time.toLocaleDateString()} {item.time.toLocaleTimeString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="history-amount">
+                        <span className="amount-value">{formatAmount(item.amount)} USDT</span>
+                        <a
+                          href={`${config.blockExplorer}/tx/${item.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="view-tx"
+                        >
+                          View
+                        </a>
                       </div>
                     </div>
-                    <div className="history-amount">
-                      <span className="amount-value">{formatAmount(item.amount)} USDT</span>
-                      <a
-                        href={`${config.blockExplorer}/tx/${item.txHash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="view-tx"
-                      >
-                        View
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                {history.length > 3 && (
+                  <button
+                    className="see-all-button premium-button"
+                    style={{ marginTop: "12px", width: "100%" }}
+                    onClick={() => setShowAllHistory(true)}
+                  >
+                    See All
+                  </button>
+                )}
+              </>
             )}
           </div>
+
+          {/* Toast pop-up for all transactions (paginated) */}
+          {showAllHistory && (
+            <div className="toast-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div className="toast-popup" style={{ background: "#181818", borderRadius: 12, padding: 24, minWidth: 350, maxWidth: 420, maxHeight: "80vh", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.4)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <h3 style={{ margin: 0 }}>All Transactions</h3>
+                  <button onClick={closeHistoryToast} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer" }}>&times;</button>
+                </div>
+                {history.length === 0 ? (
+                  <div className="empty-state">
+                    <p className="empty-message">No transactions yet</p>
+                  </div>
+                ) : (
+                  <div className="history-list">
+                    {paginatedHistory.map((item) => (
+                      <div key={`${item.txHash}-${item.time.getTime()}`} className="history-item" style={{ borderBottom: "1px solid #333", paddingBottom: 8, marginBottom: 8 }}>
+                        <div className="history-info">
+                          <div className={`history-dot ${item.type.toLowerCase().replace(/\s+/g, "-")}`}></div>
+                          <div className="history-details">
+                            <span className="history-type">{item.type}</span>
+                            <span className="history-time">
+                              {item.time.toLocaleDateString()} {item.time.toLocaleTimeString()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="history-amount">
+                          <span className="amount-value">{formatAmount(item.amount)} USDT</span>
+                          <a
+                            href={`${config.blockExplorer}/tx/${item.txHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="view-tx"
+                          >
+                            View
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Pagination controls */}
+                {totalPages > 1 && (
+                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginTop: 12, gap: 12 }}>
+                    <button
+                      onClick={handlePrevPage}
+                      disabled={historyPage === 1}
+                      style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: historyPage === 1 ? "#444" : "#222", color: "#fff", cursor: historyPage === 1 ? "not-allowed" : "pointer" }}
+                    >
+                      Prev
+                    </button>
+                    <span style={{ color: "#fff" }}>
+                      Page {historyPage} of {totalPages}
+                    </span>
+                    <button
+                      onClick={handleNextPage}
+                      disabled={historyPage === totalPages}
+                      style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: historyPage === totalPages ? "#444" : "#222", color: "#fff", cursor: historyPage === totalPages ? "not-allowed" : "pointer" }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="vault-card premium-card">
             <div className="text-center p-4 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black rounded-lg mb-4">

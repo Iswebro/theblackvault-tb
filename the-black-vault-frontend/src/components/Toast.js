@@ -6,7 +6,8 @@ export function useToast() {
   const [toasts, setToasts] = useState([])
 
   const addToast = useCallback((message, type = "info") => {
-    const id = Date.now()
+    // Use a unique id: timestamp + random string
+    const id = Date.now().toString() + Math.random().toString(36).slice(2)
     const toast = { id, message, type }
 
     setToasts((prev) => [...prev, toast])
