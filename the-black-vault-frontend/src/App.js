@@ -736,7 +736,7 @@ export default function App() {
                 <span className="balance-value">{timeUntilNextCycle > 0 ? formatCountdown(timeUntilNextCycle) : "00:00:00"}</span>
               </div>
               {/* Discreet help button for cycle/activation issues (moved below Next Accrual In) */}
-              <div style={{ textAlign: 'center', margin: '4px 0 8px 0' }}>
+              <div style={{ textAlign: 'center', margin: '2px 0 2px 0' }}>
                 <button
                   className="discreet-button"
                   style={{ fontSize: 12, color: '#888', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
