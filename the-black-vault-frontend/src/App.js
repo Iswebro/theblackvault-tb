@@ -732,7 +732,7 @@ export default function App() {
               <div className="balance-item">
                 <span className="balance-label">Projected Daily Rewards</span>
                 <span className="balance-value">
-                  {formatAmount(((parseFloat(vaultActiveAmount) * parseFloat(dailyRate)) / 1000 + parseFloat(rewards)).toString())} USDT
+                  {formatAmount(((parseFloat(vaultActiveAmount) * parseFloat(dailyRate)) / 1000).toString())} USDT
                 </span>
               </div>
 
