@@ -23,6 +23,7 @@ const CONTRACT_ADDRESS = config.contractAddress;
 const USDT_ADDRESS = config.usdtAddress;
 
 export default function App() {
+  const [showActivationModal, setShowActivationModal] = useState(false);
   const [roi, setRoi] = useState({ invested: "0", earned: "0", roiBP: "0" });
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
@@ -720,37 +721,29 @@ export default function App() {
               <div className="balance-item">
                 <span className="balance-label">Queued for Accrual</span>
                 <span className="balance-value">{formatAmount(queuedBalance)} USDT</span>
-                <button
-                  className="vault-button mini-button"
-                  style={{ marginTop: 4, fontSize: 12, padding: '2px 8px' }}
-                  onClick={async () => {
-                    if (!contract) return;
-                    try {
-                      await contract.poke();
-                      addToast("Deposit activation requested. Please wait for confirmation.", "info");
-                      await loadContractData(contract, usdtContract);
-                    } catch (e) {
-                      addToast("Activation failed or rejected.", "error");
-                    }
-                  }}
-                >
-                  Force Activate Deposit
-                </button>
               </div>
+
 
               <div className="balance-item">
                 <span className="balance-label">Projected Daily Rewards</span>
                 <span className="balance-value">
                   {formatAmount(((parseFloat(vaultActiveAmount) * parseFloat(dailyRate)) / 1000).toString())} USDT
-                  <span style={{fontSize:12, color:'#888', marginLeft:8}}>
-                    <strong>Debug:</strong> Active={vaultActiveAmount}, Rate={dailyRate}
-                  </span>
                 </span>
               </div>
 
               <div className="balance-item">
                 <span className="balance-label">Next Accrual In</span>
                 <span className="balance-value">{timeUntilNextCycle > 0 ? formatCountdown(timeUntilNextCycle) : "00:00:00"}</span>
+              </div>
+              {/* Discreet help button for cycle/activation issues (moved below Next Accrual In) */}
+              <div style={{ textAlign: 'center', margin: '4px 0 8px 0' }}>
+                <button
+                  className="discreet-button"
+                  style={{ fontSize: 12, color: '#888', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+                  onClick={() => setShowActivationModal(true)}
+                >
+                  Did cycle reset and Queued balance wasn't activated?
+                </button>
               </div>
             </div>
           </div>
@@ -964,6 +957,47 @@ export default function App() {
         account={account}
         formatAddress={formatAddress}
       />
+
+      {/* Activation Help Modal - styled to match premium frontend */}
+      {showActivationModal && (
+        <div className="premium-modal-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(30,30,40,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="premium-card premium-modal" style={{ background: 'linear-gradient(135deg, #181824 0%, #232336 100%)', borderRadius: 18, padding: 32, maxWidth: 420, width: '95%', boxShadow: '0 4px 32px rgba(0,0,0,0.25)', position: 'relative', color: '#fff', border: '1px solid #222' }}>
+            <button
+              style={{ position: 'absolute', top: 18, right: 22, background: 'none', border: 'none', fontSize: 28, color: '#888', cursor: 'pointer', fontWeight: 600 }}
+              onClick={() => setShowActivationModal(false)}
+              aria-label="Close"
+            >×</button>
+            <div style={{ fontWeight: 700, fontSize: 22, marginBottom: 16, color: '#FFD700', textShadow: '0 1px 8px #222' }}>Why wasn't my Queued balance activated?</div>
+            <ul style={{ fontSize: 15, color: '#eee', marginBottom: 18, paddingLeft: 22, lineHeight: 1.7 }}>
+              <li>Cycle may not have reset yet (wait for <b>Next Accrual In</b> countdown).</li>
+              <li>Network congestion or delayed block updates.</li>
+              <li>Queued balance will activate automatically at the next cycle.</li>
+              <li>If it still doesn't activate after the countdown, you can force activation below.</li>
+            </ul>
+            <button
+              className="vault-button premium-button primary"
+              style={{ fontSize: 15, padding: '8px 20px', marginTop: 10, marginBottom: 10, fontWeight: 600, borderRadius: 8, boxShadow: '0 2px 8px #FFD70044' }}
+              onClick={async () => {
+                if (!contract) return;
+                try {
+                  await contract.poke();
+                  setShowActivationModal(false);
+                  addToast("Deposit activation requested. Please wait for confirmation.", "info");
+                  await loadContractData(contract, usdtContract);
+                } catch (e) {
+                  addToast("Activation failed or rejected.", "error");
+                }
+              }}
+            >
+              Force Activate Deposit
+            </button>
+            <div style={{ fontSize: 13, color: '#FFD700', marginTop: 10, textAlign: 'center', fontWeight: 500 }}>
+              This will manually trigger the contract to activate your queued deposit.<br />
+              <span style={{ color: '#fff', fontWeight: 400 }}>Only use if the automatic process fails after a cycle reset, and you're sure your deposit was made before current cycle.</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
