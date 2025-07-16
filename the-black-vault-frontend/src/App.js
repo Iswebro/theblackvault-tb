@@ -213,7 +213,14 @@ export default function App() {
     }
     try {
       const res = await fetch(`/api/bscscan?wallet=${account}&vault=${vault?.address || CONTRACT_ADDRESS}`);
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (jsonError) {
+        console.error("Transaction history API did not return valid JSON:", jsonError);
+        setHistory([]);
+        return;
+      }
       if (!data.result) {
         setHistory([]);
         return;
