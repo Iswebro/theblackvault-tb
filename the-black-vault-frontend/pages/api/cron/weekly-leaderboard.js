@@ -191,8 +191,8 @@ async function aggregateWeeklyLeaderboard(weekIndex) {
         const bonusInfo = await blackVaultContract.getReferralBonusInfo(referrer, referee)
         const bonusesUsed = Number.parseInt(bonusInfo.bonusesUsed.toString())
 
-        // Only count if this would be within the first 3 bonuses
-        if (bonusesUsed <= 3) {
+        // Only count if this is one of the first 3 bonuses (contract increments after reward)
+        if (bonusesUsed < 3) {
           const rewardAmount = calculateReferralReward(amount)
 
           if (!referrerRewards[referrer]) {
@@ -270,8 +270,8 @@ async function aggregateLifetimeLeaderboard() {
         const bonusInfo = await blackVaultContract.getReferralBonusInfo(referrer, referee)
         const bonusesUsed = Number.parseInt(bonusInfo.bonusesUsed.toString())
 
-        // Only count if this would be within the first 3 bonuses
-        if (bonusesUsed <= 3) {
+        // Only count if this is one of the first 3 bonuses (contract increments after reward)
+        if (bonusesUsed < 3) {
           const rewardAmount = calculateReferralReward(amount)
 
           if (!referrerRewards[referrer]) {
@@ -335,9 +335,9 @@ export default async function handler(req, res) {
     // Generate lifetime leaderboard
     const lifetimeData = await aggregateLifetimeLeaderboard()
 
-    // Store in Upstash Redis
-    await redis.set(`leaderboard:weekly:${currentWeekIndex}`, weeklyData.leaderboard)
-    await redis.set('leaderboard:lifetime', lifetimeData.leaderboard)
+    // Store full weekly and lifetime data objects in Upstash Redis
+    await redis.set(`leaderboard:weekly:${currentWeekIndex}`, weeklyData)
+    await redis.set('leaderboard:lifetime', lifetimeData)
 
     console.log("Weekly leaderboard generated:", weeklyData.leaderboard.length, "entries")
     console.log("Lifetime leaderboard generated:", lifetimeData.leaderboard.length, "entries")
@@ -349,6 +349,8 @@ export default async function handler(req, res) {
       weeklyEntries: weeklyData.leaderboard.length,
       lifetimeEntries: lifetimeData.leaderboard.length,
       generatedAt: new Date().toISOString(),
+      weeklyData,
+      lifetimeData,
     })
   } catch (error) {
     console.error("Error in weekly leaderboard cron:", error)
