@@ -1,13 +1,12 @@
-"use client"
+"use client";
 // src/App.js
-import { ethers, Contract, formatEther, parseEther } from "ethers"
-import { getUserInfo as fetchVaultInfo } from "./useBlackVault"
+import { useEffect, useState, useRef } from "react";
+import { ethers, Contract, formatEther, parseEther } from "ethers";
+import { getUserInfo as fetchVaultInfo } from "./useBlackVault";
 import { useToast, ToastContainer, ToastProvider } from "./components/Toast";
-import { useEffect, useState, useRef } from "react"
-import { connectInjected, getReferralFromURL } from "./connectWallet"
-import BlackVaultArtifact from "./contract/BlackVaultABI.json"
-import ERC20Artifact      from "./contract/ERC20Abi.json"
-
+import { connectInjected, getReferralFromURL } from "./connectWallet";
+import BlackVaultArtifact from "./contract/BlackVaultABI.json";
+import ERC20Artifact from "./contract/ERC20Abi.json";
 import BlackVaultV1Abi from "./contract/BlackVaultV1ABI.json";
 import "./App.css";
 import HowItWorks from "./components/HowItWorks";
@@ -19,42 +18,44 @@ import { config } from "./lib/config.js";
 // Use .abi if present (Hardhat/Truffle artifact), else use as array
 const BlackVaultAbi = BlackVaultArtifact.abi || BlackVaultArtifact;
 const ERC20Abi = ERC20Artifact.abi || ERC20Artifact;
+
 const CONTRACT_ADDRESS = config.contractAddress;
 const USDT_ADDRESS = config.usdtAddress;
 
 export default function App() {
-  const [provider, setProvider] = useState(null)
-  const [signer, setSigner] = useState(null)
-  const [account, setAccount] = useState("")
-  const [contract, setContract] = useState(null)
-  const [usdtContract, setUsdtContract] = useState(null)
-  const [oldVaultContract, setOldVaultContract] = useState(null)
+  const [roi, setRoi] = useState({ invested: "0", earned: "0", roiBP: "0" });
+  const [provider, setProvider] = useState(null);
+  const [signer, setSigner] = useState(null);
+  const [account, setAccount] = useState("");
+  const [contract, setContract] = useState(null);
+  const [usdtContract, setUsdtContract] = useState(null);
+  const [oldVaultContract, setOldVaultContract] = useState(null);
 
-  const [balance, setBalance] = useState("0")
-  const [usdtBalance, setUsdtBalance] = useState("0")
-  const [queuedBalance, setQueuedBalance] = useState("0")
-  const [depositAmount, setDepositAmount] = useState("")
-  const [rewards, setRewards] = useState("0")
-  const [referralRewards, setReferralRewards] = useState("0")
-  const [referralAddress, setReferralAddress] = useState("")
-  const [history, setHistory] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [txLoading, setTxLoading] = useState(false)
-  const [referralCount, setReferralCount] = useState(0)
-  const [minDeposit, setMinDeposit] = useState("0")
-  const [usdtAllowance, setUsdtAllowance] = useState("0")
-  const [vaultActiveAmount, setVaultActiveAmount] = useState("0")
-  const [referralBonusesRemaining, setReferralBonusesRemaining] = useState(3)
-  const [showReferralsModal, setShowReferralsModal] = useState(false)
-  const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false)
-  const [dailyRate, setDailyRate] = useState("0")
-  const [cycleStartTime, setCycleStartTime] = useState(0)
-  const [cycleDuration, setCycleDuration] = useState(0)
-  const [timeUntilNextCycle, setTimeUntilNextCycle] = useState(0)
+  const [balance, setBalance] = useState("0");
+  const [usdtBalance, setUsdtBalance] = useState("0");
+  const [queuedBalance, setQueuedBalance] = useState("0");
+  const [depositAmount, setDepositAmount] = useState("");
+  const [rewards, setRewards] = useState("0");
+  const [referralRewards, setReferralRewards] = useState("0");
+  const [referralAddress, setReferralAddress] = useState("");
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [txLoading, setTxLoading] = useState(false);
+  const [referralCount, setReferralCount] = useState(0);
+  const [minDeposit, setMinDeposit] = useState("0");
+  const [usdtAllowance, setUsdtAllowance] = useState("0");
+  const [vaultActiveAmount, setVaultActiveAmount] = useState("0");
+  const [referralBonusesRemaining, setReferralBonusesRemaining] = useState(3);
+  const [showReferralsModal, setShowReferralsModal] = useState(false);
+  const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false);
+  const [dailyRate, setDailyRate] = useState("0");
+  const [cycleStartTime, setCycleStartTime] = useState(0);
+  const [cycleDuration, setCycleDuration] = useState(0);
+  const [timeUntilNextCycle, setTimeUntilNextCycle] = useState(0);
 
-  const { toasts, addToast, removeToast } = useToast()
-  const isManuallyDisconnected = useRef(false)
-  const [showDisclaimer, setShowDisclaimer] = useState(true)
+  const { toasts, addToast, removeToast } = useToast();
+  const isManuallyDisconnected = useRef(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
 
   // Get referral from URL on component mount
   useEffect(() => {
@@ -252,6 +253,7 @@ export default function App() {
       console.log("Wallet USDT balance:",  formatEther(usdtBal))
       console.log("USDT allowance:",       formatEther(allowance))
 
+
       // ─────────── ON-CHAIN VAULT DATA ───────────
       // BlackVault.sol getUserVault returns: [totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined]
       const vaultData = await vault.getUserVault(account)
@@ -266,6 +268,18 @@ export default function App() {
       console.log("Vault Active Amount:", formatEther(activeAmount))
       console.log("Queued for Accrual:",   formatEther(queuedAmount))
       console.log("Pending Rewards:",      formatEther(pendingRewards))
+
+      // ─────────── ALL-TIME ROI ───────────
+      try {
+        const roiData = await vault.getUserROI(account);
+        setRoi({
+          invested: formatEther(roiData[0]),
+          earned: formatEther(roiData[1]),
+          roiBP: roiData[2].toString(),
+        });
+      } catch (e) {
+        setRoi({ invested: "0", earned: "0", roiBP: "0" });
+      }
 
       // ─────────── CYCLE TIMING ───────────
       // Fetch cycle start time and duration from contract
@@ -681,7 +695,12 @@ export default function App() {
 
         <div className="vault-interface">
           <div className="vault-card premium-card">
-            <h3 className="card-title">Vault Balance</h3>
+            <h3 className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Vault Balance</span>
+              <span style={{ fontWeight: 400, fontSize: 14, color: '#888', marginLeft: 'auto' }}>
+                All-time ROI: {roi && roi.invested !== "0" ? ((parseFloat(roi.earned) / parseFloat(roi.invested) * 100).toFixed(2)) : "0.00"}%
+              </span>
+            </h3>
             <div className="balance-grid">
               <div className="balance-item">
                 <span className="balance-label">Active Balance</span>
@@ -714,15 +733,6 @@ export default function App() {
                 <span className="balance-value">
                   {formatAmount(
                     ((Number.parseFloat(vaultActiveAmount) * Number.parseFloat(dailyRate)) / 1000).toString(),
-                  )} USDT
-                </span>
-              </div>
-
-              <div className="balance-item">
-                <span className="balance-label">Will be earning per day (after activation)</span>
-                <span className="balance-value">
-                  {formatAmount(
-                    ((Number.parseFloat(queuedBalance) * Number.parseFloat(dailyRate)) / 1000).toString(),
                   )} USDT
                 </span>
               </div>
