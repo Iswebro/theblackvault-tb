@@ -22,6 +22,7 @@ const BlackVaultAbi = BlackVaultArtifact.abi || BlackVaultArtifact;
 const ERC20Abi = ERC20Artifact.abi || ERC20Artifact;
 
 const CONTRACT_ADDRESS = config.contractAddress;
+const OLD_CONTRACT_ADDRESS = config.oldContractAddress;
 const USDT_ADDRESS = config.usdtAddress;
 
 export default function App() {
@@ -162,9 +163,8 @@ export default function App() {
       setUsdtContract(usdt)
       console.log("USDT Contract initialized:", usdt)
 
-      const oldAddress = process.env.NEXT_PUBLIC_OLD_CONTRACT_ADDRESS;
-      if (oldAddress) {
-        const oldVault = new Contract(oldAddress, BlackVaultV1Abi, signer);
+      if (OLD_CONTRACT_ADDRESS) {
+        const oldVault = new Contract(OLD_CONTRACT_ADDRESS, BlackVaultV1Abi, signer);
         setOldVaultContract(oldVault);
         console.log("BlackVault V1 Contract initialized:", oldVault);
       } else {

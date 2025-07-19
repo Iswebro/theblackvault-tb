@@ -3,7 +3,8 @@
 // Hardcoded config for BSC Mainnet (or Testnet if you wish)
 export const config = {
   // Contract settings
-  contractAddress: "0x69945377574869DFDc646070947F759078103a8b", // <-- set to your deployed contract address
+  contractAddress: "0x22708D8a54c044CbA5B237620Af42030cbf76E14", // <-- set to your deployed contract address
+  oldContractAddress: "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1", // <-- old vault contract address
   usdtAddress:     "0x55d398326f99059fF775485246999027B3197955", // <-- set to your USDT token address
 
   // Network settings
