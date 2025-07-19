@@ -238,7 +238,7 @@ export default function App() {
       // Test if we can read user data
       try {
         const vaultData = await vault.getUserVault(account)
-        console.log("✅ getUserVault works, pending rewards:", formatEther(vaultData.pendingRewards))
+        console.log("✅ getUserVault works, pending rewards:", formatEther(vaultData[3])) // _pendingRewards is at index 3
       } catch (error) {
         console.error("❌ Error calling getUserVault:", error)
       }
@@ -359,21 +359,26 @@ export default function App() {
       let totalDeposited, activeAmount, queuedAmount, pendingRewards, totalRewardsWithdrawn;
       
       try {
-        // BlackVault.sol getUserVault returns: [totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined]
+        // BlackVault.sol getUserVault returns: [_totalDeposited, _totalRewardsWithdrawn, _joinedCycle, _pendingRewards]
         const vaultData = await vault.getUserVault(account);
-        totalDeposited = vaultData[0];
-        activeAmount   = vaultData[1];
-        queuedAmount   = vaultData[2];
-        pendingRewards = vaultData[6]; // pendingRewards
-        totalRewardsWithdrawn = vaultData[7];
+        totalDeposited = vaultData[0];           // _totalDeposited
+        totalRewardsWithdrawn = vaultData[1];    // _totalRewardsWithdrawn  
+        const joinedCycle = vaultData[2];        // _joinedCycle
+        pendingRewards = vaultData[3];           // _pendingRewards
+        
+        // Set default values for fields not returned by this contract version
+        activeAmount = totalDeposited;  // Use totalDeposited as activeAmount
+        queuedAmount = 0;               // Not available in this contract version
 
         setVaultActiveAmount(formatEther(activeAmount));
         setQueuedBalance(formatEther(queuedAmount));
         setRewards(formatEther(pendingRewards));
 
-        console.log("Vault Active Amount:", formatEther(activeAmount));
-        console.log("Queued for Accrual:", formatEther(queuedAmount));
+        console.log("Total Deposited:", formatEther(totalDeposited));
+        console.log("Active Amount (using totalDeposited):", formatEther(activeAmount));
         console.log("Pending Rewards:", formatEther(pendingRewards));
+        console.log("Total Rewards Withdrawn:", formatEther(totalRewardsWithdrawn));
+        console.log("Joined Cycle:", joinedCycle.toString());
       } catch (error) {
         console.error("Error loading vault data:", error);
         addToast("Failed to load vault data from contract", "warning");
