@@ -182,14 +182,32 @@ export default function App() {
         addToast("Wrong contract address configured!", "error")
         return
       }
+
+      // First check if the contract exists and has code
+      try {
+        const code = await provider.getCode(CONTRACT_ADDRESS)
+        if (code === "0x") {
+          console.error("❌ Contract has no code at address:", CONTRACT_ADDRESS)
+          addToast("Contract not deployed at specified address", "error")
+          return
+        }
+        console.log("✅ Contract code found at address")
+      } catch (error) {
+        console.error("❌ Error checking contract code:", error)
+        addToast("Failed to verify contract deployment", "error")
+        return
+      }
+      
+      // Test basic contract functions with better error handling
+      let contractValidation = true
       
       try {
         const minDeposit = await vault.MIN_DEPOSIT()
         console.log("✅ MIN_DEPOSIT from main contract:", minDeposit.toString())
       } catch (error) {
         console.error("❌ Error calling MIN_DEPOSIT on main contract:", error)
-        addToast("Contract connection failed - MIN_DEPOSIT not available", "error")
-        return
+        console.error("Contract may not be the expected BlackVault contract")
+        contractValidation = false
       }
 
       try {
@@ -197,8 +215,16 @@ export default function App() {
         console.log("✅ DAILY_RATE from main contract:", dailyRate.toString())
       } catch (error) {
         console.error("❌ Error calling DAILY_RATE on main contract:", error)
-        addToast("Contract connection failed - DAILY_RATE not available", "error")
-        return
+        contractValidation = false
+      }
+      
+      if (!contractValidation) {
+        addToast("Contract validation failed - may be wrong contract or ABI mismatch", "error")
+        console.error("Contract validation failed. Please check:")
+        console.error("1. Contract address is correct")
+        console.error("2. Contract is deployed and verified")
+        console.error("3. ABI matches the deployed contract")
+        // Don't return here - allow the app to continue with limited functionality
       }
 
       // Test withdraw functions exist
@@ -330,32 +356,56 @@ export default function App() {
         setDailyRate("0");
       }
       // ─────────── ON-CHAIN VAULT DATA ───────────
+      let totalDeposited, activeAmount, queuedAmount, pendingRewards, totalRewardsWithdrawn;
+      
+      try {
+        // BlackVault.sol getUserVault returns: [totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined]
+        const vaultData = await vault.getUserVault(account);
+        totalDeposited = vaultData[0];
+        activeAmount   = vaultData[1];
+        queuedAmount   = vaultData[2];
+        pendingRewards = vaultData[6]; // pendingRewards
+        totalRewardsWithdrawn = vaultData[7];
 
-      // BlackVault.sol getUserVault returns: [totalDep, activeAmt, queuedAmt, pending, withdrawn, lastCycle, joined]
-      const vaultData = await vault.getUserVault(account);
-      const totalDeposited = vaultData[0];
-      const activeAmount   = vaultData[1];
-      const queuedAmount   = vaultData[2];
-      const pendingRewards = vaultData[6]; // pendingRewards
-      const totalRewardsWithdrawn = vaultData[7];
+        setVaultActiveAmount(formatEther(activeAmount));
+        setQueuedBalance(formatEther(queuedAmount));
+        setRewards(formatEther(pendingRewards));
 
-      setVaultActiveAmount(formatEther(activeAmount));
-      setQueuedBalance(formatEther(queuedAmount));
-      setRewards(formatEther(pendingRewards));
-
-      console.log("Vault Active Amount:", formatEther(activeAmount));
-      console.log("Queued for Accrual:", formatEther(queuedAmount));
-      console.log("Pending Rewards:", formatEther(pendingRewards));
+        console.log("Vault Active Amount:", formatEther(activeAmount));
+        console.log("Queued for Accrual:", formatEther(queuedAmount));
+        console.log("Pending Rewards:", formatEther(pendingRewards));
+      } catch (error) {
+        console.error("Error loading vault data:", error);
+        addToast("Failed to load vault data from contract", "warning");
+        // Set fallback values
+        totalDeposited = 0;
+        activeAmount = 0;
+        queuedAmount = 0;
+        pendingRewards = 0;
+        totalRewardsWithdrawn = 0;
+        setVaultActiveAmount("0");
+        setQueuedBalance("0");
+        setRewards("0");
+      }
 
       // ─────────── ALL-TIME ROI ───────────
-      const invested = parseFloat(formatEther(totalDeposited));
-      const earned = parseFloat(formatEther(pendingRewards)) + parseFloat(formatEther(totalRewardsWithdrawn));
-      const roiBP = invested > 0 ? ((earned / invested) * 10000).toFixed(0) : "0";
-      setRoi({
-        invested: invested.toString(),
-        earned: earned.toString(),
-        roiBP: roiBP,
-      });
+      try {
+        const invested = parseFloat(formatEther(totalDeposited));
+        const earned = parseFloat(formatEther(pendingRewards)) + parseFloat(formatEther(totalRewardsWithdrawn));
+        const roiBP = invested > 0 ? ((earned / invested) * 10000).toFixed(0) : "0";
+        setRoi({
+          invested: invested.toString(),
+          earned: earned.toString(),
+          roiBP: roiBP,
+        });
+      } catch (error) {
+        console.error("Error calculating ROI:", error);
+        setRoi({
+          invested: "0",
+          earned: "0",
+          roiBP: "0",
+        });
+      }
 
       // ─────────── CYCLE TIMING ───────────
       // Fetch cycle start time and duration from contract
