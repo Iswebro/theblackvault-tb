@@ -14,6 +14,14 @@ export default function useVaultTransfers(wallet, vault) {
     }
     setLoading(true);
     setError(null);
+    
+    // Temporarily disable BSC scan API until backend is implemented
+    console.log("BSC scan API disabled - backend not implemented");
+    setTransfers([]);
+    setLoading(false);
+    return;
+
+    /* TODO: Re-enable when backend API is implemented
     fetch(`/api/bscscan?wallet=${wallet}&vault=${vault}`)
       .then(res => res.json())
       .then(data => {
@@ -24,6 +32,7 @@ export default function useVaultTransfers(wallet, vault) {
         setError(err.message || 'Failed to fetch transfers');
         setLoading(false);
       });
+    */
   }, [wallet, vault]);
 
   return { transfers, loading, error };

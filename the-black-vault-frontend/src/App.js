@@ -258,6 +258,12 @@ export default function App() {
     }
 
     try {
+      // Temporarily disable transaction history API until backend is implemented
+      console.log("Transaction history API disabled - backend not implemented");
+      setHistory([]);
+      return;
+      
+      /* TODO: Re-enable when backend API is implemented
       const res = await fetch(`/api/transaction-history?address=${account}`)
       if (!res.ok) {
         console.error("Transaction history API error:", res.status, res.statusText);
@@ -307,6 +313,7 @@ export default function App() {
       }));
       processedEvents.sort((a, b) => b.time.getTime() - a.time.getTime());
       setHistory(processedEvents);
+      */
     } catch (error) {
       console.error("Error loading transaction history:", error);
       addToast("Error loading transaction history.", "error");
@@ -601,8 +608,10 @@ export default function App() {
        if (receipt.status === 1) {
          addToast("Deposit successful!", "success")
          setDepositAmount("")
-         // Update leaderboard if referral used
+         // Leaderboard update disabled until backend is implemented
          if (referralAddress && referralAddress !== ethers.ZeroAddress) {
+           console.log("Leaderboard update disabled - backend not implemented");
+           /* TODO: Re-enable when backend API is implemented
            fetch("/api/leaderboard/update", {
              method: "POST",
              headers: { "Content-Type": "application/json" },
@@ -617,6 +626,7 @@ export default function App() {
              .catch(() => {
                addToast("Failed to update leaderboard", "warning")
              })
+           */
          }
          // Always call poke after deposit
          try {

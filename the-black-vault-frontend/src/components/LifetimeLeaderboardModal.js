@@ -18,6 +18,13 @@ export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddres
     setError(null)
 
     try {
+      // Temporarily disable lifetime leaderboard API until backend is implemented
+      console.log("Lifetime leaderboard API disabled - backend not implemented");
+      setLeaderboard([]);
+      setLoading(false);
+      return;
+
+      /* TODO: Re-enable when backend API is implemented
       // Use relative path for Vercel API routes
       const response = await fetch("/api/leaderboard/lifetime")
       const data = await response.json()
@@ -27,6 +34,7 @@ export default function LifetimeLeaderboardModal({ isOpen, onClose, formatAddres
       }
 
       setLeaderboard(data.leaderboard || [])
+      */
     } catch (error) {
       console.error("Error loading lifetime leaderboard:", error)
       setError(error.message)

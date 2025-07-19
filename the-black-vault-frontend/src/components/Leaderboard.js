@@ -21,6 +21,18 @@ export default function Leaderboard() {
     setError(null)
 
     try {
+      // Temporarily disable leaderboard API until backend is implemented
+      console.log("Weekly leaderboard API disabled - backend not implemented");
+      setWeeklyLeaderboard([]);
+      setWeekInfo({
+        weekIndex: 0,
+        isPreviousWeek: false,
+        message: "Leaderboard temporarily disabled - backend under development",
+      });
+      setLoading(false);
+      return;
+
+      /* TODO: Re-enable when backend API is implemented
       const url = week !== null ? `/api/leaderboard/weekly?week=${week}` : "/api/leaderboard/weekly";
       const response = await fetch(url);
       const data = await response.json();
@@ -35,6 +47,7 @@ export default function Leaderboard() {
         isPreviousWeek: week !== null && week !== data.weekIndex,
         message: data.message,
       });
+      */
     } catch (error) {
       console.error("Error loading weekly leaderboard:", error);
       setError(error.message);
