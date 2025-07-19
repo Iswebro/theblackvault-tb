@@ -2,6 +2,7 @@
 // src/App.js
 import { useEffect, useState, useRef } from "react";
 import { ethers, Contract, formatEther, parseEther } from "ethers";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { getUserInfo as fetchVaultInfo } from "./useBlackVault";
 import { useToast, ToastContainer, ToastProvider } from "./components/Toast";
 import { connectInjected, getReferralFromURL } from "./connectWallet";
@@ -13,6 +14,7 @@ import HowItWorks from "./components/HowItWorks";
 import Leaderboard from "./components/Leaderboard";
 import ReferralsModal from "./components/ReferralsModal";
 import TroubleshootingModal from "./components/TroubleshootingModal";
+
 import { config } from "./lib/config.js";
 
 // Use .abi if present (Hardhat/Truffle artifact), else use as array
@@ -92,81 +94,66 @@ export default function App() {
 
   // Listen for account changes
   useEffect(() => {
+    if (!window.ethereum) return;
+
+    const handleChainChanged = () => {
+      console.log("Chain changed, reloading page.");
+      window.location.reload();
+    };
+
+    const handleAccountsChanged = async (accounts) => {
+      console.log("Accounts changed event received:", accounts);
+
+      // no accounts → disconnect
+      if (accounts.length === 0) {
+        console.log("No accounts found, disconnecting.");
+        if (!isManuallyDisconnected.current) {
+          disconnect();
+        }
+        return;
+      }
+
+      // if account differs from current, reconnect
+      if (accounts[0] !== account) {
+        try {
+          // grab provider + signer + account in one go
+          const { provider: p, signer: s, account: a } = await connectInjected();
+          setProvider(p);
+          setSigner(s);
+          setAccount(a);
+          addToast("Wallet connected successfully!", "success");
+        } catch (err) {
+          console.error("Auto-connect failed:", err);
+          addToast(err.message || "Failed to connect wallet", "error");
+        }
+      }
+    };
+
+    window.ethereum.on("accountsChanged", handleAccountsChanged);
+    window.ethereum.on("chainChanged", handleChainChanged);
+
+    // trigger once on mount to pick up any already-connected wallet
+    window.ethereum
+      .request({ method: "eth_accounts" })
+      .then(handleAccountsChanged)
+      .catch((err) => console.error("Error getting initial accounts:", err));
   if (!window.ethereum) return;
-
-  const handleChainChanged = () => {
-    console.log("Chain changed, reloading page.");
-    window.location.reload();
-  };
-
-  const handleAccountsChanged = async (accounts) => {
-    console.log("Accounts changed event received:", accounts);
-
-    // no accounts → disconnect
-    if (accounts.length === 0) {
-      console.log("No accounts found, disconnecting.");
-      if (!isManuallyDisconnected.current) {
-        disconnect();
+    return () => {
+      if (window.ethereum.removeListener) {
+        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+        window.ethereum.removeListener("chainChanged", handleChainChanged);
       }
-      return;
-    }
-
-    // got an account
-    const newAccount = accounts[0];
-
-    // if it’s a different account (or initial connect) AND we're not manually disconnected:
-    if (!isManuallyDisconnected.current && newAccount.toLowerCase() !== account.toLowerCase()) {
-      console.log("Connecting to account:", newAccount);
-      try {
-        // grab provider + signer + account in one go
-        const { provider: p, signer: s, account: a } = await connectInjected();
-        setProvider(p);
-        setSigner(s);
-        setAccount(a);
-        addToast("Wallet connected successfully!", "success");
-      } catch (err) {
-        console.error("Auto-connect failed:", err);
-        addToast(err.message || "Failed to connect wallet", "error");
-      }
-    }
-  };
-
-  window.ethereum.on("accountsChanged", handleAccountsChanged);
-  window.ethereum.on("chainChanged", handleChainChanged);
-
-  // trigger once on mount to pick up any already-connected wallet
-  window.ethereum
-    .request({ method: "eth_accounts" })
-    .then(handleAccountsChanged)
-    .catch((err) => console.error("Error getting initial accounts:", err));
-
-  return () => {
-    if (window.ethereum.removeListener) {
-      window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
-      window.ethereum.removeListener("chainChanged", handleChainChanged);
-    }
-  };
-}, [account, addToast]);
+    };
+  }, [signer, account, provider])
 
   const initializeContracts = async () => {
-    if (!signer) return
+    if (!signer || !account) {
+      console.log("Cannot initialize contracts: missing signer or account")
+      return
+    }
+
     try {
-      console.log("=== CONTRACT DEBUGGING ===")
-      console.log("CONTRACT_ADDRESS:", CONTRACT_ADDRESS)
-      console.log("USDT_ADDRESS:", USDT_ADDRESS)
-      console.log("OLD_CONTRACT_ADDRESS:", process.env.NEXT_PUBLIC_OLD_CONTRACT_ADDRESS)
-      console.log("Expected new contract:", "0x69945377574869DFDc646070947F759078103a8b")
-      console.log("Expected old contract:", "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1")
-
-      // Check if CONTRACT_ADDRESS is correct
-      if (CONTRACT_ADDRESS !== "0x69945377574869DFDc646070947F759078103a8b") {
-        console.error(
-          "❌ WRONG CONTRACT ADDRESS! Expected: 0x69945377574869DFDc646070947F759078103a8b, Got:",
-          CONTRACT_ADDRESS,
-        )
-        addToast("Wrong contract address configured!", "error")
-      }
-
+      // ─────────── CONTRACTS ───────────
       const vault = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
       setContract(vault)
       console.log("BlackVault Contract initialized:", vault)
@@ -227,13 +214,32 @@ export default function App() {
   const loadTransactionHistory = async (vault, usdt) => {
     if (!vault || !account) {
       console.log("Skipping loadTransactionHistory: missing vault or account")
-      return
+      return;
     }
+
     try {
-      const res = await fetch(`/api/bscscan?wallet=${account}&vault=${vault?.address || CONTRACT_ADDRESS}`);
-      const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await res.text();
+      const res = await fetch(`/api/transaction-history?address=${account}`)
+      if (!res.ok) {
+        console.error("Transaction history API error:", res.status, res.statusText);
+        addToast("Failed to load transaction history.", "error");
+        setHistory([]);
+        return;
+      }
+      const text = await res.text();
+      if (!text.trim()) {
+        console.error("Transaction history API returned empty response");
+        addToast("Transaction history API returned empty response.", "error");
+        setHistory([]);
+        return;
+      }
+      let isJson = false;
+      try {
+        JSON.parse(text);
+        isJson = true;
+      } catch {
+        // not JSON
+      }
+      if (!isJson) {
         console.error("Transaction history API did not return JSON. Response:", text);
         addToast("Transaction history API error. See console for details.", "error");
         setHistory([]);
@@ -713,10 +719,11 @@ export default function App() {
 
         <TroubleshootingModal isOpen={showTroubleshootingModal} onClose={() => setShowTroubleshootingModal(false)} />
       </div>
-    )
+    );
   }
 
   return (
+    <>
     <div className="app-container">
       <div className="premium-background">
         <div className="bg-grid"></div>
@@ -1111,5 +1118,7 @@ export default function App() {
         </div>
       )}
     </div>
-  )
+    <SpeedInsights />
+    </>
+  );
 }
