@@ -173,11 +173,23 @@ export default function App() {
 
       // Test if the main contract has the expected functions
       console.log("=== TESTING CONTRACT FUNCTIONS ===")
+      console.log("CONTRACT_ADDRESS being used:", CONTRACT_ADDRESS)
+      console.log("Expected contract address:", "0x22708D8a54c044CbA5B237620Af42030cbf76E14")
+      
+      // Verify we're using the correct contract address
+      if (CONTRACT_ADDRESS !== "0x22708D8a54c044CbA5B237620Af42030cbf76E14") {
+        console.error("❌ WRONG CONTRACT ADDRESS! Expected: 0x22708D8a54c044CbA5B237620Af42030cbf76E14, Got:", CONTRACT_ADDRESS)
+        addToast("Wrong contract address configured!", "error")
+        return
+      }
+      
       try {
         const minDeposit = await vault.MIN_DEPOSIT()
         console.log("✅ MIN_DEPOSIT from main contract:", minDeposit.toString())
       } catch (error) {
         console.error("❌ Error calling MIN_DEPOSIT on main contract:", error)
+        addToast("Contract connection failed - MIN_DEPOSIT not available", "error")
+        return
       }
 
       try {
@@ -185,6 +197,8 @@ export default function App() {
         console.log("✅ DAILY_RATE from main contract:", dailyRate.toString())
       } catch (error) {
         console.error("❌ Error calling DAILY_RATE on main contract:", error)
+        addToast("Contract connection failed - DAILY_RATE not available", "error")
+        return
       }
 
       // Test withdraw functions exist
@@ -283,17 +297,27 @@ export default function App() {
 
     try {
       // ─────────── WALLET BALANCES ───────────
-      const [ethBal, usdtBal, allowance] = await Promise.all([
-        provider.getBalance(account),
-        usdt.balanceOf(account),
-        usdt.allowance(account, CONTRACT_ADDRESS),
-      ])
-      setBalance      (formatEther(ethBal))
-      setUsdtBalance  (formatEther(usdtBal))
-      setUsdtAllowance(formatEther(allowance))
-      console.log("Wallet ETH balance:",   formatEther(ethBal))
-      console.log("Wallet USDT balance:",  formatEther(usdtBal))
-      console.log("USDT allowance:",       formatEther(allowance))
+      let ethBal, usdtBal, allowance;
+      try {
+        [ethBal, usdtBal, allowance] = await Promise.all([
+          provider.getBalance(account),
+          usdt.balanceOf(account),
+          usdt.allowance(account, CONTRACT_ADDRESS),
+        ])
+        setBalance      (formatEther(ethBal))
+        setUsdtBalance  (formatEther(usdtBal))
+        setUsdtAllowance(formatEther(allowance))
+        console.log("Wallet ETH balance:",   formatEther(ethBal))
+        console.log("Wallet USDT balance:",  formatEther(usdtBal))
+        console.log("USDT allowance:",       formatEther(allowance))
+      } catch (balanceError) {
+        console.error("Error fetching wallet balances:", balanceError)
+        addToast("Error fetching wallet balances. Check network connection.", "error")
+        // Set fallback values
+        setBalance("0")
+        setUsdtBalance("0")
+        setUsdtAllowance("0")
+      }
 
 
       // ─────────── DAILY RATE ───────────
