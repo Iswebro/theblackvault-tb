@@ -386,9 +386,8 @@ export default function App() {
         // Set fallback values
         totalDeposited = 0;
         pendingRewards = 0;
-        setVaultActiveAmount("0");
-        // Removed: setQueuedBalance (no longer used in V2)
-        setRewards("0");
+      setVaultActiveAmount("0");
+      setRewards("0");
       }
 
       // ─────────── ALL-TIME ROI ───────────
@@ -454,7 +453,6 @@ export default function App() {
       addToast("Error loading data from contract", "error")
       // reset just these three so UI doesn’t hang
       setVaultActiveAmount("0")
-      setQueuedBalance    ("0")
       setRewards          ("0")
       setTimeUntilNextCycle(0)
     }
