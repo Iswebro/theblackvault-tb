@@ -99,8 +99,14 @@ const updateDefaultReferrerStats = async (contract) => {
     console.log("🔍 CRON: Contract address:", CONTRACT_ADDRESS);
     console.log("🔍 CRON: Default referrer:", DEFAULT_REFERRER);
     
+    // Test provider connection - create a new provider instance if needed
+    let provider = contract.provider;
+    if (!provider) {
+      console.warn("⚠️ CRON: Contract provider undefined, creating new provider");
+      provider = new ethers.JsonRpcProvider(RPC_URL);
+    }
+    
     // First test - get current block number to verify connection
-    const provider = contract.provider;
     const currentBlock = await provider.getBlockNumber();
     console.log("🔍 CRON: Current block number:", currentBlock);
     console.log("🔍 CRON: Network:", await provider.getNetwork());
