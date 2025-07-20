@@ -428,17 +428,29 @@ export default function App() {
         
         if (apiData.result && apiData.result.stats) {
           const stats = apiData.result.stats;
-          console.log("🔍 DEBUG: Using cached background job data:", stats);
-          console.log("🔍 DEBUG: Data source: background job");
-          console.log("🔍 DEBUG: Last updated:", apiData.result.lastUpdated);
+          console.log("🔍 DEBUG: Cached stats:", stats);
           
-          setDefaultReferrerStats({
-            totalReferrals: stats.totalReferrals || "0",
-            uniqueReferrals: stats.uniqueReferrals || 0,
-            totalRewards: stats.totalRewards || "0",
-            availableRewards: stats.availableRewards || "0"
-          });
-          return;
+          // Check if cached data seems valid (has totalReferrals > 0 but uniqueReferrals = 0)
+          // This indicates the cron job found contract data but failed to find events
+          const hasReferrals = parseInt(stats.totalReferrals || "0") > 0;
+          const hasUniqueCount = parseInt(stats.uniqueReferrals || "0") > 0;
+          
+          if (hasReferrals && !hasUniqueCount) {
+            console.log("🔍 DEBUG: Cached data seems incomplete (has referrals but no unique count), forcing fallback...");
+            // Force fallback by continuing to fallback logic
+          } else {
+            console.log("🔍 DEBUG: Using cached background job data:", stats);
+            console.log("🔍 DEBUG: Data source: background job");
+            console.log("🔍 DEBUG: Last updated:", apiData.result.lastUpdated);
+            
+            setDefaultReferrerStats({
+              totalReferrals: stats.totalReferrals || "0",
+              uniqueReferrals: stats.uniqueReferrals || 0,
+              totalRewards: stats.totalRewards || "0",
+              availableRewards: stats.availableRewards || "0"
+            });
+            return; // Use cached data and exit
+          }
         }
       } else {
         console.warn("⚠️ Cached referral stats not available (API returned status:", response.status, "), using fallback");
