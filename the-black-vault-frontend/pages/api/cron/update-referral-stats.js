@@ -25,16 +25,23 @@ const BLACK_VAULT_ABI = [
 
 // Helper function to query events with aggressive rate limiting - focusing on recent blocks
 const queryEventsWithRetry = async (contract, filter, blockRanges = [-10000, -25000, -50000, -100000, -200000]) => {
+  console.log(`🔍 CRON: Starting queryEventsWithRetry with filter:`, filter);
+  console.log(`🔍 CRON: Block ranges to try:`, blockRanges);
+  
   for (let i = 0; i < blockRanges.length; i++) {
     const blockRange = blockRanges[i];
     try {
       console.log(`🔍 CRON: Trying event query with ${Math.abs(blockRange)} block range...`);
       if (i > 0) {
         // Add longer delays between retries for background processing
+        console.log(`🔍 CRON: Adding delay of ${1000 * i}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, 1000 * i));
       }
+      
+      console.log(`🔍 CRON: Calling contract.queryFilter with range ${blockRange}...`);
       const events = await contract.queryFilter(filter, blockRange);
       console.log(`🔍 CRON: Successfully found ${events.length} events with ${Math.abs(blockRange)} range`);
+      
       if (events.length > 0) {
         // Log some sample events for debugging
         console.log(`🔍 CRON: Sample event data:`, events.slice(0, 2).map(e => ({
@@ -47,10 +54,17 @@ const queryEventsWithRetry = async (contract, filter, blockRanges = [-10000, -25
             cycle: e.args.cycle?.toString()
           } : 'No args'
         })));
+      } else {
+        console.log(`🔍 CRON: No events found with range ${blockRange}`);
       }
       return events;
     } catch (error) {
       console.warn(`⚠️ CRON: Event query failed with ${Math.abs(blockRange)} range:`, error.message);
+      console.warn(`⚠️ CRON: Error details:`, {
+        code: error.code,
+        reason: error.reason,
+        action: error.action
+      });
       if (i === blockRanges.length - 1) {
         console.error("❌ CRON: All event query attempts failed");
         return [];
@@ -128,15 +142,46 @@ const updateDefaultReferrerStats = async (contract) => {
     }
     
     // Query both Deposited and DepositWithReferrer events, merge results
-    const depositedFilter = contract.filters.Deposited();
-    const depositWithRefFilter = contract.filters.DepositWithReferrer();
-    console.log("🔍 CRON: Deposit filter created:", depositedFilter);
-    console.log("🔍 CRON: DepositWithReferrer filter created:", depositWithRefFilter);
+    console.log("🔍 CRON: Creating event filters...");
+    
+    let depositedFilter, depositWithRefFilter;
+    try {
+      depositedFilter = contract.filters.Deposited();
+      console.log("✅ CRON: Deposited filter created successfully:", depositedFilter);
+    } catch (filterError) {
+      console.error("❌ CRON: Failed to create Deposited filter:", filterError.message);
+      depositedFilter = null;
+    }
+    
+    try {
+      depositWithRefFilter = contract.filters.DepositWithReferrer();
+      console.log("✅ CRON: DepositWithReferrer filter created successfully:", depositWithRefFilter);
+    } catch (filterError) {
+      console.error("❌ CRON: Failed to create DepositWithReferrer filter:", filterError.message);
+      depositWithRefFilter = null;
+    }
+    
     console.log("🔍 CRON: Contract interface events:", Object.keys(contract.interface.events));
+    console.log("🔍 CRON: Available contract filter methods:", Object.keys(contract.filters));
 
     // Query both event types in recent blocks
-    let depositedEvents = await queryEventsWithRetry(contract, depositedFilter, [-10000, -25000, -50000, -100000]);
-    let depositWithRefEvents = await queryEventsWithRetry(contract, depositWithRefFilter, [-10000, -25000, -50000, -100000]);
+    console.log("🔍 CRON: Starting event queries with filters...");
+    let depositedEvents = [];
+    let depositWithRefEvents = [];
+    
+    if (depositedFilter) {
+      depositedEvents = await queryEventsWithRetry(contract, depositedFilter, [-10000, -25000, -50000, -100000]);
+      console.log(`🔍 CRON: Deposited events query completed: ${depositedEvents.length} events`);
+    } else {
+      console.warn("⚠️ CRON: Skipping Deposited events query - filter creation failed");
+    }
+    
+    if (depositWithRefFilter) {
+      depositWithRefEvents = await queryEventsWithRetry(contract, depositWithRefFilter, [-10000, -25000, -50000, -100000]);
+      console.log(`🔍 CRON: DepositWithReferrer events query completed: ${depositWithRefEvents.length} events`);
+    } else {
+      console.warn("⚠️ CRON: Skipping DepositWithReferrer events query - filter creation failed");
+    }
 
     // Merge all events
     let allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
@@ -147,8 +192,17 @@ const updateDefaultReferrerStats = async (contract) => {
       console.log("🔍 CRON: Trying broader range from block 42296467 (approximate contract deployment)...");
       try {
         const fromBlock = 42296467; // Approximate deployment block
-        depositedEvents = await contract.queryFilter(depositedFilter, fromBlock);
-        depositWithRefEvents = await contract.queryFilter(depositWithRefFilter, fromBlock);
+        
+        if (depositedFilter) {
+          depositedEvents = await contract.queryFilter(depositedFilter, fromBlock);
+          console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events from deployment block`);
+        }
+        
+        if (depositWithRefFilter) {
+          depositWithRefEvents = await contract.queryFilter(depositWithRefFilter, fromBlock);
+          console.log(`🔍 CRON: Found ${depositWithRefEvents.length} DepositWithReferrer events from deployment block`);
+        }
+        
         allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
         console.log(`🔍 CRON: Found ${allDepositEvents.length} events from deployment block`);
       } catch (broadError) {
@@ -160,8 +214,16 @@ const updateDefaultReferrerStats = async (contract) => {
     if (allDepositEvents.length === 0) {
       console.log("🔍 CRON: Trying very recent blocks (last 10000 - about 8 hours on BSC)...");
       try {
-        depositedEvents = await contract.queryFilter(depositedFilter, -10000);
-        depositWithRefEvents = await contract.queryFilter(depositWithRefFilter, -10000);
+        if (depositedFilter) {
+          depositedEvents = await contract.queryFilter(depositedFilter, -10000);
+          console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events in last 10000 blocks`);
+        }
+        
+        if (depositWithRefFilter) {
+          depositWithRefEvents = await contract.queryFilter(depositWithRefFilter, -10000);
+          console.log(`🔍 CRON: Found ${depositWithRefEvents.length} DepositWithReferrer events in last 10000 blocks`);
+        }
+        
         allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
         console.log(`🔍 CRON: Found ${allDepositEvents.length} events in last 10000 blocks`);
       } catch (recentError) {
@@ -173,8 +235,16 @@ const updateDefaultReferrerStats = async (contract) => {
     if (allDepositEvents.length === 0) {
       console.log("🔍 CRON: Last resort - trying to get ALL deposit events (no block limit)...");
       try {
-        depositedEvents = await contract.queryFilter(depositedFilter);
-        depositWithRefEvents = await contract.queryFilter(depositWithRefFilter);
+        if (depositedFilter) {
+          depositedEvents = await contract.queryFilter(depositedFilter);
+          console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events with no block limit`);
+        }
+        
+        if (depositWithRefFilter) {
+          depositWithRefEvents = await contract.queryFilter(depositWithRefFilter);
+          console.log(`🔍 CRON: Found ${depositWithRefEvents.length} DepositWithReferrer events with no block limit`);
+        }
+        
         allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
         console.log(`🔍 CRON: Found ${allDepositEvents.length} events with no block limit`);
       } catch (allEventsError) {
