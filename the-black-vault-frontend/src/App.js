@@ -298,7 +298,10 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`/api/transaction-history?address=${account}`)
+      console.log("🔍 DEBUG: Loading transaction history for account:", account);
+      console.log("🔍 DEBUG: Using contract address:", CONTRACT_ADDRESS);
+      
+      const res = await fetch(`/api/bscscan?wallet=${account}&vault=${CONTRACT_ADDRESS}`)
       if (!res.ok) {
         console.error("Transaction history API error:", res.status, res.statusText);
         addToast("Failed to load transaction history.", "error");
@@ -327,25 +330,53 @@ export default function App() {
       }
       let data;
       try {
-        data = await res.json();
+        data = JSON.parse(text);
       } catch (jsonError) {
         console.error("Transaction history API returned invalid JSON:", jsonError);
         addToast("Transaction history API returned invalid JSON.", "error");
         setHistory([]);
         return;
       }
+      
+      console.log("🔍 DEBUG: BscScan API response:", data);
+      
       if (!data.result) {
+        console.log("🔍 DEBUG: No transaction results found");
         setHistory([]);
         return;
       }
+      
+      console.log("🔍 DEBUG: Found transactions:", data.result.length);
+      
       // Map BscScan txs to history format
-      const processedEvents = data.result.map(tx => ({
-        type: tx.methodId === '0xa9059cbb' ? 'Deposit' : 'Transfer', // You may want to improve this logic
-        amount: (parseFloat(tx.value) / Math.pow(10, 18)).toString(),
-        time: new Date(parseInt(tx.timeStamp) * 1000),
-        txHash: tx.hash,
-      }));
+      const processedEvents = data.result.map(tx => {
+        console.log("🔍 DEBUG: Processing transaction:", {
+          hash: tx.hash,
+          from: tx.from,
+          to: tx.to,
+          value: tx.value,
+          tokenSymbol: tx.tokenSymbol,
+          timeStamp: tx.timeStamp
+        });
+        
+        // Determine transaction type based on direction
+        let type = 'Transfer';
+        if (tx.to.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
+          type = 'Deposit';
+        } else if (tx.from.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
+          type = 'Withdrawal';
+        }
+        
+        return {
+          type: type,
+          amount: (parseFloat(tx.value) / Math.pow(10, parseInt(tx.tokenDecimal || 18))).toString(),
+          time: new Date(parseInt(tx.timeStamp) * 1000),
+          txHash: tx.hash,
+        };
+      });
+      
       processedEvents.sort((a, b) => b.time.getTime() - a.time.getTime());
+      console.log("🔍 DEBUG: Processed events:", processedEvents);
       setHistory(processedEvents);
     } catch (error) {
       console.error("Error loading transaction history:", error);
@@ -363,29 +394,78 @@ export default function App() {
 
     try {
       console.log("🔍 DEBUG: Loading default referrer data for:", DEFAULT_REFERRER);
+      console.log("🔍 DEBUG: Current connected account:", account);
+      console.log("🔍 DEBUG: Is current account the default referrer?", account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase());
       
       // Get default referrer's referral data
       const defaultReferralData = await vault.getUserReferralData(DEFAULT_REFERRER);
       console.log("🔍 DEBUG: Default referrer raw data:", defaultReferralData);
+      console.log("🔍 DEBUG: Default referrer data breakdown:", {
+        totalRewards: defaultReferralData[0]?.toString(),
+        availableRewards: defaultReferralData[1]?.toString(),
+        referredCount: defaultReferralData[2]?.toString(),
+        totalVolume: defaultReferralData[3]?.toString(),
+        totalWithdrawn: defaultReferralData[4]?.toString(),
+      });
       
       // Get unique referral count by checking deposit events for default referrer
+      console.log("🔍 DEBUG: Searching for Deposited events with default referrer...");
       const defaultDepositFilter = vault.filters.Deposited(null, null, DEFAULT_REFERRER);
+      console.log("🔍 DEBUG: Filter created:", defaultDepositFilter);
+      
       const defaultDepositEvents = await vault.queryFilter(defaultDepositFilter, -200000);
-      console.log("🔍 DEBUG: Default referrer deposit events:", defaultDepositEvents.length);
+      console.log("🔍 DEBUG: Default referrer deposit events found:", defaultDepositEvents.length);
+      
+      if (defaultDepositEvents.length > 0) {
+        console.log("🔍 DEBUG: Sample events:");
+        defaultDepositEvents.slice(0, 5).forEach((event, i) => {
+          console.log(`🔍 DEBUG: Event ${i}:`, {
+            user: event.args.user,
+            amount: formatEther(event.args.amount),
+            referrer: event.args.referrer,
+            cycle: event.args.cycle?.toString(),
+            blockNumber: event.blockNumber,
+            transactionHash: event.transactionHash
+          });
+        });
+      } else {
+        console.log("🔍 DEBUG: No events found - checking if this is expected...");
+        
+        // Let's also try searching for ANY Deposited events to see if the contract is working
+        console.log("🔍 DEBUG: Searching for ANY Deposited events to verify contract...");
+        const anyDepositFilter = vault.filters.Deposited();
+        const anyDepositEvents = await vault.queryFilter(anyDepositFilter, -50000); // Smaller range for test
+        console.log("🔍 DEBUG: Total deposit events in last 50k blocks:", anyDepositEvents.length);
+        
+        if (anyDepositEvents.length > 0) {
+          console.log("🔍 DEBUG: Recent deposits found, showing first few:");
+          anyDepositEvents.slice(0, 3).forEach((event, i) => {
+            console.log(`🔍 DEBUG: Recent Event ${i}:`, {
+              user: event.args.user,
+              amount: formatEther(event.args.amount),
+              referrer: event.args.referrer,
+              isDefaultReferrer: event.args.referrer?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase()
+            });
+          });
+        }
+      }
       
       const uniqueDefaultReferees = [...new Set(defaultDepositEvents.map((event) => event.args.user.toLowerCase()))];
       console.log("🔍 DEBUG: Unique users referred by default referrer:", uniqueDefaultReferees.length);
       console.log("🔍 DEBUG: Default referrer unique referee addresses:", uniqueDefaultReferees);
       
-      setDefaultReferrerStats({
+      const stats = {
         totalReferrals: defaultReferralData[2]?.toString() || "0",
         uniqueReferrals: uniqueDefaultReferees.length,
         totalRewards: formatEther(defaultReferralData[0] || 0),
         availableRewards: formatEther(defaultReferralData[1] || 0)
-      });
+      };
+      
+      console.log("🔍 DEBUG: Final stats being set:", stats);
+      setDefaultReferrerStats(stats);
       
     } catch (error) {
-      console.error("Error loading default referrer data:", error);
+      console.error("❌ Error loading default referrer data:", error);
       setDefaultReferrerStats({
         totalReferrals: 0,
         uniqueReferrals: 0,
@@ -1146,7 +1226,7 @@ export default function App() {
           <div className="vault-card premium-card">
             <h3 className="card-title">
               <span className="card-icon">👥</span>
-              Referral Rewards {account === DEFAULT_REFERRER && <span style={{ fontSize: '12px', color: '#4a9eff' }}>(Default Referrer Account)</span>}
+              Referral Rewards {account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase() && <span style={{ fontSize: '12px', color: '#4a9eff' }}>(Default Referrer Account)</span>}
             </h3>
             <div className="reward-display">
               <span className="reward-amount purple">{formatAmount(referralRewards)} USDT</span>
@@ -1157,7 +1237,7 @@ export default function App() {
               <span className="referral-value">{uniqueReferralCount}</span>
             </div>
             
-            {account === DEFAULT_REFERRER && (
+            {account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase() && (
               <div style={{ marginTop: '12px', padding: '8px', background: '#1a2332', borderRadius: '6px', border: '1px solid #4a9eff' }}>
                 <div style={{ fontSize: '12px', color: '#4a9eff', fontWeight: 'bold', marginBottom: '8px' }}>
                   🏢 Default Referrer Statistics
@@ -1173,6 +1253,9 @@ export default function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
                   <span style={{ color: '#ccc' }}>Total Default Rewards:</span>
                   <span style={{ color: '#fff' }}>{formatAmount(defaultReferrerStats.totalRewards)} USDT</span>
+                </div>
+                <div style={{ fontSize: '10px', color: '#666', marginTop: '8px', fontStyle: 'italic' }}>
+                  Debug: Connected as {formatAddress(account)} | Default: {formatAddress(DEFAULT_REFERRER)} | Match: {account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase() ? 'YES' : 'NO'}
                 </div>
               </div>
             )}
@@ -1342,7 +1425,7 @@ export default function App() {
         contract={contract}
         account={account}
         formatAddress={formatAddress}
-        isDefaultReferrer={account === DEFAULT_REFERRER}
+        isDefaultReferrer={account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase()}
       />
 
       {/* Activation Help Modal removed: no longer needed in V2 */}
