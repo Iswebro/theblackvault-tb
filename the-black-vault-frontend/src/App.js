@@ -451,21 +451,92 @@ export default function App() {
         }
       }
       
-      // Fallback only if cached data not available (background job hasn't run)
-      console.log("🔍 DEBUG: Fallback - fetching default referrer data directly...");
+      // Fallback with event querying (same as other functions)
+      console.log("🔍 DEBUG: Fallback - fetching default referrer data with event querying...");
       try {
         const defaultReferralData = await vault.getUserReferralData(DEFAULT_REFERRER);
         console.log("🔍 DEBUG: Fallback - Default referrer raw data:", defaultReferralData);
         
-        const stats = {
+        // Set basic contract data
+        const basicStats = {
           totalReferrals: defaultReferralData[2]?.toString() || "0",
-          uniqueReferrals: 0, // Can't get unique count without expensive event queries
           totalRewards: formatEther(defaultReferralData[0] || 0),
           availableRewards: formatEther(defaultReferralData[1] || 0)
         };
         
-        console.log("🔍 DEBUG: Fallback - Basic stats (no unique count):", stats);
-        setDefaultReferrerStats(stats);
+        console.log("🔍 DEBUG: Basic contract stats:", basicStats);
+        
+        // Now query events to find unique users who got default referrer rewards
+        try {
+          console.log("🔍 DEBUG: Querying deposit events to find default referrer beneficiaries...");
+          
+          // Helper function for event queries with retry (same as user referrals)
+          const queryEventsWithRetry = async (contract, filter, blockRanges = [-20000, -8000, -3000]) => {
+            for (let i = 0; i < blockRanges.length; i++) {
+              const blockRange = blockRanges[i];
+              try {
+                console.log(`🔍 DEBUG: Default referrer - trying event query with ${Math.abs(blockRange)}k block range...`);
+                if (i > 0) {
+                  await new Promise(resolve => setTimeout(resolve, 1000 * i));
+                }
+                const events = await contract.queryFilter(filter, blockRange);
+                console.log(`🔍 DEBUG: Default referrer - found ${events.length} events with ${Math.abs(blockRange)}k range`);
+                return events;
+              } catch (error) {
+                console.warn(`⚠️ Default referrer event query failed with ${Math.abs(blockRange)}k range:`, error.message);
+                if (i === blockRanges.length - 1) {
+                  console.error("❌ Default referrer - all event query attempts failed");
+                  return [];
+                }
+              }
+            }
+            return [];
+          };
+          
+          // Get ALL deposit events
+          const depositFilter = vault.filters.Deposited();
+          const depositEvents = await queryEventsWithRetry(vault, depositFilter, [-20000, -8000, -3000]);
+          console.log("🔍 DEBUG: Default referrer - total deposit events found:", depositEvents.length);
+          
+          // Filter for deposits that used default referrer OR zero address (which automatically use default referrer)
+          const defaultReferrerEvents = depositEvents.filter(event => {
+            const referrer = event.args?.referrer;
+            const isDefaultReferrer = referrer && referrer.toLowerCase() === DEFAULT_REFERRER.toLowerCase();
+            const isZeroAddress = referrer && (referrer === ethers.ZeroAddress || referrer.toLowerCase() === "0x0000000000000000000000000000000000000000");
+            return isDefaultReferrer || isZeroAddress;
+          });
+          
+          console.log("🔍 DEBUG: Default referrer - events using default referrer or zero address:", defaultReferrerEvents.length);
+          
+          // Get unique users who deposited without a referral (and thus got default referrer rewards)
+          const uniqueDefaultBeneficiaries = [...new Set(defaultReferrerEvents.map(event => event.args.user.toLowerCase()))];
+          
+          console.log("🔍 DEBUG: Default referrer - unique users who got default referrer rewards:", uniqueDefaultBeneficiaries.length);
+          
+          // Log some examples for debugging
+          if (defaultReferrerEvents.length > 0) {
+            console.log("🔍 DEBUG: Sample default referrer events:", defaultReferrerEvents.slice(0, 3).map(e => ({
+              user: e.args?.user,
+              referrer: e.args?.referrer,
+              amount: e.args?.amount?.toString(),
+              blockNumber: e.blockNumber
+            })));
+          }
+          
+          setDefaultReferrerStats({
+            ...basicStats,
+            uniqueReferrals: uniqueDefaultBeneficiaries.length
+          });
+          
+          console.log("✅ Successfully used event querying for default referrer stats");
+          
+        } catch (eventError) {
+          console.warn("⚠️ Default referrer event queries failed, using basic stats only:", eventError.message);
+          setDefaultReferrerStats({
+            ...basicStats,
+            uniqueReferrals: 0
+          });
+        }
         
       } catch (fallbackError) {
         console.error("❌ Fallback failed for default referrer data:", fallbackError);
