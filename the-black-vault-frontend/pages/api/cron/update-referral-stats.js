@@ -80,11 +80,23 @@ const updateDefaultReferrerStats = async (contract) => {
     // Get default referrer's contract data
     const defaultReferralData = await contract.getUserReferralData(DEFAULT_REFERRER);
     
-    // Get deposit events for default referrer
-    const defaultDepositFilter = contract.filters.Deposited(null, null, DEFAULT_REFERRER);
-    const defaultDepositEvents = await queryEventsWithRetry(contract, defaultDepositFilter, [-100000, -50000, -25000]);
+    // Get ALL deposit events to analyze which ones used default referrer
+    console.log("🔍 CRON: Getting all deposit events to analyze default referrer usage...");
+    const allDepositFilter = contract.filters.Deposited();
+    const allDepositEvents = await queryEventsWithRetry(contract, allDepositFilter, [-100000, -50000, -25000]);
     
-    const uniqueDefaultReferees = [...new Set(defaultDepositEvents.map(event => event.args.user.toLowerCase()))];
+    // Filter events where the referrer is the DEFAULT_REFERRER
+    // This includes both explicit referrals AND automatic default assignments
+    const defaultReferrerEvents = allDepositEvents.filter(event => 
+      event.args.referrer.toLowerCase() === DEFAULT_REFERRER.toLowerCase()
+    );
+    
+    // Get unique users who used default referrer (either explicitly or automatically)
+    const uniqueDefaultReferees = [...new Set(defaultReferrerEvents.map(event => event.args.user.toLowerCase()))];
+    
+    console.log(`🔍 CRON: Found ${allDepositEvents.length} total deposit events`);
+    console.log(`🔍 CRON: Found ${defaultReferrerEvents.length} events using default referrer`);
+    console.log(`🔍 CRON: Found ${uniqueDefaultReferees.length} unique users using default referrer`);
     
     const stats = {
       contractAddress: DEFAULT_REFERRER,
@@ -95,7 +107,12 @@ const updateDefaultReferrerStats = async (contract) => {
       totalVolume: ethers.formatEther(defaultReferralData[3] || 0),
       totalWithdrawn: ethers.formatEther(defaultReferralData[4] || 0),
       lastUpdated: new Date().toISOString(),
-      eventCount: defaultDepositEvents.length
+      eventCount: defaultReferrerEvents.length,
+      debugInfo: {
+        totalEvents: allDepositEvents.length,
+        defaultReferrerEvents: defaultReferrerEvents.length,
+        uniqueUsers: uniqueDefaultReferees.length
+      }
     };
     
     // Store in Redis with 25 hour expiry (longer than daily cron interval)
