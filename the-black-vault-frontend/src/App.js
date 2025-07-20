@@ -185,54 +185,71 @@ export default function App() {
         return
       }
 
-      // First check if the contract exists and has code
-      try {
-        const code = await provider.getCode(CONTRACT_ADDRESS)
-        if (code === "0x") {
-          console.error("❌ Contract has no code at address:", CONTRACT_ADDRESS)
-          addToast("Contract not deployed at specified address", "error")
-          return
-        }
-        console.log("✅ Contract code found at address")
-      } catch (error) {
-        console.error("❌ Error checking contract code:", error)
-        // Check if it's a "missing trie node" or RPC error
-        if (error.message && (error.message.includes("missing trie node") || error.message.includes("Internal JSON-RPC error"))) {
-          console.warn("⚠️ RPC node issue detected. Contract validation skipped, but continuing with initialization...")
-          addToast("RPC node issue detected, but continuing with limited validation", "warning")
-        } else {
-          addToast("Failed to verify contract deployment", "error")
-          return
+      // First check if the contract exists and has code (with retry logic)
+      let contractCodeChecked = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const code = await provider.getCode(CONTRACT_ADDRESS)
+          if (code === "0x") {
+            console.error("❌ Contract has no code at address:", CONTRACT_ADDRESS)
+            addToast("Contract not deployed at specified address", "error")
+            return
+          }
+          console.log("✅ Contract code found at address")
+          contractCodeChecked = true;
+          break;
+        } catch (error) {
+          console.warn(`❌ Error checking contract code (attempt ${attempt}/3):`, error)
+          if (attempt === 3) {
+            // Final attempt failed, but continue with limited validation
+            console.warn("⚠️ Contract code validation failed after 3 attempts. Continuing with limited validation...")
+            // Don't show error toast, just continue
+          } else {
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          }
         }
       }
       
-      // Test basic contract functions with better error handling
+      // Test basic contract functions with better error handling and retry logic
       let contractValidation = true
       
-      try {
-        const minDeposit = await vault.MIN_DEPOSIT()
-        console.log("✅ MIN_DEPOSIT from main contract:", minDeposit.toString())
-      } catch (error) {
-        console.error("❌ Error calling MIN_DEPOSIT on main contract:", error)
-        console.error("Contract may not be the expected BlackVault contract")
-        contractValidation = false
+      // Test MIN_DEPOSIT with retry
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const minDeposit = await vault.MIN_DEPOSIT()
+          console.log("✅ MIN_DEPOSIT from main contract:", minDeposit.toString())
+          break;
+        } catch (error) {
+          console.warn(`❌ Error calling MIN_DEPOSIT (attempt ${attempt}/2):`, error)
+          if (attempt === 2) {
+            console.error("Contract may not be the expected BlackVault contract")
+            contractValidation = false
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
       }
 
-      try {
-        const dailyRate = await vault.DAILY_RATE()
-        console.log("✅ DAILY_RATE from main contract:", dailyRate.toString())
-      } catch (error) {
-        console.error("❌ Error calling DAILY_RATE on main contract:", error)
-        contractValidation = false
+      // Test DAILY_RATE with retry
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const dailyRate = await vault.DAILY_RATE()
+          console.log("✅ DAILY_RATE from main contract:", dailyRate.toString())
+          break;
+        } catch (error) {
+          console.warn(`❌ Error calling DAILY_RATE (attempt ${attempt}/2):`, error)
+          if (attempt === 2) {
+            contractValidation = false
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
       }
       
       if (!contractValidation) {
-        addToast("Contract validation failed - may be wrong contract or ABI mismatch", "error")
-        console.error("Contract validation failed. Please check:")
-        console.error("1. Contract address is correct")
-        console.error("2. Contract is deployed and verified")
-        console.error("3. ABI matches the deployed contract")
-        // Don't return here - allow the app to continue with limited functionality
+        console.warn("⚠️ Contract validation failed - may be RPC issues or wrong contract. Continuing with limited functionality...")
+        // Don't show error toast, just continue with reduced functionality
       }
 
       // Test withdraw functions exist
@@ -332,25 +349,33 @@ export default function App() {
     try {
       // ─────────── WALLET BALANCES ───────────
       let ethBal, usdtBal, allowance;
-      try {
-        [ethBal, usdtBal, allowance] = await Promise.all([
-          provider.getBalance(account),
-          usdt.balanceOf(account),
-          usdt.allowance(account, CONTRACT_ADDRESS),
-        ])
-        setBalance      (formatEther(ethBal))
-        setUsdtBalance  (formatEther(usdtBal))
-        setUsdtAllowance(formatEther(allowance))
-        console.log("Wallet ETH balance:",   formatEther(ethBal))
-        console.log("Wallet USDT balance:",  formatEther(usdtBal))
-        console.log("USDT allowance:",       formatEther(allowance))
-      } catch (balanceError) {
-        console.error("Error fetching wallet balances:", balanceError)
-        addToast("Error fetching wallet balances. Check network connection.", "error")
-        // Set fallback values
-        setBalance("0")
-        setUsdtBalance("0")
-        setUsdtAllowance("0")
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          [ethBal, usdtBal, allowance] = await Promise.all([
+            provider.getBalance(account),
+            usdt.balanceOf(account),
+            usdt.allowance(account, CONTRACT_ADDRESS),
+          ])
+          setBalance      (formatEther(ethBal))
+          setUsdtBalance  (formatEther(usdtBal))
+          setUsdtAllowance(formatEther(allowance))
+          console.log("Wallet ETH balance:",   formatEther(ethBal))
+          console.log("Wallet USDT balance:",  formatEther(usdtBal))
+          console.log("USDT allowance:",       formatEther(allowance))
+          break; // Success, exit retry loop
+        } catch (balanceError) {
+          console.warn(`Error fetching wallet balances (attempt ${attempt}/3):`, balanceError)
+          if (attempt === 3) {
+            console.error("Failed to fetch wallet balances after 3 attempts")
+            // Set fallback values
+            setBalance("0")
+            setUsdtBalance("0")
+            setUsdtAllowance("0")
+          } else {
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          }
+        }
       }
 
       // ─────────── REFERRAL REWARDS ───────────
@@ -382,34 +407,42 @@ export default function App() {
       // ─────────── ON-CHAIN VAULT DATA ───────────
       let totalDeposited, pendingRewards, totalRewardsWithdrawn;
       
-      try {
-        // BlackVaultV2.sol getUserVault returns: [totalDeposited, totalRewardsWithdrawn, joinedCycle, pendingRewards]
-        const vaultData = await vault.getUserVault(account);
-        totalDeposited = vaultData[0];
-        totalRewardsWithdrawn = vaultData[1];
-        // joinedCycle = vaultData[2]; // Not used in frontend, can be removed
-        pendingRewards = vaultData[3];
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          // BlackVaultV2.sol getUserVault returns: [totalDeposited, totalRewardsWithdrawn, joinedCycle, pendingRewards]
+          const vaultData = await vault.getUserVault(account);
+          totalDeposited = vaultData[0];
+          totalRewardsWithdrawn = vaultData[1];
+          // joinedCycle = vaultData[2]; // Not used in frontend, can be removed
+          pendingRewards = vaultData[3];
 
-        // Calculate net earning amount (total deposited minus 1% fee)
-        // Contract deducts 1% fee, so net earning amount = gross * 0.99
-        const grossAmount = parseFloat(formatEther(totalDeposited));
-        const netEarningAmount = grossAmount * 0.99;
+          // Calculate net earning amount (total deposited minus 1% fee)
+          // Contract deducts 1% fee, so net earning amount = gross * 0.99
+          const grossAmount = parseFloat(formatEther(totalDeposited));
+          const netEarningAmount = grossAmount * 0.99;
 
-        setVaultActiveAmount(netEarningAmount.toString());
-        // Removed: setQueuedBalance (no longer used in V2)
-        setRewards(formatEther(pendingRewards));
+          setVaultActiveAmount(netEarningAmount.toString());
+          // Removed: setQueuedBalance (no longer used in V2)
+          setRewards(formatEther(pendingRewards));
 
-        console.log("Total Deposited (Gross):", formatEther(totalDeposited));
-        console.log("Net Earning Amount:", netEarningAmount);
-        console.log("Pending Rewards:", formatEther(pendingRewards));
-      } catch (error) {
-        console.error("Error loading vault data:", error);
-        addToast("Failed to load vault data from contract", "warning");
-        // Set fallback values
-        totalDeposited = 0;
-        pendingRewards = 0;
-      setVaultActiveAmount("0");
-      setRewards("0");
+          console.log("Total Deposited (Gross):", formatEther(totalDeposited));
+          console.log("Net Earning Amount:", netEarningAmount);
+          console.log("Pending Rewards:", formatEther(pendingRewards));
+          break; // Success, exit retry loop
+        } catch (error) {
+          console.warn(`Error loading vault data (attempt ${attempt}/3):`, error);
+          if (attempt === 3) {
+            console.error("Failed to load vault data after 3 attempts");
+            // Set fallback values
+            totalDeposited = 0;
+            pendingRewards = 0;
+            setVaultActiveAmount("0");
+            setRewards("0");
+          } else {
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          }
+        }
       }
 
       // ─────────── ALL-TIME ROI ───────────
