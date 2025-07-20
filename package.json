@@ -11,6 +11,7 @@
     "@vercel/analytics": "^1.5.0",
     "@vercel/speed-insights": "^1.2.0",
     "assert": "^2.1.0",
+    "browserify-zlib": "^0.2.0",
     "buffer": "^6.0.3",
     "crypto-browserify": "^3.12.1",
     "dotenv": "^17.0.1",
@@ -26,6 +27,7 @@
     "stream-http": "^3.2.0",
     "url": "^0.11.4",
     "util": "^0.12.5",
+    "vm-browserify": "^1.1.2",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
