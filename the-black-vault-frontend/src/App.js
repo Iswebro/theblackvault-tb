@@ -347,6 +347,22 @@ export default function App() {
         setUsdtAllowance("0")
       }
 
+      // ─────────── REFERRAL REWARDS ───────────
+      try {
+        if (vault && account) {
+          const referralData = await vault.getUserReferralData(account);
+          // referralData: [_totalRewards, _availableRewards, _referredCount, _totalVolume, _totalWithdrawn]
+          setReferralRewards(formatEther(referralData[1])); // _availableRewards
+          setReferralCount(referralData[2]?.toString() || "0");
+          console.log("Referral rewards (available):", formatEther(referralData[1]));
+          console.log("Referral count:", referralData[2]?.toString() || "0");
+        }
+      } catch (e) {
+        console.error("Error fetching referral rewards:", e);
+        setReferralRewards("0");
+        setReferralCount("0");
+      }
+
 
       // ─────────── DAILY RATE ───────────
       try {
