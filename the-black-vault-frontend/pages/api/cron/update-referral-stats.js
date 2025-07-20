@@ -72,7 +72,20 @@ const getActiveUsers = async (contract) => {
   try {
     console.log("🔍 CRON: Getting active users from recent deposits...");
     const depositFilter = contract.filters.Deposited();
-    const depositEvents = await queryEventsWithRetry(contract, depositFilter, [-5000, -10000]);
+    
+    // Try recent blocks first
+    let depositEvents = await queryEventsWithRetry(contract, depositFilter, [-5000, -10000]);
+    
+    // If no recent events, try from deployment
+    if (depositEvents.length === 0) {
+      console.log("🔍 CRON: No recent deposits found, trying from contract deployment...");
+      try {
+        depositEvents = await contract.queryFilter(depositFilter, 42296467); // From deployment
+        console.log(`🔍 CRON: Found ${depositEvents.length} total historical deposit events`);
+      } catch (error) {
+        console.warn("⚠️ CRON: Historical query failed:", error.message);
+      }
+    }
     
     // Get unique users who have made deposits
     const uniqueUsers = [...new Set(depositEvents.map(event => event.args.user.toLowerCase()))];
@@ -212,46 +225,98 @@ const updateDefaultReferrerStats = async (contract) => {
     let allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
     console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events, ${depositWithRefEvents.length} DepositWithReferrer events, merged total: ${allDepositEvents.length}`);
 
-    // If no events found in recent blocks, try a broader range (but not too broad to avoid timeouts)
+    // If no events found in recent blocks, try a broader range to get ALL historical data
     if (allDepositEvents.length === 0) {
-      console.log("🔍 CRON: No events in recent blocks, trying broader range...");
+      console.log("🔍 CRON: No events in recent blocks, trying FULL historical range from contract deployment...");
       try {
+        const deploymentBlock = 42296467; // Contract deployment block
+        console.log(`🔍 CRON: Querying from block ${deploymentBlock} to current...`);
+        
         if (depositedFilter) {
-          depositedEvents = await contract.queryFilter(depositedFilter, -50000); // Last ~40 hours on BSC
-          console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events in last 50k blocks`);
+          console.log("🔍 CRON: Querying ALL Deposited events from deployment...");
+          depositedEvents = await contract.queryFilter(depositedFilter, deploymentBlock);
+          console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events from deployment block`);
+          
+          // Log samples of found events
+          if (depositedEvents.length > 0) {
+            console.log("🔍 CRON: Sample Deposited events:", depositedEvents.slice(0, 3).map(e => ({
+              blockNumber: e.blockNumber,
+              transactionHash: e.transactionHash,
+              user: e.args?.user,
+              referrer: e.args?.referrer,
+              amount: e.args?.amount?.toString(),
+              cycle: e.args?.cycle?.toString()
+            })));
+          }
         }
         
         if (depositWithRefFilter) {
-          depositWithRefEvents = await contract.queryFilter(depositWithRefFilter, -50000);
-          console.log(`🔍 CRON: Found ${depositWithRefEvents.length} DepositWithReferrer events in last 50k blocks`);
+          console.log("🔍 CRON: Querying ALL DepositWithReferrer events from deployment...");
+          depositWithRefEvents = await contract.queryFilter(depositWithRefFilter, deploymentBlock);
+          console.log(`🔍 CRON: Found ${depositWithRefEvents.length} DepositWithReferrer events from deployment block`);
+          
+          // Log samples of found events
+          if (depositWithRefEvents.length > 0) {
+            console.log("🔍 CRON: Sample DepositWithReferrer events:", depositWithRefEvents.slice(0, 3).map(e => ({
+              blockNumber: e.blockNumber,
+              transactionHash: e.transactionHash,
+              user: e.args?.user,
+              referrer: e.args?.referrer,
+              amount: e.args?.amount?.toString()
+            })));
+          }
         }
         
         allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
-        console.log(`🔍 CRON: Found ${allDepositEvents.length} total events in broader range`);
+        console.log(`🔍 CRON: Found ${allDepositEvents.length} total historical events`);
       } catch (broadError) {
-        console.warn("⚠️ CRON: Broader range query failed:", broadError.message);
+        console.warn("⚠️ CRON: Historical range query failed:", broadError.message);
       }
     }
 
-    // Prioritize Deposited events for processing
-    const depositEvents = allDepositEvents.filter(event => 
+    // Process ALL deposit events (both Deposited and DepositWithReferrer)
+    console.log(`🔍 CRON: Processing all ${allDepositEvents.length} deposit events...`);
+    
+    // Separate events by type for analysis
+    const depositedEventsByType = allDepositEvents.filter(event => 
       event.fragment?.name === 'Deposited' || event.eventName === 'Deposited'
     );
+    const depositWithRefEventsByType = allDepositEvents.filter(event => 
+      event.fragment?.name === 'DepositWithReferrer' || event.eventName === 'DepositWithReferrer'
+    );
+    
+    console.log(`🔍 CRON: Event breakdown - Deposited: ${depositedEventsByType.length}, DepositWithReferrer: ${depositWithRefEventsByType.length}`);
 
-    // Filter events where the referrer is the DEFAULT_REFERRER
-    const defaultReferrerEvents = depositEvents.filter(event => 
+    // Process BOTH event types for default referrer analysis
+    const allDefaultReferrerEvents = allDepositEvents.filter(event => 
       event.args && event.args.referrer && event.args.referrer.toLowerCase() === DEFAULT_REFERRER.toLowerCase()
     );
+    
+    console.log(`🔍 CRON: Found ${allDefaultReferrerEvents.length} events using default referrer from ALL event types`);
+    
+    // Log details of default referrer events
+    if (allDefaultReferrerEvents.length > 0) {
+      console.log("🔍 CRON: Default referrer events details:", allDefaultReferrerEvents.map(e => ({
+        eventType: e.fragment?.name || e.eventName || 'Unknown',
+        blockNumber: e.blockNumber,
+        user: e.args?.user,
+        referrer: e.args?.referrer,
+        amount: e.args?.amount?.toString(),
+        transactionHash: e.transactionHash.slice(0, 10) + '...'
+      })));
+    }
 
-    // Get unique users who used default referrer (either explicitly or automatically)
-    const uniqueDefaultReferees = [...new Set(defaultReferrerEvents.map(event => event.args.user.toLowerCase()))];
+    // Get unique users who used default referrer (from ALL event types)
+    const uniqueDefaultReferees = [...new Set(allDefaultReferrerEvents.map(event => event.args.user.toLowerCase()))];
 
-    // Print sample addresses for debug
-    console.log(`🔍 CRON: Found ${depositEvents.length} total deposit events`);
-    console.log(`🔍 CRON: Found ${defaultReferrerEvents.length} events using default referrer`);
+    // Print comprehensive debug information
+    console.log(`🔍 CRON: Found ${allDepositEvents.length} total deposit events`);
+    console.log(`🔍 CRON: Found ${depositedEventsByType.length} Deposited events`);
+    console.log(`🔍 CRON: Found ${depositWithRefEventsByType.length} DepositWithReferrer events`);
+    console.log(`🔍 CRON: Found ${allDefaultReferrerEvents.length} events using default referrer`);
     console.log(`🔍 CRON: Found ${uniqueDefaultReferees.length} unique users using default referrer`);
     if (uniqueDefaultReferees.length > 0) {
-      console.log(`🔍 CRON: Sample unique users:`, uniqueDefaultReferees.slice(0, 3));
+      console.log(`🔍 CRON: Unique users using default referrer:`, uniqueDefaultReferees);
     }
     if (allDepositEvents.length === 0) {
       console.warn("⚠️ CRON: No deposit events found. This might indicate an ABI issue or the contract has no deposits yet.");
@@ -266,11 +331,17 @@ const updateDefaultReferrerStats = async (contract) => {
       totalVolume: ethers.formatEther(defaultReferralData[3] || 0),
       totalWithdrawn: ethers.formatEther(defaultReferralData[4] || 0),
       lastUpdated: new Date().toISOString(),
-      eventCount: defaultReferrerEvents.length,
+      eventCount: allDefaultReferrerEvents.length,
       debugInfo: {
         totalEvents: allDepositEvents.length,
-        defaultReferrerEvents: defaultReferrerEvents.length,
-        uniqueUsers: uniqueDefaultReferees.length
+        depositedEvents: depositedEventsByType.length,
+        depositWithReferrerEvents: depositWithRefEventsByType.length,
+        defaultReferrerEvents: allDefaultReferrerEvents.length,
+        uniqueUsers: uniqueDefaultReferees.length,
+        contractData: {
+          totalRewards: ethers.formatEther(defaultReferralData[0] || 0),
+          totalReferrals: defaultReferralData[2]?.toString() || "0"
+        }
       }
     };
 
