@@ -24,6 +24,7 @@ const bscMainnetConfig = {
     decimals: 18,
   },
   rpcUrls: [
+    "https://rpc.ankr.com/multichain/608da03fc0a1cb8d5a5a6df34cb8bc598dfa27f71213d822afb470aaf0018ee4",
     "https://rpc.ankr.com/bsc",
     "https://bsc-dataseed.binance.org/",
     "https://bsc-dataseed1.defibit.io/",
