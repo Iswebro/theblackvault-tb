@@ -17,6 +17,30 @@ export default function ReferralsModal({
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
 
+  // Helper function to query events with rate limiting and retry logic
+  const queryEventsWithRetry = async (contract, filter, blockRanges = [-20000, -8000, -3000]) => {
+    for (let i = 0; i < blockRanges.length; i++) {
+      const blockRange = blockRanges[i];
+      try {
+        console.log(`🔍 DEBUG: Modal trying event query with ${Math.abs(blockRange)}k block range...`);
+        if (i > 0) {
+          // Add delay between retries to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 1000 * i));
+        }
+        const events = await contract.queryFilter(filter, blockRange);
+        console.log(`🔍 DEBUG: Modal successfully found ${events.length} events with ${Math.abs(blockRange)}k range`);
+        return events;
+      } catch (error) {
+        console.warn(`⚠️ Modal event query failed with ${Math.abs(blockRange)}k range:`, error.message);
+        if (i === blockRanges.length - 1) {
+          console.error("❌ Modal: All event query attempts failed");
+          return [];
+        }
+      }
+    }
+    return [];
+  };
+
   useEffect(() => {
     if (isOpen && contract && account) {
       setCurrentPage(1) // Reset to page 1 when modal opens
@@ -29,18 +53,25 @@ export default function ReferralsModal({
 
     setLoading(true)
     try {
+      console.log("🔍 DEBUG: Modal loading referrals for account:", account);
+      
       // Get referral data from contract (this gives us total referral count)
       const referralData = await contract.getUserReferralData(account)
       const totalCount = referralData[2]?.toString() || "0"
       setTotalReferralCount(totalCount)
+      console.log("🔍 DEBUG: Modal total referral count:", totalCount);
 
-      // Get all deposit events where this user is the referrer (search more blocks for better coverage)
+      // Get all deposit events where this user is the referrer (using rate limiting)
       const depositFilter = contract.filters.Deposited(null, null, account)
-      const depositEvents = await contract.queryFilter(depositFilter, -200000) // Last 200k blocks for better coverage
+      console.log("🔍 DEBUG: Modal searching for deposit events...");
+      
+      const depositEvents = await queryEventsWithRetry(contract, depositFilter, [-20000, -8000, -3000]);
+      console.log("🔍 DEBUG: Modal deposit events found:", depositEvents.length);
 
       // Extract unique referee addresses
       const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))]
       setUniqueReferrals(uniqueReferees.length)
+      console.log("🔍 DEBUG: Modal unique referees:", uniqueReferees.length);
 
       if (uniqueReferees.length === 0) {
         setReferrals([])
@@ -48,6 +79,7 @@ export default function ReferralsModal({
       }
 
       // Get bonus info for each referee
+      console.log("🔍 DEBUG: Modal getting bonus info for each referee...");
       const referralData2 = await Promise.all(
         uniqueReferees.map(async (refereeAddress) => {
           try {
@@ -68,6 +100,7 @@ export default function ReferralsModal({
         }),
       )
 
+      console.log("🔍 DEBUG: Modal final referral data:", referralData2);
       setReferrals(referralData2)
     } catch (error) {
       console.error("Error loading referrals:", error)
