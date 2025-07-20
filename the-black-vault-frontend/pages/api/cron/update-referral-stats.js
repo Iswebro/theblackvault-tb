@@ -98,8 +98,8 @@ const updateDefaultReferrerStats = async (contract) => {
       eventCount: defaultDepositEvents.length
     };
     
-    // Store in Redis with 1 hour expiry
-    await redis.set('referral-stats:default', stats, { ex: 3600 });
+    // Store in Redis with 25 hour expiry (longer than daily cron interval)
+    await redis.set('referral-stats:default', stats, { ex: 90000 });
     console.log("✅ CRON: Default referrer stats updated");
     
     return stats;
@@ -163,9 +163,9 @@ const updateUserStats = async (contract, users) => {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   
-  // Store all user stats in Redis with 30 minutes expiry
+  // Store all user stats in Redis with 25 hour expiry (longer than daily cron interval)
   if (Object.keys(userStats).length > 0) {
-    await redis.set('referral-stats:users', userStats, { ex: 1800 });
+    await redis.set('referral-stats:users', userStats, { ex: 90000 });
     console.log(`✅ CRON: Updated stats for ${Object.keys(userStats).length} users`);
   }
   

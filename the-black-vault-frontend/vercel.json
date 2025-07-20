@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/update-referral-stats",
-      "schedule": "*/20 * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }

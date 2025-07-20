@@ -1,6 +1,6 @@
 # The Black Vault - Frontend
 
-A secure, community-driven crypto vault built on Binance Smart Chain.
+A secure, community-driven crypto vault built on Binance Smart Chain with automated background processing.
 
 ## Features
 
