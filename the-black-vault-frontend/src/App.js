@@ -1062,7 +1062,7 @@ export default function App() {
               <span className="reward-label">From referrals</span>
             </div>
             <div className="referral-stats">
-              <span className="referral-label">Referrals:</span>
+              <span className="referral-label">Total Referral Deposits:</span>
               <span className="referral-value">{referralCount}</span>
             </div>
 
