@@ -1,6 +1,6 @@
 # The Black Vault - Frontend
 
-A secure, community-driven crypto vault built on Binance Smart Chain with automated background processing.
+A secure, community-driven crypto vault built on Binance Smart Chain.
 
 ## Features
 
@@ -110,6 +110,7 @@ The Black Vault features both weekly and lifetime referral leaderboards to track
 #### Weekly Leaderboard
 
 - **Reset Schedule**: Every Monday at 7:00 AM AEST (Brisbane Time)
+- **Update Frequency**: Daily at 1:00 AM UTC (11:00 AM AEST)
 - **Tracking Period**: 7-day rolling windows from launch
 - **Data Source**: On-chain `Deposited` events with referral rewards calculation
 - **Display**: Top 10 referrers by weekly referral rewards earned
@@ -129,17 +130,16 @@ The Black Vault features both weekly and lifetime referral leaderboards to track
 npm run leaderboard:weekly
 \`\`\`
 
-The script (`scripts/weeklyLeaderboard.js`) should be scheduled to run via cron:
+The script (`scripts/weeklyLeaderboard.js`) is scheduled to run daily via Vercel cron:
 
 \`\`\`bash
-# Crontab entry for Monday 7 AM AEST (UTC+10)
-# Note: Adjust for daylight saving time if needed
-0 21 * * 0 cd /path/to/project && npm run leaderboard:weekly
+# Daily update at 1 AM UTC (11 AM AEST)
+0 1 * * * /api/cron/weeklyleaderboard
 \`\`\`
 
 **Brisbane Time Cron Schedule:**
-- **Standard Time (AEST)**: `0 21 * * 0` (Sunday 9 PM UTC = Monday 7 AM AEST)
-- **Daylight Time (AEDT)**: `0 20 * * 0` (Sunday 8 PM UTC = Monday 7 AM AEDT)
+- **Daily Updates**: `0 1 * * *` (1 AM UTC = 11 AM AEST)
+- **Week Reset**: Automatic every Monday at 7 AM AEST based on timestamp calculation
 
 #### Data Storage
 
