@@ -71,6 +71,30 @@ export default function App() {
     availableRewards: "0"
   });
 
+  // Helper function to query events with rate limiting and retry logic
+  const queryEventsWithRetry = async (contract, filter, blockRanges = [-30000, -10000, -5000]) => {
+    for (let i = 0; i < blockRanges.length; i++) {
+      const blockRange = blockRanges[i];
+      try {
+        console.log(`🔍 DEBUG: Trying event query with ${Math.abs(blockRange)}k block range...`);
+        if (i > 0) {
+          // Add delay between retries to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 1000 * i));
+        }
+        const events = await contract.queryFilter(filter, blockRange);
+        console.log(`🔍 DEBUG: Successfully found ${events.length} events with ${Math.abs(blockRange)}k range`);
+        return events;
+      } catch (error) {
+        console.warn(`⚠️ Event query failed with ${Math.abs(blockRange)}k range:`, error.message);
+        if (i === blockRanges.length - 1) {
+          console.error("❌ All event query attempts failed");
+          return [];
+        }
+      }
+    }
+    return [];
+  };
+
   // Derived variables (after all state hooks)
   const pageSize = 10;
   const totalPages = Math.ceil(history.length / pageSize);
@@ -413,7 +437,7 @@ export default function App() {
       const defaultDepositFilter = vault.filters.Deposited(null, null, DEFAULT_REFERRER);
       console.log("🔍 DEBUG: Filter created:", defaultDepositFilter);
       
-      const defaultDepositEvents = await vault.queryFilter(defaultDepositFilter, -200000);
+      const defaultDepositEvents = await queryEventsWithRetry(vault, defaultDepositFilter, [-20000, -10000, -5000]);
       console.log("🔍 DEBUG: Default referrer deposit events found:", defaultDepositEvents.length);
       
       if (defaultDepositEvents.length > 0) {
@@ -434,8 +458,8 @@ export default function App() {
         // Let's also try searching for ANY Deposited events to see if the contract is working
         console.log("🔍 DEBUG: Searching for ANY Deposited events to verify contract...");
         const anyDepositFilter = vault.filters.Deposited();
-        const anyDepositEvents = await vault.queryFilter(anyDepositFilter, -50000); // Smaller range for test
-        console.log("🔍 DEBUG: Total deposit events in last 50k blocks:", anyDepositEvents.length);
+        const anyDepositEvents = await queryEventsWithRetry(vault, anyDepositFilter, [-5000, -2000, -1000]);
+        console.log("🔍 DEBUG: Total deposit events found:", anyDepositEvents.length);
         
         if (anyDepositEvents.length > 0) {
           console.log("🔍 DEBUG: Recent deposits found, showing first few:");
@@ -536,20 +560,32 @@ export default function App() {
           // Get unique referral count by checking deposit events
           try {
             console.log("🔍 DEBUG: Searching for Deposited events with account as referrer:", account);
-            const depositFilter = contract.filters.Deposited(null, null, account)
-            const depositEvents = await contract.queryFilter(depositFilter, -200000) // Search more blocks
+            const depositFilter = contract.filters.Deposited(null, null, account);
+            
+            const depositEvents = await queryEventsWithRetry(contract, depositFilter, [-20000, -8000, -3000]);
             console.log("🔍 DEBUG: Found deposit events:", depositEvents.length);
-            depositEvents.forEach((event, i) => {
-              console.log(`🔍 DEBUG: Event ${i}:`, {
-                user: event.args.user,
-                amount: formatEther(event.args.amount), 
-                referrer: event.args.referrer,
+            
+            if (depositEvents.length > 0) {
+              depositEvents.slice(0, 3).forEach((event, i) => {
+                console.log(`🔍 DEBUG: Event ${i}:`, {
+                  user: event.args.user,
+                  amount: formatEther(event.args.amount), 
+                  referrer: event.args.referrer,
+                });
               });
-            });
+              if (depositEvents.length > 3) {
+                console.log(`🔍 DEBUG: ... and ${depositEvents.length - 3} more events`);
+              }
+            }
+            
             const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))]
             setUniqueReferralCount(uniqueReferees.length)
             console.log("Unique referrals:", uniqueReferees.length);
-            console.log("Unique referee addresses:", uniqueReferees);
+            if (uniqueReferees.length > 0 && uniqueReferees.length <= 5) {
+              console.log("Unique referee addresses:", uniqueReferees);
+            } else if (uniqueReferees.length > 5) {
+              console.log("Unique referee addresses:", uniqueReferees.slice(0, 3), `... and ${uniqueReferees.length - 3} more`);
+            }
           } catch (eventError) {
             console.warn("Error fetching unique referral count:", eventError);
             setUniqueReferralCount(0);
