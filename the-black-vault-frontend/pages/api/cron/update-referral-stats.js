@@ -248,8 +248,13 @@ const updateDefaultReferrerStats = async (contract) => {
     };
 
     // Store in Redis with 25 hour expiry (longer than daily cron interval)
+    // Write to both lowercase and original-case keys for compatibility
+    const keyOriginal = `user-referrals:${DEFAULT_REFERRER}`;
+    const keyLower = `user-referrals:${DEFAULT_REFERRER.toLowerCase()}`;
     await redis.set('referral-stats:default', stats, { ex: 90000 });
-    console.log("✅ CRON: Default referrer stats updated");
+    await redis.set(keyOriginal, stats, { ex: 90000 });
+    await redis.set(keyLower, stats, { ex: 90000 });
+    console.log("✅ CRON: Default referrer stats updated for both cases");
     return stats;
   } catch (error) {
     console.error("❌ CRON: Error updating default referrer stats:", error);

@@ -58,16 +58,27 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Valid account address required' });
   }
 
-  // Cache key for user referral data
-  const cacheKey = `user-referrals:${account.toLowerCase()}`;
-  
+  // Cache keys for user referral data (both cases)
+  const cacheKeyLower = `user-referrals:${account.toLowerCase()}`;
+  const cacheKeyOriginal = `user-referrals:${account}`;
+
   try {
-    // Try to get cached result first (shorter cache time for user data)
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      console.log("🔍 USER-API: Returning cached user referral data for", account);
+    // Try to get cached result from both keys (prefer original-case if both exist and are different)
+    const [cachedLower, cachedOriginal] = await Promise.all([
+      redis.get(cacheKeyLower),
+      redis.get(cacheKeyOriginal)
+    ]);
+    if (cachedOriginal) {
+      console.log("🔍 USER-API: Returning cached user referral data for (original-case)", account);
       return res.status(200).json({ 
-        result: cached,
+        result: cachedOriginal,
+        cached: true,
+        timestamp: new Date().toISOString()
+      });
+    } else if (cachedLower) {
+      console.log("🔍 USER-API: Returning cached user referral data for (lowercase)", account);
+      return res.status(200).json({ 
+        result: cachedLower,
         cached: true,
         timestamp: new Date().toISOString()
       });
@@ -157,10 +168,13 @@ export default async function handler(req, res) {
       lastUpdated: new Date().toISOString()
     };
 
-    // Cache the result for 3 minutes (180 seconds)
+    // Cache the result for 3 minutes (180 seconds) to both keys
     try {
-      await redis.set(cacheKey, resultData, { ex: 180 });
-      console.log("🔍 USER-API: Cached user referral data for 3 minutes");
+      await Promise.all([
+        redis.set(cacheKeyLower, resultData, { ex: 180 }),
+        redis.set(cacheKeyOriginal, resultData, { ex: 180 })
+      ]);
+      console.log("🔍 USER-API: Cached user referral data for 3 minutes to both keys");
     } catch (e) {
       console.warn("⚠️ USER-API: Cache write error:", e.message);
       // Continue anyway
