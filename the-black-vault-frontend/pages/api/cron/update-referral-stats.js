@@ -107,6 +107,8 @@ const updateDefaultReferrerStats = async (contract) => {
     if (!provider) {
       console.warn("⚠️ CRON: Contract provider undefined, creating new provider");
       provider = new ethers.JsonRpcProvider(RPC_URL);
+      // Recreate contract with new provider
+      contract = new ethers.Contract(CONTRACT_ADDRESS, BLACK_VAULT_ABI, provider);
     }
     
     // First test - get current block number to verify connection
@@ -185,29 +187,72 @@ const updateDefaultReferrerStats = async (contract) => {
     if (allDepositEvents.length === 0) {
       fallbackUsed = true;
       console.log("🔍 CRON: No events found, scanning raw logs for both event signatures...");
-      const topics = [
-        getEventTopic("Deposited"),
-        getEventTopic("DepositWithReferrer")
-      ];
-      // Use recent blocks for performance
-      const fromBlock = Math.max(0, currentBlock - 20000);
-      const logs = await provider.getLogs({
-        address: CONTRACT_ADDRESS,
-        fromBlock,
-        toBlock: 'latest',
-        topics: [topics]
-      });
-      console.log(`🔍 CRON: Found ${logs.length} raw logs for deposit events`);
-      // Decode logs
-      allDepositEvents = logs.map(log => {
-        try {
-          const parsed = contract.interface.parseLog(log);
-          return { ...log, args: parsed.args, eventName: parsed.name };
-        } catch (e) {
-          return null;
-        }
-      }).filter(Boolean);
-      console.log(`🔍 CRON: Decoded ${allDepositEvents.length} deposit events from raw logs`);
+      try {
+        const depositedTopic = getEventTopic("Deposited");
+        const depositWithRefTopic = getEventTopic("DepositWithReferrer");
+        console.log("🔍 CRON: Event topics:", { depositedTopic, depositWithRefTopic });
+        
+        // Use recent blocks for performance
+        const fromBlock = Math.max(0, currentBlock - 20000);
+        console.log(`🔍 CRON: Scanning logs from block ${fromBlock} to latest`);
+        
+        const logs = await provider.getLogs({
+          address: CONTRACT_ADDRESS,
+          fromBlock,
+          toBlock: 'latest',
+          topics: [[depositedTopic, depositWithRefTopic]] // Use OR logic for topics
+        });
+        console.log(`🔍 CRON: Found ${logs.length} raw logs for deposit events`);
+        
+        // Decode logs
+        allDepositEvents = logs.map(log => {
+          try {
+            const parsed = contract.interface.parseLog(log);
+            return { ...log, args: parsed.args, eventName: parsed.name };
+          } catch (e) {
+            console.warn("⚠️ CRON: Failed to parse log:", e.message);
+            return null;
+          }
+        }).filter(Boolean);
+        console.log(`🔍 CRON: Decoded ${allDepositEvents.length} deposit events from raw logs`);
+      } catch (rawLogError) {
+        console.error("❌ CRON: Raw log scanning failed:", rawLogError.message);
+      }
+    }
+    // If STILL no events, try using a simple block range approach from deployment
+    if (allDepositEvents.length === 0) {
+      console.log("🔍 CRON: Final fallback - trying from known deployment block range...");
+      try {
+        // Use a safe deployment block from a few weeks ago
+        const deploymentBlock = 42296467;
+        const recentBlock = Math.max(deploymentBlock, currentBlock - 100000); // Last 100k blocks or from deployment
+        
+        console.log(`🔍 CRON: Trying from block ${recentBlock} to current (${currentBlock})`);
+        
+        // Try with simpler topic filter - just get ALL contract events and filter later
+        const allLogs = await provider.getLogs({
+          address: CONTRACT_ADDRESS,
+          fromBlock: recentBlock,
+          toBlock: 'latest'
+        });
+        console.log(`🔍 CRON: Found ${allLogs.length} total contract logs`);
+        
+        // Parse and filter for deposit events
+        allDepositEvents = allLogs.map(log => {
+          try {
+            const parsed = contract.interface.parseLog(log);
+            if (parsed.name === 'Deposited' || parsed.name === 'DepositWithReferrer') {
+              return { ...log, args: parsed.args, eventName: parsed.name };
+            }
+            return null;
+          } catch (e) {
+            return null;
+          }
+        }).filter(Boolean);
+        console.log(`🔍 CRON: Found ${allDepositEvents.length} deposit events after filtering`);
+      } catch (finalError) {
+        console.error("❌ CRON: Final fallback also failed:", finalError.message);
+      }
     }
 
     // Filter events where the referrer is the DEFAULT_REFERRER
@@ -267,6 +312,12 @@ const updateUserStats = async (contract, users) => {
   const userStats = {};
   const batchSize = 10; // Process users in batches to avoid overwhelming RPC
   
+  // Ensure users is an array
+  if (!Array.isArray(users) || users.length === 0) {
+    console.log("🔍 CRON: No users to process for user stats");
+    return userStats;
+  }
+  
   for (let i = 0; i < users.length; i += batchSize) {
     const batch = users.slice(i, i + batchSize);
     console.log(`🔍 CRON: Processing user batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(users.length/batchSize)}`);
@@ -317,9 +368,11 @@ const updateUserStats = async (contract, users) => {
   }
   
   // Store all user stats in Redis with 25 hour expiry (longer than daily cron interval)
-  if (Object.keys(userStats).length > 0) {
+  if (userStats && Object.keys(userStats).length > 0) {
     await redis.set('referral-stats:users', userStats, { ex: 90000 });
     console.log(`✅ CRON: Updated stats for ${Object.keys(userStats).length} users`);
+  } else {
+    console.log("🔍 CRON: No user stats to store");
   }
   
   return userStats;
@@ -342,8 +395,20 @@ export default async function handler(req, res) {
     console.log("🚀 CRON: Starting referral stats update job...");
     const startTime = Date.now();
     
-    // Initialize provider and contract
+    // Initialize provider and contract with error handling
+    console.log("🔗 CRON: Initializing provider and contract...");
     const provider = new ethers.JsonRpcProvider(RPC_URL);
+    
+    // Test provider connection first
+    try {
+      const network = await provider.getNetwork();
+      const blockNumber = await provider.getBlockNumber();
+      console.log(`🔗 CRON: Connected to network ${network.name} (chainId: ${network.chainId}), block: ${blockNumber}`);
+    } catch (providerError) {
+      console.error("❌ CRON: Provider connection failed:", providerError.message);
+      throw new Error(`Provider connection failed: ${providerError.message}`);
+    }
+    
     const contract = new ethers.Contract(CONTRACT_ADDRESS, BLACK_VAULT_ABI, provider);
     
     // Get active users and referrers
@@ -357,9 +422,9 @@ export default async function handler(req, res) {
     
     // Store summary stats
     const summary = {
-      totalUsers: users.length,
-      totalReferrers: referrers.length,
-      processedUsers: Object.keys(userStats).length,
+      totalUsers: users ? users.length : 0,
+      totalReferrers: referrers ? referrers.length : 0,
+      processedUsers: userStats ? Object.keys(userStats).length : 0,
       defaultReferrerProcessed: !!defaultStats,
       lastRun: new Date().toISOString(),
       executionTime: Date.now() - startTime
