@@ -255,9 +255,11 @@ const updateDefaultReferrerStats = async (contract) => {
       }
     }
 
+    // Prioritize Deposited events for processing
+    const depositEvents = allDepositEvents.filter(event => event.eventName === 'Deposited');
+
     // Filter events where the referrer is the DEFAULT_REFERRER
-    // This includes both explicit referrals AND automatic default assignments
-    const defaultReferrerEvents = allDepositEvents.filter(event => 
+    const defaultReferrerEvents = depositEvents.filter(event => 
       event.args && event.args.referrer && event.args.referrer.toLowerCase() === DEFAULT_REFERRER.toLowerCase()
     );
 
@@ -265,7 +267,7 @@ const updateDefaultReferrerStats = async (contract) => {
     const uniqueDefaultReferees = [...new Set(defaultReferrerEvents.map(event => event.args.user.toLowerCase()))];
 
     // Print sample addresses for debug
-    console.log(`🔍 CRON: Found ${allDepositEvents.length} total deposit events (merged)`);
+    console.log(`🔍 CRON: Found ${depositEvents.length} total deposit events`);
     console.log(`🔍 CRON: Found ${defaultReferrerEvents.length} events using default referrer`);
     console.log(`🔍 CRON: Found ${uniqueDefaultReferees.length} unique users using default referrer`);
     if (uniqueDefaultReferees.length > 0) {
