@@ -498,7 +498,8 @@ export default function App() {
           const depositEvents = await queryEventsWithRetry(vault, depositFilter, [-20000, -8000, -3000]);
           console.log("🔍 DEBUG: Default referrer - total deposit events found:", depositEvents.length);
           
-          // Filter for deposits that used default referrer OR zero address (which automatically use default referrer)
+          // Filter for deposits that benefited the default referrer
+          // This includes: deposits without referral (auto-assigned to default) AND explicit default referrer usage
           const defaultReferrerEvents = depositEvents.filter(event => {
             const referrer = event.args?.referrer;
             const isDefaultReferrer = referrer && referrer.toLowerCase() === DEFAULT_REFERRER.toLowerCase();
@@ -508,24 +509,62 @@ export default function App() {
           
           console.log("🔍 DEBUG: Default referrer - events using default referrer or zero address:", defaultReferrerEvents.length);
           
-          // Get unique users who deposited without a referral (and thus got default referrer rewards)
-          const uniqueDefaultBeneficiaries = [...new Set(defaultReferrerEvents.map(event => event.args.user.toLowerCase()))];
+          // More importantly: find ALL deposits and identify which users made deposits without using ANY referral
+          // We need to find users who have made deposits where the referrer was assigned as default (not chosen by user)
+          console.log("🔍 DEBUG: Analyzing deposit patterns to find no-referral users...");
           
-          console.log("🔍 DEBUG: Default referrer - unique users who got default referrer rewards:", uniqueDefaultBeneficiaries.length);
+          // Group deposits by user to analyze their referral patterns
+          const userDepositPatterns = {};
+          depositEvents.forEach(event => {
+            const user = event.args?.user?.toLowerCase();
+            const referrer = event.args?.referrer?.toLowerCase();
+            
+            if (user && referrer) {
+              if (!userDepositPatterns[user]) {
+                userDepositPatterns[user] = {
+                  totalDeposits: 0,
+                  defaultReferrerDeposits: 0,
+                  otherReferrerDeposits: 0,
+                  referrers: new Set()
+                };
+              }
+              
+              userDepositPatterns[user].totalDeposits++;
+              userDepositPatterns[user].referrers.add(referrer);
+              
+              const isDefaultOrZero = referrer === DEFAULT_REFERRER.toLowerCase() || 
+                                     referrer === ethers.ZeroAddress.toLowerCase() || 
+                                     referrer === "0x0000000000000000000000000000000000000000";
+              
+              if (isDefaultOrZero) {
+                userDepositPatterns[user].defaultReferrerDeposits++;
+              } else {
+                userDepositPatterns[user].otherReferrerDeposits++;
+              }
+            }
+          });
           
-          // Log some examples for debugging
-          if (defaultReferrerEvents.length > 0) {
-            console.log("🔍 DEBUG: Sample default referrer events:", defaultReferrerEvents.slice(0, 3).map(e => ({
-              user: e.args?.user,
-              referrer: e.args?.referrer,
-              amount: e.args?.amount?.toString(),
-              blockNumber: e.blockNumber
-            })));
-          }
+          // Find users who made deposits without referrals (deposits that used default referrer)
+          const usersWithoutReferralDeposits = Object.keys(userDepositPatterns).filter(user => 
+            userDepositPatterns[user].defaultReferrerDeposits > 0
+          );
+          
+          console.log("🔍 DEBUG: Users who made deposits without referral links:", usersWithoutReferralDeposits.length);
+          console.log("🔍 DEBUG: User deposit patterns:", Object.fromEntries(
+            Object.entries(userDepositPatterns).slice(0, 3).map(([user, pattern]) => [
+              user.slice(0, 10) + '...', 
+              {
+                total: pattern.totalDeposits,
+                defaultRef: pattern.defaultReferrerDeposits,
+                otherRef: pattern.otherReferrerDeposits,
+                referrerCount: pattern.referrers.size
+              }
+            ])
+          ));
           
           setDefaultReferrerStats({
             ...basicStats,
-            uniqueReferrals: uniqueDefaultBeneficiaries.length
+            uniqueReferrals: usersWithoutReferralDeposits.length
           });
           
           console.log("✅ Successfully used event querying for default referrer stats");

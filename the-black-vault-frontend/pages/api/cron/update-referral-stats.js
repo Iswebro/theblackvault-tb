@@ -310,12 +310,62 @@ const updateDefaultReferrerStats = async (contract) => {
     
     console.log(`🔍 CRON: Event breakdown - Deposited: ${depositedEventsByType.length}, DepositWithReferrer: ${depositWithRefEventsByType.length}`);
 
-    // Process BOTH event types for default referrer analysis
+    // Process BOTH event types for default referrer analysis with improved logic
     const allDefaultReferrerEvents = allDepositEvents.filter(event => 
-      event.args && event.args.referrer && event.args.referrer.toLowerCase() === DEFAULT_REFERRER.toLowerCase()
+      event.args && event.args.referrer && (
+        event.args.referrer.toLowerCase() === DEFAULT_REFERRER.toLowerCase() ||
+        event.args.referrer === ethers.ZeroAddress ||
+        event.args.referrer.toLowerCase() === "0x0000000000000000000000000000000000000000"
+      )
     );
     
     console.log(`🔍 CRON: Found ${allDefaultReferrerEvents.length} events using default referrer from ALL event types`);
+    
+    // Improved logic: analyze user deposit patterns to find users who made deposits without referrals
+    console.log("🔍 CRON: Analyzing deposit patterns to identify no-referral users...");
+    
+    const userDepositPatterns = {};
+    allDepositEvents.forEach(event => {
+      const user = event.args?.user?.toLowerCase();
+      const referrer = event.args?.referrer?.toLowerCase();
+      
+      if (user && referrer) {
+        if (!userDepositPatterns[user]) {
+          userDepositPatterns[user] = {
+            totalDeposits: 0,
+            defaultReferrerDeposits: 0,
+            otherReferrerDeposits: 0,
+            referrers: new Set()
+          };
+        }
+        
+        userDepositPatterns[user].totalDeposits++;
+        userDepositPatterns[user].referrers.add(referrer);
+        
+        const isDefaultOrZero = referrer === DEFAULT_REFERRER.toLowerCase() || 
+                               referrer === ethers.ZeroAddress.toLowerCase() || 
+                               referrer === "0x0000000000000000000000000000000000000000";
+        
+        if (isDefaultOrZero) {
+          userDepositPatterns[user].defaultReferrerDeposits++;
+        } else {
+          userDepositPatterns[user].otherReferrerDeposits++;
+        }
+      }
+    });
+    
+    // Find users who made deposits without referrals (deposits that used default referrer)
+    const usersWithoutReferralDeposits = Object.keys(userDepositPatterns).filter(user => 
+      userDepositPatterns[user].defaultReferrerDeposits > 0
+    );
+    
+    console.log(`🔍 CRON: Found ${usersWithoutReferralDeposits.length} unique users who made deposits without referrals`);
+    
+    // Log pattern analysis for debugging
+    console.log("🔍 CRON: Sample user deposit patterns:");
+    Object.entries(userDepositPatterns).slice(0, 3).forEach(([user, pattern]) => {
+      console.log(`  User ${user.slice(0, 10)}...: ${pattern.totalDeposits} total, ${pattern.defaultReferrerDeposits} no-referral, ${pattern.otherReferrerDeposits} with-referral`);
+    });
     
     // Log details of default referrer events
     if (allDefaultReferrerEvents.length > 0) {
@@ -329,8 +379,8 @@ const updateDefaultReferrerStats = async (contract) => {
       })));
     }
 
-    // Get unique users who used default referrer (from ALL event types)
-    const uniqueDefaultReferees = [...new Set(allDefaultReferrerEvents.map(event => event.args.user.toLowerCase()))];
+    // Use the improved unique count
+    const uniqueDefaultReferees = usersWithoutReferralDeposits;
 
     // Print comprehensive debug information
     console.log(`🔍 CRON: Found ${allDepositEvents.length} total deposit events`);
