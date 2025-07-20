@@ -441,7 +441,14 @@ export default function App() {
           return;
         }
       } else {
-        console.warn("⚠️ Cached referral stats not available, using fallback");
+        console.warn("⚠️ Cached referral stats not available (API returned status:", response.status, "), using fallback");
+        // Log more details about the API failure
+        try {
+          const errorData = await response.text();
+          console.warn("⚠️ API error details:", errorData);
+        } catch (e) {
+          console.warn("⚠️ Could not read error response");
+        }
       }
       
       // Fallback only if cached data not available (background job hasn't run)
@@ -553,7 +560,14 @@ export default function App() {
                 userReferralDataFetched = true;
               }
             } else {
-              console.warn("⚠️ User not found in cached data, using direct contract call");
+              console.warn("⚠️ User not found in cached data (API returned status:", userResponse.status, "), using direct contract call");
+              // Log API error details
+              try {
+                const errorData = await userResponse.text();
+                console.warn("⚠️ User API error details:", errorData);
+              } catch (e) {
+                console.warn("⚠️ Could not read user API error response");
+              }
             }
           } catch (userApiError) {
             console.warn("⚠️ Cached user referral API error, using direct contract call:", userApiError.message);
