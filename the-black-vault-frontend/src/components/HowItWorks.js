@@ -15,7 +15,7 @@ export default function HowItWorks() {
       icon: "🔗",
       title: "Referral System",
       description:
-        "Invite new users and earn a 10% referral bonus on their first 3 deposits only.",
+        "Invite new users and earn a 10% referral bonus on their first 3 deposits.",
     },
     {
       icon: "💰",
@@ -31,13 +31,19 @@ export default function HowItWorks() {
     {
       icon: "💳",
       title: "Flexible Withdrawals",
-      description: "You can now withdraw any amount of your available rewards at any time. No more activation or queued states.",
+      description: "You can now withdraw any amount of your available rewards at any time.",
     },
     {
       icon: "🛡️",
       title: "Fair Play & Security",
       description:
         "We actively monitor user activity to ensure fair play. Any abuse or exploitation detected will not be tolerated, maintaining a secure environment for all.",
+    },
+    {
+      icon: "❤️",
+      title: "Thank You, Community!",
+      description:
+        "This project is made with love and gratitude for our amazing community. Thank you for your trust and support. Black Vault is built to last!",
     },
   ]
 
