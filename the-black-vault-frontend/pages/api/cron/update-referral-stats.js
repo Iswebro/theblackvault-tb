@@ -116,95 +116,74 @@ const updateDefaultReferrerStats = async (contract) => {
       console.error("❌ CRON: Contract connection test failed:", contractError.message);
     }
     
-    const allDepositFilter = contract.filters.Deposited();
-    console.log("🔍 CRON: Deposit filter created:", allDepositFilter);
-    console.log("🔍 CRON: Deposit filter topics:", allDepositFilter.topics);
+    // Query both Deposited and DepositWithReferrer events, merge results
+    const depositedFilter = contract.filters.Deposited();
+    const depositWithRefFilter = contract.filters.DepositWithReferrer();
+    console.log("🔍 CRON: Deposit filter created:", depositedFilter);
+    console.log("🔍 CRON: DepositWithReferrer filter created:", depositWithRefFilter);
     console.log("🔍 CRON: Contract interface events:", Object.keys(contract.interface.events));
-    
-    let allDepositEvents = await queryEventsWithRetry(contract, allDepositFilter, [-10000, -25000, -50000, -100000]);
-    
-    // If no events found with Deposited, try alternative event names
-    if (allDepositEvents.length === 0) {
-      console.log("🔍 CRON: No Deposited events found, trying alternative event names...");
-      try {
-        const altFilter = contract.filters.DepositWithReferrer();
-        allDepositEvents = await queryEventsWithRetry(contract, altFilter, [-10000, -25000, -50000, -100000]);
-        console.log(`🔍 CRON: Found ${allDepositEvents.length} DepositWithReferrer events`);
-      } catch (altError) {
-        console.warn("⚠️ CRON: Alternative event query also failed:", altError.message);
-      }
-    }
-    
-    // If still no events, try getting events from contract deployment to latest block
+
+    // Query both event types in recent blocks
+    let depositedEvents = await queryEventsWithRetry(contract, depositedFilter, [-10000, -25000, -50000, -100000]);
+    let depositWithRefEvents = await queryEventsWithRetry(contract, depositWithRefFilter, [-10000, -25000, -50000, -100000]);
+
+    // Merge all events
+    let allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
+    console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events, ${depositWithRefEvents.length} DepositWithReferrer events, merged total: ${allDepositEvents.length}`);
+
+    // If still no events, try broader range from deployment block
     if (allDepositEvents.length === 0) {
       console.log("🔍 CRON: Trying broader range from block 42296467 (approximate contract deployment)...");
       try {
         const fromBlock = 42296467; // Approximate deployment block
-        allDepositEvents = await contract.queryFilter(allDepositFilter, fromBlock);
+        depositedEvents = await contract.queryFilter(depositedFilter, fromBlock);
+        depositWithRefEvents = await contract.queryFilter(depositWithRefFilter, fromBlock);
+        allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
         console.log(`🔍 CRON: Found ${allDepositEvents.length} events from deployment block`);
       } catch (broadError) {
         console.warn("⚠️ CRON: Broad range query also failed:", broadError.message);
       }
     }
-    
-    // If STILL no events, try even more recent blocks (last 10000 blocks - about 8 hours on BSC)
+
+    // If STILL no events, try even more recent blocks (last 10000 blocks)
     if (allDepositEvents.length === 0) {
       console.log("🔍 CRON: Trying very recent blocks (last 10000 - about 8 hours on BSC)...");
       try {
-        allDepositEvents = await contract.queryFilter(allDepositFilter, -10000);
+        depositedEvents = await contract.queryFilter(depositedFilter, -10000);
+        depositWithRefEvents = await contract.queryFilter(depositWithRefFilter, -10000);
+        allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
         console.log(`🔍 CRON: Found ${allDepositEvents.length} events in last 10000 blocks`);
-        
-        // If still nothing, try with a simple topic-based query
-        if (allDepositEvents.length === 0) {
-          console.log("🔍 CRON: Trying raw logs query for last 5000 blocks...");
-          const provider = contract.provider;
-          const currentBlock = await provider.getBlockNumber();
-          const logs = await provider.getLogs({
-            address: CONTRACT_ADDRESS,
-            fromBlock: currentBlock - 5000,
-            toBlock: 'latest'
-          });
-          console.log(`🔍 CRON: Found ${logs.length} raw logs in last 5000 blocks`);
-          
-          // Try to decode any logs we find
-          logs.forEach((log, index) => {
-            try {
-              const parsed = contract.interface.parseLog(log);
-              console.log(`🔍 CRON: Log ${index}: ${parsed.name}`, parsed.args);
-            } catch (parseError) {
-              console.log(`🔍 CRON: Could not parse log ${index}:`, log.topics);
-            }
-          });
-        }
       } catch (recentError) {
         console.warn("⚠️ CRON: Recent blocks query also failed:", recentError.message);
       }
     }
-    
-    // Last resort: try to get ALL events without block filtering (very expensive but thorough)
+
+    // Last resort: try to get ALL events without block filtering
     if (allDepositEvents.length === 0) {
-      console.log("🔍 CRON: Last resort - trying to get ALL Deposited events (no block limit)...");
+      console.log("🔍 CRON: Last resort - trying to get ALL deposit events (no block limit)...");
       try {
-        allDepositEvents = await contract.queryFilter(allDepositFilter);
+        depositedEvents = await contract.queryFilter(depositedFilter);
+        depositWithRefEvents = await contract.queryFilter(depositWithRefFilter);
+        allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
         console.log(`🔍 CRON: Found ${allDepositEvents.length} events with no block limit`);
       } catch (allEventsError) {
         console.warn("⚠️ CRON: All events query failed:", allEventsError.message);
       }
     }
-    
+
     // Filter events where the referrer is the DEFAULT_REFERRER
     // This includes both explicit referrals AND automatic default assignments
     const defaultReferrerEvents = allDepositEvents.filter(event => 
-      event.args.referrer.toLowerCase() === DEFAULT_REFERRER.toLowerCase()
+      event.args.referrer && event.args.referrer.toLowerCase() === DEFAULT_REFERRER.toLowerCase()
     );
-    
+
     // Get unique users who used default referrer (either explicitly or automatically)
     const uniqueDefaultReferees = [...new Set(defaultReferrerEvents.map(event => event.args.user.toLowerCase()))];
-    
-    console.log(`🔍 CRON: Found ${allDepositEvents.length} total deposit events`);
+
+    console.log(`🔍 CRON: Found ${allDepositEvents.length} total deposit events (merged)`);
     console.log(`🔍 CRON: Found ${defaultReferrerEvents.length} events using default referrer`);
     console.log(`🔍 CRON: Found ${uniqueDefaultReferees.length} unique users using default referrer`);
-    
+
     const stats = {
       contractAddress: DEFAULT_REFERRER,
       totalRewards: ethers.formatEther(defaultReferralData[0] || 0),
@@ -221,11 +200,10 @@ const updateDefaultReferrerStats = async (contract) => {
         uniqueUsers: uniqueDefaultReferees.length
       }
     };
-    
+
     // Store in Redis with 25 hour expiry (longer than daily cron interval)
     await redis.set('referral-stats:default', stats, { ex: 90000 });
     console.log("✅ CRON: Default referrer stats updated");
-    
     return stats;
   } catch (error) {
     console.error("❌ CRON: Error updating default referrer stats:", error);
