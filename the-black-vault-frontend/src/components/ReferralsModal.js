@@ -41,6 +41,99 @@ export default function ReferralsModal({
     return [];
   };
 
+  // Fetch detailed list of users who made deposits without referrals (for default referrer)
+  const fetchDefaultReferrerDetailedList = async () => {
+    if (!contract) return;
+    
+    console.log("🔍 DEBUG: Fetching detailed no-referral deposits list...");
+    
+    try {
+      // Get all deposit events to find users who deposited without referrals
+      const depositFilter = contract.filters.Deposited();
+      
+      // Use the same retry logic as the main app
+      const queryEventsWithRetry = async (filter, blockRanges = [-50000, -25000, -10000]) => {
+        for (let i = 0; i < blockRanges.length; i++) {
+          const blockRange = blockRanges[i];
+          try {
+            console.log(`🔍 DEBUG: Modal trying ${Math.abs(blockRange)}k block range...`);
+            if (i > 0) {
+              await new Promise(resolve => setTimeout(resolve, 500 * i));
+            }
+            const events = await contract.queryFilter(filter, blockRange);
+            console.log(`🔍 DEBUG: Modal found ${events.length} events with ${Math.abs(blockRange)}k range`);
+            return events;
+          } catch (error) {
+            console.warn(`⚠️ DEBUG: Modal event query failed with ${Math.abs(blockRange)}k range:`, error.message);
+            if (i === blockRanges.length - 1) {
+              return [];
+            }
+          }
+        }
+        return [];
+      };
+      
+      let depositEvents = await queryEventsWithRetry(depositFilter, [-50000, -25000, -10000]);
+      
+      // If no recent events, try from deployment
+      if (depositEvents.length === 0) {
+        console.log("🔍 DEBUG: Modal no recent events, trying from deployment...");
+        try {
+          depositEvents = await contract.queryFilter(depositFilter, 42296467);
+          console.log(`🔍 DEBUG: Modal found ${depositEvents.length} historical events`);
+        } catch (error) {
+          console.warn("⚠️ DEBUG: Modal historical query failed:", error.message);
+        }
+      }
+      
+      // Filter events for deposits without referrals (zero address or default referrer)
+      const DEFAULT_REFERRER = '0x706961C676FE743C34A867437661D13E16ADCbEc';
+      const noReferralEvents = depositEvents.filter(event => {
+        const referrer = event.args?.referrer?.toLowerCase();
+        return referrer === '0x0000000000000000000000000000000000000000' || 
+               referrer === DEFAULT_REFERRER.toLowerCase();
+      });
+      
+      console.log(`🔍 DEBUG: Modal found ${noReferralEvents.length} no-referral deposit events`);
+      
+      // Get unique users who made deposits without referrals
+      const uniqueNoReferralUsers = [...new Set(noReferralEvents.map(event => event.args.user.toLowerCase()))];
+      console.log(`🔍 DEBUG: Modal found ${uniqueNoReferralUsers.length} unique no-referral users`);
+      
+      // Get bonus info for each user
+      const maxUsersToProcess = 50; // Limit to prevent excessive RPC calls
+      const usersToProcess = uniqueNoReferralUsers.slice(0, maxUsersToProcess);
+      
+      const noReferralUserData = await Promise.all(
+        usersToProcess.map(async (userAddress) => {
+          try {
+            // For no-referral users, we check how many bonuses they would have gotten from default referrer
+            const bonusInfo = await contract.getReferralBonusInfo(DEFAULT_REFERRER, userAddress);
+            return {
+              address: userAddress,
+              bonusesUsed: parseInt(bonusInfo.used.toString()),
+              bonusesRemaining: parseInt(bonusInfo.remaining.toString()),
+            };
+          } catch (error) {
+            console.warn(`⚠️ DEBUG: Modal error getting bonus info for ${userAddress}:`, error.message);
+            return {
+              address: userAddress,
+              bonusesUsed: 0,
+              bonusesRemaining: 3,
+            };
+          }
+        })
+      );
+      
+      console.log("🔍 DEBUG: Modal no-referral user data:", noReferralUserData);
+      setReferrals(noReferralUserData);
+      
+    } catch (error) {
+      console.error("❌ DEBUG: Modal error fetching no-referral detailed list:", error);
+      setReferrals([]);
+    }
+  };
+
   useEffect(() => {
     if (isOpen && contract && account) {
       setCurrentPage(1) // Reset to page 1 when modal opens
@@ -84,10 +177,18 @@ export default function ReferralsModal({
             setUniqueReferrals(stats.uniqueReferrals || 0);
             
             // For default referrer, show the "no referral" deposits
-            setReferees([]); // These are "no referral" users, we don't have individual details yet
+            setReferrals([]); // These are "no referral" users, we'll fetch them separately
             
             console.log("🔍 DEBUG: Modal default referrer stats set successfully");
             referralDataFetched = true;
+            
+            // Now fetch the detailed list of users who deposited without referrals
+            try {
+              console.log("🔍 DEBUG: Fetching detailed no-referral users list...");
+              await fetchDefaultReferrerDetailedList();
+            } catch (detailError) {
+              console.warn("⚠️ DEBUG: Failed to fetch detailed no-referral list:", detailError.message);
+            }
             
           } else if (!isDefaultReferrer && apiData.result && apiData.result.contractData) {
             // Regular user case - use the user-referrals data
@@ -105,9 +206,9 @@ export default function ReferralsModal({
             
             // For regular users, show their referee details
             if (apiData.result.referrals && apiData.result.referrals.length > 0) {
-              setReferees(apiData.result.referrals);
+              setReferrals(apiData.result.referrals);
             } else {
-              setReferees([]);
+              setReferrals([]);
             }
             
             console.log("🔍 DEBUG: Modal cached stats set successfully");
