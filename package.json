@@ -31,10 +31,10 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-app-rewired start",
-    "build": "react-app-rewired build",
-    "test": "react-app-rewired test --env=jsdom",
-    "eject": "react-app-rewired eject",
+    "start": "cd the-black-vault-frontend && npm start",
+    "build": "cd the-black-vault-frontend && npm run build",
+    "dev": "cd the-black-vault-frontend && npm run dev",
+    "lint": "cd the-black-vault-frontend && npm run lint",
     "deploy:testnet": "hardhat run scripts/deploy-bsc-testnet.js --network bscTestnet",
     "deploy:mainnet": "hardhat run scripts/deploy.js --network bscMainnet"
   },
