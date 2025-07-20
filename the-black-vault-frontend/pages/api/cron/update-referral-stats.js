@@ -193,6 +193,12 @@ const updateDefaultReferrerStats = async (contract) => {
     
     console.log("🔍 CRON: Contract interface events:", contract.interface?.events ? Object.keys(contract.interface.events) : "No events found");
     console.log("🔍 CRON: Available contract filter methods:", contract.filters ? Object.keys(contract.filters) : "No filters found");
+    
+    // Debug: Let's see the exact event signatures in our ABI
+    console.log("🔍 CRON: ABI event signatures:");
+    BLACK_VAULT_ABI.filter(item => item.startsWith('event')).forEach(event => {
+      console.log(`  - ${event}`);
+    });
 
     // Query both event types in recent blocks (simplified approach)
     console.log("🔍 CRON: Starting simplified event queries...");
@@ -229,41 +235,58 @@ const updateDefaultReferrerStats = async (contract) => {
     if (allDepositEvents.length === 0) {
       console.log("🔍 CRON: No events in recent blocks, trying FULL historical range from contract deployment...");
       try {
-        const deploymentBlock = 42296467; // Contract deployment block
-        console.log(`🔍 CRON: Querying from block ${deploymentBlock} to current...`);
+        // Try multiple potential deployment blocks
+        const deploymentBlocks = [42296467, 42000000, 41000000]; // Try different blocks
+        let foundAnyEvents = false;
         
-        if (depositedFilter) {
-          console.log("🔍 CRON: Querying ALL Deposited events from deployment...");
-          depositedEvents = await contract.queryFilter(depositedFilter, deploymentBlock);
-          console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events from deployment block`);
+        for (const deploymentBlock of deploymentBlocks) {
+          if (foundAnyEvents) break;
           
-          // Log samples of found events
-          if (depositedEvents.length > 0) {
-            console.log("🔍 CRON: Sample Deposited events:", depositedEvents.slice(0, 3).map(e => ({
-              blockNumber: e.blockNumber,
-              transactionHash: e.transactionHash,
-              user: e.args?.user,
-              referrer: e.args?.referrer,
-              amount: e.args?.amount?.toString(),
-              cycle: e.args?.cycle?.toString()
-            })));
-          }
-        }
-        
-        if (depositWithRefFilter) {
-          console.log("🔍 CRON: Querying ALL DepositWithReferrer events from deployment...");
-          depositWithRefEvents = await contract.queryFilter(depositWithRefFilter, deploymentBlock);
-          console.log(`🔍 CRON: Found ${depositWithRefEvents.length} DepositWithReferrer events from deployment block`);
+          console.log(`🔍 CRON: Trying deployment block ${deploymentBlock}...`);
           
-          // Log samples of found events
-          if (depositWithRefEvents.length > 0) {
-            console.log("🔍 CRON: Sample DepositWithReferrer events:", depositWithRefEvents.slice(0, 3).map(e => ({
-              blockNumber: e.blockNumber,
-              transactionHash: e.transactionHash,
-              user: e.args?.user,
-              referrer: e.args?.referrer,
-              amount: e.args?.amount?.toString()
-            })));
+          // First, try to get ANY events from the contract to see if events exist at all
+          console.log("🔍 CRON: Checking for ANY events from this contract...");
+          try {
+            const allContractLogs = await provider.getLogs({
+              address: CONTRACT_ADDRESS,
+              fromBlock: deploymentBlock,
+              toBlock: 'latest'
+            });
+            console.log(`🔍 CRON: Found ${allContractLogs.length} total contract events from block ${deploymentBlock}`);
+            
+            if (allContractLogs.length > 0) {
+              foundAnyEvents = true;
+              // Try to parse the logs to see what events we have
+              console.log("🔍 CRON: Sample contract events:");
+              allContractLogs.slice(0, 5).forEach((log, index) => {
+                try {
+                  const parsed = contract.interface.parseLog(log);
+                  console.log(`Event ${index + 1}: ${parsed.name}`, {
+                    args: parsed.args,
+                    blockNumber: log.blockNumber,
+                    transactionHash: log.transactionHash.slice(0, 10) + '...'
+                  });
+                } catch (error) {
+                  console.log(`Event ${index + 1}: Unable to parse - Topic: ${log.topics[0]}`);
+                }
+              });
+              
+              // Now try our specific event queries from this successful block
+              if (depositedFilter) {
+                console.log("🔍 CRON: Querying ALL Deposited events from deployment...");
+                depositedEvents = await contract.queryFilter(depositedFilter, deploymentBlock);
+                console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events from deployment block`);
+              }
+              
+              if (depositWithRefFilter) {
+                console.log("🔍 CRON: Querying ALL DepositWithReferrer events from deployment...");
+                depositWithRefEvents = await contract.queryFilter(depositWithRefFilter, deploymentBlock);
+                console.log(`🔍 CRON: Found ${depositWithRefEvents.length} DepositWithReferrer events from deployment block`);
+              }
+              break; // Found events, stop trying other blocks
+            }
+          } catch (blockError) {
+            console.warn(`⚠️ CRON: Failed to query from block ${deploymentBlock}:`, blockError.message);
           }
         }
         
