@@ -90,9 +90,23 @@ const updateDefaultReferrerStats = async (contract) => {
     const provider = contract.provider;
     const currentBlock = await provider.getBlockNumber();
     console.log("🔍 CRON: Current block number:", currentBlock);
+    console.log("🔍 CRON: Network:", await provider.getNetwork());
+    
+    // Test contract connection by calling a simple view function
+    try {
+      const testCall = await contract.getUserReferralData(DEFAULT_REFERRER);
+      console.log("🔍 CRON: Contract connection test successful - default referrer data:", {
+        totalRewards: ethers.formatEther(testCall[0]),
+        totalReferrals: testCall[2].toString()
+      });
+    } catch (contractError) {
+      console.error("❌ CRON: Contract connection test failed:", contractError.message);
+    }
     
     const allDepositFilter = contract.filters.Deposited();
     console.log("🔍 CRON: Deposit filter created:", allDepositFilter);
+    console.log("🔍 CRON: Deposit filter topics:", allDepositFilter.topics);
+    console.log("🔍 CRON: Contract interface events:", Object.keys(contract.interface.events));
     
     let allDepositEvents = await queryEventsWithRetry(contract, allDepositFilter, [-200000, -100000, -50000, -25000]);
     
@@ -117,6 +131,28 @@ const updateDefaultReferrerStats = async (contract) => {
         console.log(`🔍 CRON: Found ${allDepositEvents.length} events from deployment block`);
       } catch (broadError) {
         console.warn("⚠️ CRON: Broad range query also failed:", broadError.message);
+      }
+    }
+    
+    // If STILL no events, try even more recent blocks (last 1000 blocks)
+    if (allDepositEvents.length === 0) {
+      console.log("🔍 CRON: Trying very recent blocks (last 1000)...");
+      try {
+        allDepositEvents = await contract.queryFilter(allDepositFilter, -1000);
+        console.log(`🔍 CRON: Found ${allDepositEvents.length} events in last 1000 blocks`);
+      } catch (recentError) {
+        console.warn("⚠️ CRON: Recent blocks query also failed:", recentError.message);
+      }
+    }
+    
+    // Last resort: try to get ALL events without block filtering (very expensive but thorough)
+    if (allDepositEvents.length === 0) {
+      console.log("🔍 CRON: Last resort - trying to get ALL Deposited events (no block limit)...");
+      try {
+        allDepositEvents = await contract.queryFilter(allDepositFilter);
+        console.log(`🔍 CRON: Found ${allDepositEvents.length} events with no block limit`);
+      } catch (allEventsError) {
+        console.warn("⚠️ CRON: All events query failed:", allEventsError.message);
       }
     }
     
