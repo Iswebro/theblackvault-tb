@@ -58,38 +58,70 @@ export default function ReferralsModal({
       // Try to use cached background job data first (fast and reliable)
       let referralDataFetched = false;
       try {
-        const response = await fetch(`/api/referral-stats?user=${account}`);
+        // Use different endpoint based on whether this is the default referrer
+        const apiUrl = isDefaultReferrer 
+          ? `/api/referral-stats?type=default`
+          : `/api/user-referrals?account=${account}`;
+        
+        console.log("🔍 DEBUG: Modal fetching from:", apiUrl, "isDefaultReferrer:", isDefaultReferrer);
+        
+        const response = await fetch(apiUrl);
         if (response.ok) {
           const apiData = await response.json();
           console.log("🔍 DEBUG: Modal cached referral API response:", apiData);
           
-          if (apiData.result && apiData.result.stats) {
-            const { contractData, stats, events } = apiData.result;
+          if (isDefaultReferrer && apiData.result && apiData.result.stats) {
+            // Default referrer case - use the "no referral" stats
+            const { stats } = apiData.result;
             
-            console.log("🔍 DEBUG: Modal using cached background job data:", {
-              dataSource: "background-job",
-              totalReferrals: stats.totalReferralCount,
-              uniqueReferrals: stats.uniqueReferrals,
-              eventsCount: events.length
+            console.log("🔍 DEBUG: Modal using cached default referrer data:", {
+              dataSource: "background-job-default",
+              totalReferrals: stats.totalReferrals,
+              uniqueReferrals: stats.uniqueReferrals
             });
             
-            setTotalReferralCount(stats.totalReferralCount || "0");
+            setTotalReferralCount(stats.totalReferrals || "0");
             setUniqueReferrals(stats.uniqueReferrals || 0);
             
-            // Process events into referral format
-            const referralData = events.map(event => ({
-              address: event.user,
-              bonusesUsed: 1, // Assume 1 bonus used per deposit
-              bonusesRemaining: 2, // Default remaining bonuses
-            }));
+            // For default referrer, show the "no referral" deposits
+            setReferees([]); // These are "no referral" users, we don't have individual details yet
             
-            setReferrals(referralData);
+            console.log("🔍 DEBUG: Modal default referrer stats set successfully");
+            referralDataFetched = true;
+            
+          } else if (!isDefaultReferrer && apiData.result && apiData.result.contractData) {
+            // Regular user case - use the user-referrals data
+            const { contractData, events, stats } = apiData.result;
+            
+            console.log("🔍 DEBUG: Modal using cached user referral data:", {
+              dataSource: "background-job-user",
+              totalReferrals: contractData.referredCount,
+              uniqueReferrals: stats.uniqueReferrals,
+              eventsCount: events.totalEvents
+            });
+            
+            setTotalReferralCount(contractData.referredCount || "0");
+            setUniqueReferrals(stats.uniqueReferrals || 0);
+            
+            // For regular users, show their referee details
+            if (apiData.result.referrals && apiData.result.referrals.length > 0) {
+              setReferees(apiData.result.referrals);
+            } else {
+              setReferees([]);
+            }
             
             console.log("🔍 DEBUG: Modal cached stats set successfully");
             referralDataFetched = true;
           }
+        } else if (response.status === 404) {
+          // User not found in cache - they might not have any referrals
+          console.log("🔍 DEBUG: Modal user not found in cache (likely no referrals), setting empty data");
+          setTotalReferralCount("0");
+          setUniqueReferrals(0);
+          setReferrals([]);
+          referralDataFetched = true;
         } else {
-          console.warn("⚠️ Modal: User not found in cached data, using fallback");
+          console.warn("⚠️ Modal: API error, using fallback. Status:", response.status);
         }
       } catch (cacheError) {
         console.warn("⚠️ Modal: Cached API error, using fallback:", cacheError.message);
