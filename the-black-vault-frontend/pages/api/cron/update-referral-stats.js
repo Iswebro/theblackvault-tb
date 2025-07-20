@@ -18,12 +18,13 @@ const DEFAULT_REFERRER = '0x706961C676FE743C34A867437661D13E16ADCbEc';
 // BlackVault ABI - only the parts we need
 const BLACK_VAULT_ABI = [
   "event Deposited(address indexed user, uint256 amount, address indexed referrer, uint256 cycle)",
+  "event DepositWithReferrer(address indexed user, uint256 amount, address indexed referrer)", // Alternative event name
   "function getUserReferralData(address user) view returns (uint256 totalRewards, uint256 availableRewards, uint256 referredCount, uint256 totalVolume, uint256 totalWithdrawn)",
   "function getReferralBonusInfo(address referrer, address referee) view returns (uint256 used, uint256 remaining)"
 ];
 
 // Helper function to query events with aggressive rate limiting
-const queryEventsWithRetry = async (contract, filter, blockRanges = [-50000, -30000, -15000, -8000, -3000]) => {
+const queryEventsWithRetry = async (contract, filter, blockRanges = [-200000, -100000, -50000, -25000, -10000]) => {
   for (let i = 0; i < blockRanges.length; i++) {
     const blockRange = blockRanges[i];
     try {
@@ -82,8 +83,42 @@ const updateDefaultReferrerStats = async (contract) => {
     
     // Get ALL deposit events to analyze which ones used default referrer
     console.log("🔍 CRON: Getting all deposit events to analyze default referrer usage...");
+    console.log("🔍 CRON: Contract address:", CONTRACT_ADDRESS);
+    console.log("🔍 CRON: Default referrer:", DEFAULT_REFERRER);
+    
+    // First test - get current block number to verify connection
+    const provider = contract.provider;
+    const currentBlock = await provider.getBlockNumber();
+    console.log("🔍 CRON: Current block number:", currentBlock);
+    
     const allDepositFilter = contract.filters.Deposited();
-    const allDepositEvents = await queryEventsWithRetry(contract, allDepositFilter, [-100000, -50000, -25000]);
+    console.log("🔍 CRON: Deposit filter created:", allDepositFilter);
+    
+    let allDepositEvents = await queryEventsWithRetry(contract, allDepositFilter, [-200000, -100000, -50000, -25000]);
+    
+    // If no events found with Deposited, try alternative event names
+    if (allDepositEvents.length === 0) {
+      console.log("🔍 CRON: No Deposited events found, trying alternative event names...");
+      try {
+        const altFilter = contract.filters.DepositWithReferrer();
+        allDepositEvents = await queryEventsWithRetry(contract, altFilter, [-200000, -100000, -50000]);
+        console.log(`🔍 CRON: Found ${allDepositEvents.length} DepositWithReferrer events`);
+      } catch (altError) {
+        console.warn("⚠️ CRON: Alternative event query also failed:", altError.message);
+      }
+    }
+    
+    // If still no events, try getting events from contract deployment to latest block
+    if (allDepositEvents.length === 0) {
+      console.log("🔍 CRON: Trying broader range from block 42296467 (approximate contract deployment)...");
+      try {
+        const fromBlock = 42296467; // Approximate deployment block
+        allDepositEvents = await contract.queryFilter(allDepositFilter, fromBlock);
+        console.log(`🔍 CRON: Found ${allDepositEvents.length} events from deployment block`);
+      } catch (broadError) {
+        console.warn("⚠️ CRON: Broad range query also failed:", broadError.message);
+      }
+    }
     
     // Filter events where the referrer is the DEFAULT_REFERRER
     // This includes both explicit referrals AND automatic default assignments
