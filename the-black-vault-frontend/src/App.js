@@ -573,21 +573,64 @@ export default function App() {
             console.warn("⚠️ Cached user referral API error, using direct contract call:", userApiError.message);
           }
           
-          // Fallback to direct contract call (but without expensive event queries)
+          // Fallback to direct contract call WITH event queries (same as ReferralsModal)
           if (!userReferralDataFetched) {
-            console.log("🔍 DEBUG: Fallback - using direct contract call for basic user referral data...");
+            console.log("🔍 DEBUG: Fallback - using direct contract call WITH events (same as modal)...");
             
             const referralData = await vault.getUserReferralData(account);
             console.log("🔍 DEBUG: Raw referralData:", referralData);
             
-            // Only get basic contract data, skip expensive event queries
+            // Set basic rewards and total count from contract
             setReferralRewards(formatEther(referralData[1])); // _availableRewards
-            setReferralCount(referralData[2]?.toString() || "0");
-            setUniqueReferralCount(0); // Can't get unique count without expensive queries
+            const contractReferralCount = referralData[2]?.toString() || "0";
+            setReferralCount(contractReferralCount);
             
             console.log("Referral rewards (available) from contract:", formatEther(referralData[1]));
-            console.log("Referral count from contract:", referralData[2]?.toString() || "0");
-            console.log("Unique referral count: unavailable (background job needed)");
+            console.log("Referral count from contract:", contractReferralCount);
+            
+            // Now do event queries to get unique count (same logic as ReferralsModal)
+            try {
+              console.log("🔍 DEBUG: Querying deposit events for unique referral count...");
+              
+              // Helper function for event queries with retry (same as ReferralsModal)
+              const queryEventsWithRetry = async (contract, filter, blockRanges = [-20000, -8000, -3000]) => {
+                for (let i = 0; i < blockRanges.length; i++) {
+                  const blockRange = blockRanges[i];
+                  try {
+                    console.log(`🔍 DEBUG: Trying event query with ${Math.abs(blockRange)}k block range...`);
+                    if (i > 0) {
+                      await new Promise(resolve => setTimeout(resolve, 1000 * i));
+                    }
+                    const events = await contract.queryFilter(filter, blockRange);
+                    console.log(`🔍 DEBUG: Successfully found ${events.length} events with ${Math.abs(blockRange)}k range`);
+                    return events;
+                  } catch (error) {
+                    console.warn(`⚠️ Event query failed with ${Math.abs(blockRange)}k range:`, error.message);
+                    if (i === blockRanges.length - 1) {
+                      console.error("❌ All event query attempts failed");
+                      return [];
+                    }
+                  }
+                }
+                return [];
+              };
+              
+              // Get deposit events where this user is the referrer (same as ReferralsModal)
+              const depositFilter = vault.filters.Deposited(null, null, account);
+              const depositEvents = await queryEventsWithRetry(vault, depositFilter, [-20000, -8000, -3000]);
+              console.log("🔍 DEBUG: Deposit events found:", depositEvents.length);
+              
+              // Extract unique referee addresses
+              const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))];
+              setUniqueReferralCount(uniqueReferees.length);
+              
+              console.log("🔍 DEBUG: Unique referees found:", uniqueReferees.length);
+              console.log("✅ Successfully used same logic as ReferralsModal");
+              
+            } catch (eventError) {
+              console.warn("⚠️ Event queries failed, setting unique count to 0:", eventError.message);
+              setUniqueReferralCount(0);
+            }
           }
         }
       } catch (e) {
