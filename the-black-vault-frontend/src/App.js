@@ -58,6 +58,7 @@ export default function App() {
   const [referralBonusesRemaining, setReferralBonusesRemaining] = useState(3);
   const [showReferralsModal, setShowReferralsModal] = useState(false);
   const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false);
+  const [showDefaultReferrerModal, setShowDefaultReferrerModal] = useState(false);
   const [dailyRate, setDailyRate] = useState("0");
   const [cycleStartTime, setCycleStartTime] = useState(0);
   const [cycleDuration, setCycleDuration] = useState(0);
@@ -1077,9 +1078,28 @@ export default function App() {
               <span className="reward-label">From referrals</span>
             </div>
             <div className="referral-stats">
-              <span className="referral-label">Referrals:</span>
+              <span className="referral-label">Your Referrals:</span>
               <span className="referral-value">{uniqueReferralCount}</span>
             </div>
+
+            {uniqueReferralCount === 0 && (
+              <div className="referral-note" style={{ 
+                background: "#2a2a2a", 
+                padding: "12px", 
+                borderRadius: "8px", 
+                marginBottom: "16px",
+                border: "1px solid #404040"
+              }}>
+                <div style={{ color: "#ffd700", fontSize: "14px", marginBottom: "8px" }}>
+                  💡 Testing Notes:
+                </div>
+                <div style={{ color: "#ccc", fontSize: "13px", lineHeight: "1.4" }}>
+                  • Deposits without referral codes use default referrer: <span style={{ fontFamily: "monospace", color: "#fff" }}>{formatAddress(DEFAULT_REFERRER)}</span><br/>
+                  • To see your referrals, others need to deposit using your referral link<br/>
+                  • Each user can earn max 3 referral rewards per referrer (including default)
+                </div>
+              </div>
+            )}
 
             <div className="referral-actions">
               <button className="copy-link-button" onClick={copyReferralLink}>
@@ -1088,6 +1108,15 @@ export default function App() {
               <button className="see-referrals-button" onClick={() => setShowReferralsModal(true)}>
                 See Referrals
               </button>
+              {uniqueReferralCount === 0 && (
+                <button 
+                  className="see-referrals-button" 
+                  style={{ opacity: 0.7, fontSize: "12px" }}
+                  onClick={() => setShowDefaultReferrerModal(true)}
+                >
+                  Check Default Referrer
+                </button>
+              )}
             </div>
 
             <button className="vault-button premium-button purple" onClick={withdrawReferral} disabled={txLoading}>
@@ -1244,6 +1273,17 @@ export default function App() {
         contract={contract}
         account={account}
         formatAddress={formatAddress}
+      />
+
+      {/* Default Referrer Modal for Testing */}
+      <ReferralsModal
+        isOpen={showDefaultReferrerModal}
+        onClose={() => setShowDefaultReferrerModal(false)}
+        contract={contract}
+        account={DEFAULT_REFERRER}
+        formatAddress={formatAddress}
+        title="Default Referrer Stats (Testing)"
+        subtitle={`This shows referrals that used the default referrer (${formatAddress(DEFAULT_REFERRER)}). Your test deposits appear here.`}
       />
 
       {/* Activation Help Modal removed: no longer needed in V2 */}

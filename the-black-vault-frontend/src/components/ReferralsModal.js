@@ -2,7 +2,15 @@
 
 import { useState, useEffect } from "react"
 
-export default function ReferralsModal({ isOpen, onClose, contract, account, formatAddress }) {
+export default function ReferralsModal({ 
+  isOpen, 
+  onClose, 
+  contract, 
+  account, 
+  formatAddress, 
+  title = "Your Referrals",
+  subtitle = null 
+}) {
   const [referrals, setReferrals] = useState([])
   const [loading, setLoading] = useState(false)
   const [totalReferralCount, setTotalReferralCount] = useState(0)
@@ -34,6 +42,11 @@ export default function ReferralsModal({ isOpen, onClose, contract, account, for
       // Extract unique referee addresses
       const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))]
       setUniqueReferrals(uniqueReferees.length)
+
+      if (uniqueReferees.length === 0) {
+        setReferrals([])
+        return
+      }
 
       // Get bonus info for each referee
       const referralData2 = await Promise.all(
@@ -89,12 +102,26 @@ export default function ReferralsModal({ isOpen, onClose, contract, account, for
         <div className="modal-header">
           <h3 className="modal-title">
             <span className="modal-icon">👥</span>
-            Your Referrals
+            {title}
           </h3>
           <button className="modal-close" onClick={onClose} aria-label="Close modal">
             ×
           </button>
         </div>
+
+        {subtitle && (
+          <div style={{ 
+            padding: "12px 24px 0 24px", 
+            color: "#ffd700", 
+            fontSize: "14px", 
+            textAlign: "center",
+            background: "#2a2a2a",
+            margin: "0 -24px 16px -24px",
+            borderBottom: "1px solid #404040"
+          }}>
+            {subtitle}
+          </div>
+        )}
 
         <div className="modal-body">
           {!loading && (
@@ -124,8 +151,7 @@ export default function ReferralsModal({ isOpen, onClose, contract, account, for
                   : "Share your referral link to start earning bonuses!"
                 }
               </p>
-            </div>
-          ) : (
+            </div>          ) : (
             <div className="referrals-list">
               <div className="referrals-header">
                 <span className="referral-col-address">Address</span>
@@ -137,7 +163,7 @@ export default function ReferralsModal({ isOpen, onClose, contract, account, for
                   <span className="referral-bonuses">{referral.bonusesUsed}/3</span>
                 </div>
               ))}
-              
+
               {/* Pagination controls */}
               {totalPages > 1 && (
                 <div style={{ 
@@ -180,6 +206,38 @@ export default function ReferralsModal({ isOpen, onClose, contract, account, for
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Testing helper section */}
+          {uniqueReferrals === 0 && (
+            <div style={{ 
+              marginTop: "20px", 
+              padding: "16px", 
+              background: "#1a1a1a", 
+              borderRadius: "8px", 
+              border: "1px solid #404040" 
+            }}>
+              <h4 style={{ color: "#ffd700", margin: "0 0 12px 0", fontSize: "16px" }}>
+                🔍 Testing & Development Notes
+              </h4>
+              <div style={{ color: "#ccc", fontSize: "14px", lineHeight: "1.5" }}>
+                <p style={{ margin: "0 0 8px 0" }}>
+                  <strong>Why you see 0 referrals:</strong> You've been testing deposits yourself, 
+                  which use the default referrer instead of generating referrals for your address.
+                </p>
+                <p style={{ margin: "0 0 8px 0" }}>
+                  <strong>Default referrer:</strong> <span style={{ fontFamily: "monospace", background: "#333", padding: "2px 4px", borderRadius: "3px" }}>0x706...bEc</span>
+                </p>
+                <p style={{ margin: "0 0 8px 0" }}>
+                  <strong>To see real referrals:</strong> Have others deposit using your referral link 
+                  (or test with a different wallet using your link).
+                </p>
+                <p style={{ margin: "0" }}>
+                  <strong>3-reward limit:</strong> Yes, each user can only earn max 3 referral rewards per referrer 
+                  (including the default referrer).
+                </p>
+              </div>
             </div>
           )}
         </div>
