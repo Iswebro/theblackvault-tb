@@ -102,8 +102,19 @@ const getActiveUsers = async (contract) => {
 
 // Update default referrer stats
 const updateDefaultReferrerStats = async (contract) => {
-    // Helper: get event signature topics
-    const getEventTopic = (eventName) => contract.interface.getEventTopic(eventName);
+    // Helper: get event signature topics with null check
+    const getEventTopic = (eventName) => {
+      try {
+        if (contract?.interface?.getEventTopic) {
+          return contract.interface.getEventTopic(eventName);
+        }
+        console.warn(`⚠️ CRON: Cannot get event topic for ${eventName} - interface not available`);
+        return null;
+      } catch (error) {
+        console.warn(`⚠️ CRON: Error getting event topic for ${eventName}:`, error.message);
+        return null;
+      }
+    };
 
   try {
     console.log("🔍 CRON: Updating default referrer stats...");
@@ -143,26 +154,39 @@ const updateDefaultReferrerStats = async (contract) => {
     
     // Query both Deposited and DepositWithReferrer events, merge results
     console.log("🔍 CRON: Creating event filters...");
+    console.log("🔍 CRON: Contract instance:", !!contract);
+    console.log("🔍 CRON: Contract interface:", !!contract.interface);
+    console.log("🔍 CRON: Contract filters:", !!contract.filters);
     
     let depositedFilter, depositWithRefFilter;
     try {
-      depositedFilter = contract.filters.Deposited();
-      console.log("✅ CRON: Deposited filter created successfully:", depositedFilter);
+      if (contract.filters && contract.filters.Deposited) {
+        depositedFilter = contract.filters.Deposited();
+        console.log("✅ CRON: Deposited filter created successfully:", depositedFilter);
+      } else {
+        console.error("❌ CRON: Deposited filter method not available on contract");
+        depositedFilter = null;
+      }
     } catch (filterError) {
       console.error("❌ CRON: Failed to create Deposited filter:", filterError.message);
       depositedFilter = null;
     }
     
     try {
-      depositWithRefFilter = contract.filters.DepositWithReferrer();
-      console.log("✅ CRON: DepositWithReferrer filter created successfully:", depositWithRefFilter);
+      if (contract.filters && contract.filters.DepositWithReferrer) {
+        depositWithRefFilter = contract.filters.DepositWithReferrer();
+        console.log("✅ CRON: DepositWithReferrer filter created successfully:", depositWithRefFilter);
+      } else {
+        console.error("❌ CRON: DepositWithReferrer filter method not available on contract");
+        depositWithRefFilter = null;
+      }
     } catch (filterError) {
       console.error("❌ CRON: Failed to create DepositWithReferrer filter:", filterError.message);
       depositWithRefFilter = null;
     }
     
-    console.log("🔍 CRON: Contract interface events:", Object.keys(contract.interface.events));
-    console.log("🔍 CRON: Available contract filter methods:", Object.keys(contract.filters));
+    console.log("🔍 CRON: Contract interface events:", contract.interface?.events ? Object.keys(contract.interface.events) : "No events found");
+    console.log("🔍 CRON: Available contract filter methods:", contract.filters ? Object.keys(contract.filters) : "No filters found");
 
     // Query both event types in recent blocks
     console.log("🔍 CRON: Starting event queries with filters...");
@@ -262,29 +286,35 @@ const updateDefaultReferrerStats = async (contract) => {
         const depositWithRefTopic = getEventTopic("DepositWithReferrer");
         console.log("🔍 CRON: Event topics:", { depositedTopic, depositWithRefTopic });
         
-        // Use recent blocks for performance
-        const fromBlock = Math.max(0, currentBlock - 20000);
-        console.log(`🔍 CRON: Scanning logs from block ${fromBlock} to latest`);
-        
-        const logs = await provider.getLogs({
-          address: CONTRACT_ADDRESS,
-          fromBlock,
-          toBlock: 'latest',
-          topics: [[depositedTopic, depositWithRefTopic]] // Use OR logic for topics
-        });
-        console.log(`🔍 CRON: Found ${logs.length} raw logs for deposit events`);
-        
-        // Decode logs
-        allDepositEvents = logs.map(log => {
-          try {
-            const parsed = contract.interface.parseLog(log);
-            return { ...log, args: parsed.args, eventName: parsed.name };
-          } catch (e) {
-            console.warn("⚠️ CRON: Failed to parse log:", e.message);
-            return null;
-          }
-        }).filter(Boolean);
-        console.log(`🔍 CRON: Decoded ${allDepositEvents.length} deposit events from raw logs`);
+        // Only proceed if we have at least one valid topic
+        const validTopics = [depositedTopic, depositWithRefTopic].filter(Boolean);
+        if (validTopics.length === 0) {
+          console.warn("⚠️ CRON: No valid event topics found, skipping raw log scan");
+        } else {
+          // Use recent blocks for performance
+          const fromBlock = Math.max(0, currentBlock - 20000);
+          console.log(`🔍 CRON: Scanning logs from block ${fromBlock} to latest`);
+          
+          const logs = await provider.getLogs({
+            address: CONTRACT_ADDRESS,
+            fromBlock,
+            toBlock: 'latest',
+            topics: [validTopics] // Use OR logic for topics
+          });
+          console.log(`🔍 CRON: Found ${logs.length} raw logs for deposit events`);
+          
+          // Decode logs
+          allDepositEvents = logs.map(log => {
+            try {
+              const parsed = contract.interface.parseLog(log);
+              return { ...log, args: parsed.args, eventName: parsed.name };
+            } catch (e) {
+              console.warn("⚠️ CRON: Failed to parse log:", e.message);
+              return null;
+            }
+          }).filter(Boolean);
+          console.log(`🔍 CRON: Decoded ${allDepositEvents.length} deposit events from raw logs`);
+        }
       } catch (rawLogError) {
         console.error("❌ CRON: Raw log scanning failed:", rawLogError.message);
       }
