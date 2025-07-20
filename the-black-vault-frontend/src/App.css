@@ -584,6 +584,11 @@ body {
   text-shadow: 0 0 30px rgba(255, 255, 255, 0.2), 0 0 60px rgba(0, 0, 0, 0.2);
 }
 
+.reward-amount.blue {
+  color: #4a9eff; /* Light blue */
+  text-shadow: 0 0 30px rgba(74, 158, 255, 0.3), 0 0 60px rgba(74, 158, 255, 0.1);
+}
+
 .reward-label {
   font-size: 1rem;
   color: #a0a0a0; /* Light grey */

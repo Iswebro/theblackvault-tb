@@ -62,6 +62,14 @@ export default function App() {
   const [cycleStartTime, setCycleStartTime] = useState(0);
   const [cycleDuration, setCycleDuration] = useState(0);
   const [timeUntilNextCycle, setTimeUntilNextCycle] = useState(0);
+  
+  // Default referrer tracking
+  const [defaultReferrerStats, setDefaultReferrerStats] = useState({
+    totalReferrals: 0,
+    uniqueReferrals: 0,
+    totalRewards: "0",
+    availableRewards: "0"
+  });
 
   // Derived variables (after all state hooks)
   const pageSize = 10;
@@ -347,6 +355,46 @@ export default function App() {
   }
 
   // ─────────── loadContractData ───────────
+  const loadDefaultReferrerData = async (vault) => {
+    if (!vault || !provider) {
+      console.log("Skipping loadDefaultReferrerData: missing dependencies");
+      return;
+    }
+
+    try {
+      console.log("🔍 DEBUG: Loading default referrer data for:", DEFAULT_REFERRER);
+      
+      // Get default referrer's referral data
+      const defaultReferralData = await vault.getUserReferralData(DEFAULT_REFERRER);
+      console.log("🔍 DEBUG: Default referrer raw data:", defaultReferralData);
+      
+      // Get unique referral count by checking deposit events for default referrer
+      const defaultDepositFilter = vault.filters.Deposited(null, null, DEFAULT_REFERRER);
+      const defaultDepositEvents = await vault.queryFilter(defaultDepositFilter, -200000);
+      console.log("🔍 DEBUG: Default referrer deposit events:", defaultDepositEvents.length);
+      
+      const uniqueDefaultReferees = [...new Set(defaultDepositEvents.map((event) => event.args.user.toLowerCase()))];
+      console.log("🔍 DEBUG: Unique users referred by default referrer:", uniqueDefaultReferees.length);
+      console.log("🔍 DEBUG: Default referrer unique referee addresses:", uniqueDefaultReferees);
+      
+      setDefaultReferrerStats({
+        totalReferrals: defaultReferralData[2]?.toString() || "0",
+        uniqueReferrals: uniqueDefaultReferees.length,
+        totalRewards: formatEther(defaultReferralData[0] || 0),
+        availableRewards: formatEther(defaultReferralData[1] || 0)
+      });
+      
+    } catch (error) {
+      console.error("Error loading default referrer data:", error);
+      setDefaultReferrerStats({
+        totalReferrals: 0,
+        uniqueReferrals: 0,
+        totalRewards: "0",
+        availableRewards: "0"
+      });
+    }
+  };
+
   const loadContractData = async (vault = contract, usdt = usdtContract) => {
     if (!vault || !provider || !account || !usdt) {
       console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt })
@@ -542,7 +590,9 @@ export default function App() {
       }
 
       // ─────────── YOUR REFERRAL + CONSTANTS + TIMING + HISTORY FOLLOWS ───────────
-      // …leave your existing code here unchanged…
+      // Load default referrer statistics
+      await loadDefaultReferrerData(vault);
+      
       await loadTransactionHistory(vault, usdt)
     } catch (error) {
       console.error("Error loading contract data:", error)
@@ -1096,7 +1146,7 @@ export default function App() {
           <div className="vault-card premium-card">
             <h3 className="card-title">
               <span className="card-icon">👥</span>
-              Referral Rewards
+              Referral Rewards {account === DEFAULT_REFERRER && <span style={{ fontSize: '12px', color: '#4a9eff' }}>(Default Referrer Account)</span>}
             </h3>
             <div className="reward-display">
               <span className="reward-amount purple">{formatAmount(referralRewards)} USDT</span>
@@ -1106,12 +1156,34 @@ export default function App() {
               <span className="referral-label">Your Referrals:</span>
               <span className="referral-value">{uniqueReferralCount}</span>
             </div>
+            
+            {account === DEFAULT_REFERRER && (
+              <div style={{ marginTop: '12px', padding: '8px', background: '#1a2332', borderRadius: '6px', border: '1px solid #4a9eff' }}>
+                <div style={{ fontSize: '12px', color: '#4a9eff', fontWeight: 'bold', marginBottom: '8px' }}>
+                  🏢 Default Referrer Statistics
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
+                  <span style={{ color: '#ccc' }}>Total Deposits via Default:</span>
+                  <span style={{ color: '#fff' }}>{defaultReferrerStats.totalReferrals}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
+                  <span style={{ color: '#ccc' }}>Unique Users (No Referral):</span>
+                  <span style={{ color: '#fff' }}>{defaultReferrerStats.uniqueReferrals}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                  <span style={{ color: '#ccc' }}>Total Default Rewards:</span>
+                  <span style={{ color: '#fff' }}>{formatAmount(defaultReferrerStats.totalRewards)} USDT</span>
+                </div>
+              </div>
+            )}
 
             <div className="referral-actions">
               <button className="copy-link-button" onClick={copyReferralLink}>
                 Copy Referral Link
               </button>
-              <button className="see-referrals-button" onClick={() => setShowReferralsModal(true)}>
+              <button className="see-referrals-button" onClick={() => {
+                setShowReferralsModal(true);
+              }}>
                 See Referrals
               </button>
             </div>
@@ -1270,6 +1342,7 @@ export default function App() {
         contract={contract}
         account={account}
         formatAddress={formatAddress}
+        isDefaultReferrer={account === DEFAULT_REFERRER}
       />
 
       {/* Activation Help Modal removed: no longer needed in V2 */}

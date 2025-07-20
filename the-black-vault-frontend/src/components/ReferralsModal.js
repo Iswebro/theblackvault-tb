@@ -7,7 +7,8 @@ export default function ReferralsModal({
   onClose, 
   contract, 
   account, 
-  formatAddress
+  formatAddress,
+  isDefaultReferrer = false
 }) {
   const [referrals, setReferrals] = useState([])
   const [loading, setLoading] = useState(false)
@@ -100,7 +101,7 @@ export default function ReferralsModal({
         <div className="modal-header">
           <h3 className="modal-title">
             <span className="modal-icon">👥</span>
-            Your Referrals
+            {isDefaultReferrer ? 'All Referrals (Including Default)' : 'Your Referrals'}
           </h3>
           <button className="modal-close" onClick={onClose} aria-label="Close modal">
             ×
@@ -131,8 +132,8 @@ export default function ReferralsModal({
               <p className="empty-message">No unique referrals yet</p>
               <p className="empty-submessage">
                 {totalReferralCount > 0 
-                  ? `You have ${totalReferralCount} total referral deposits, but they may be from the same addresses making multiple deposits.`
-                  : "Share your referral link to start earning bonuses!"
+                  ? `${isDefaultReferrer ? 'There are' : 'You have'} ${totalReferralCount} total referral deposits, but they may be from the same addresses making multiple deposits.`
+                  : isDefaultReferrer ? "No users have deposited yet." : "Share your referral link to start earning bonuses!"
                 }
               </p>
             </div>          ) : (
