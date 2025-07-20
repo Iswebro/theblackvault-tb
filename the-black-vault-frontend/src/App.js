@@ -9,7 +9,6 @@ import { connectInjected, getReferralFromURL } from "./connectWallet";
 import BlackVaultArtifact from "./contract/BlackVaultABI.json";
 import ERC20Artifact from "./contract/ERC20Abi.json";
 import BlackVaultV1Abi from "./contract/BlackVaultV1ABI.json";
-import "./App.css";
 import HowItWorks from "./components/HowItWorks";
 import Leaderboard from "./components/Leaderboard";
 import ReferralsModal from "./components/ReferralsModal";

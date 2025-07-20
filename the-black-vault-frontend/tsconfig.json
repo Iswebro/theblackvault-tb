@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "es6",
     "module": "esnext",
-    "jsx": "react-jsx",
+    "jsx": "preserve",
     "moduleResolution": "node",
     "allowJs": true,
     "checkJs": false,
@@ -12,7 +12,18 @@
     "noEmit": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "strict": false
+    "strict": false,
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "incremental": true
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

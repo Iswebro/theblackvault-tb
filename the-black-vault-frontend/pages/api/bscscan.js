@@ -4,7 +4,6 @@
 
 
 import { Redis } from '@upstash/redis';
-import fetch from 'node-fetch';
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
