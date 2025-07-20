@@ -529,54 +529,95 @@ export default function App() {
       try {
         if (vault && account) {
           console.log("🔍 DEBUG: Calling getUserReferralData for account:", account);
-          const referralData = await vault.getUserReferralData(account);
-          console.log("🔍 DEBUG: Raw referralData:", referralData);
-          console.log("🔍 DEBUG: referralData structure:", {
-            0: referralData[0]?.toString(),
-            1: referralData[1]?.toString(), 
-            2: referralData[2]?.toString(),
-            3: referralData[3]?.toString(),
-            4: referralData[4]?.toString(),
-          });
           
-          // referralData: [_totalRewards, _availableRewards, _referredCount, _totalVolume, _totalWithdrawn]
-          setReferralRewards(formatEther(referralData[1])); // _availableRewards
-          setReferralCount(referralData[2]?.toString() || "0");
-          console.log("Referral rewards (available):", formatEther(referralData[1]));
-          console.log("Referral count:", referralData[2]?.toString() || "0");
-          
-          // Get unique referral count by checking deposit events
+          // Try to use API endpoint first for user referral data (reduces RPC rate limiting)
+          let userReferralDataFetched = false;
           try {
-            console.log("🔍 DEBUG: Searching for Deposited events with account as referrer:", account);
-            const depositFilter = contract.filters.Deposited(null, null, account);
-            
-            const depositEvents = await queryEventsWithRetry(contract, depositFilter, [-20000, -8000, -3000]);
-            console.log("🔍 DEBUG: Found deposit events:", depositEvents.length);
-            
-            if (depositEvents.length > 0) {
-              depositEvents.slice(0, 3).forEach((event, i) => {
-                console.log(`🔍 DEBUG: Event ${i}:`, {
-                  user: event.args.user,
-                  amount: formatEther(event.args.amount), 
-                  referrer: event.args.referrer,
+            const userResponse = await fetch(`/api/user-referrals?account=${account}`);
+            if (userResponse.ok) {
+              const userApiData = await userResponse.json();
+              console.log("🔍 DEBUG: User referral API response:", userApiData);
+              
+              if (userApiData.result && userApiData.result.stats) {
+                const { contractData, stats } = userApiData.result;
+                
+                console.log("🔍 DEBUG: Using API data for user referrals:", {
+                  availableRewards: contractData.availableRewards,
+                  totalReferrals: stats.totalReferralCount,
+                  uniqueReferrals: stats.uniqueReferrals,
+                  dataSource: userApiData.cached ? "Redis cache" : "Fresh RPC query"
                 });
-              });
-              if (depositEvents.length > 3) {
-                console.log(`🔍 DEBUG: ... and ${depositEvents.length - 3} more events`);
+                
+                setReferralRewards(contractData.availableRewards || "0");
+                setReferralCount(stats.totalReferralCount || "0");
+                setUniqueReferralCount(stats.uniqueReferrals || 0);
+                
+                console.log("Referral rewards (available) from API:", contractData.availableRewards);
+                console.log("Referral count from API:", stats.totalReferralCount);
+                console.log("Unique referral count from API:", stats.uniqueReferrals);
+                
+                userReferralDataFetched = true;
               }
+            } else {
+              console.warn("⚠️ User referral API endpoint failed, falling back to direct RPC");
             }
+          } catch (userApiError) {
+            console.warn("⚠️ User referral API error, falling back to direct RPC:", userApiError.message);
+          }
+          
+          // Fallback to direct RPC calls if API fails
+          if (!userReferralDataFetched) {
+            console.log("🔍 DEBUG: Falling back to direct contract calls for user referral data...");
             
-            const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))]
-            setUniqueReferralCount(uniqueReferees.length)
-            console.log("Unique referrals:", uniqueReferees.length);
-            if (uniqueReferees.length > 0 && uniqueReferees.length <= 5) {
-              console.log("Unique referee addresses:", uniqueReferees);
-            } else if (uniqueReferees.length > 5) {
-              console.log("Unique referee addresses:", uniqueReferees.slice(0, 3), `... and ${uniqueReferees.length - 3} more`);
+            const referralData = await vault.getUserReferralData(account);
+            console.log("🔍 DEBUG: Raw referralData:", referralData);
+            console.log("🔍 DEBUG: referralData structure:", {
+              0: referralData[0]?.toString(),
+              1: referralData[1]?.toString(), 
+              2: referralData[2]?.toString(),
+              3: referralData[3]?.toString(),
+              4: referralData[4]?.toString(),
+            });
+            
+            // referralData: [_totalRewards, _availableRewards, _referredCount, _totalVolume, _totalWithdrawn]
+            setReferralRewards(formatEther(referralData[1])); // _availableRewards
+            setReferralCount(referralData[2]?.toString() || "0");
+            console.log("Referral rewards (available):", formatEther(referralData[1]));
+            console.log("Referral count:", referralData[2]?.toString() || "0");
+            
+            // Get unique referral count by checking deposit events
+            try {
+              console.log("🔍 DEBUG: Searching for Deposited events with account as referrer:", account);
+              const depositFilter = contract.filters.Deposited(null, null, account);
+              
+              const depositEvents = await queryEventsWithRetry(contract, depositFilter, [-20000, -8000, -3000]);
+              console.log("🔍 DEBUG: Found deposit events:", depositEvents.length);
+              
+              if (depositEvents.length > 0) {
+                depositEvents.slice(0, 3).forEach((event, i) => {
+                  console.log(`🔍 DEBUG: Event ${i}:`, {
+                    user: event.args.user,
+                    amount: formatEther(event.args.amount), 
+                    referrer: event.args.referrer,
+                  });
+                });
+                if (depositEvents.length > 3) {
+                  console.log(`🔍 DEBUG: ... and ${depositEvents.length - 3} more events`);
+                }
+              }
+              
+              const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))]
+              setUniqueReferralCount(uniqueReferees.length)
+              console.log("Unique referrals:", uniqueReferees.length);
+              if (uniqueReferees.length > 0 && uniqueReferees.length <= 5) {
+                console.log("Unique referee addresses:", uniqueReferees);
+              } else if (uniqueReferees.length > 5) {
+                console.log("Unique referee addresses:", uniqueReferees.slice(0, 3), `... and ${uniqueReferees.length - 3} more`);
+              }
+            } catch (eventError) {
+              console.warn("Error fetching unique referral count:", eventError);
+              setUniqueReferralCount(0);
             }
-          } catch (eventError) {
-            console.warn("Error fetching unique referral count:", eventError);
-            setUniqueReferralCount(0);
           }
         }
       } catch (e) {
