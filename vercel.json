@@ -1,15 +1,16 @@
 {
-  "buildCommand": "cd the-black-vault-frontend && npm run build",
-  "outputDirectory": "the-black-vault-frontend/.next",
-  "installCommand": "cd the-black-vault-frontend && npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next", 
+  "installCommand": "npm install",
   "framework": "nextjs",
+  "rootDirectory": "the-black-vault-frontend",
   "crons": [
     {
       "path": "/api/cron/weeklyleaderboard",
       "schedule": "0 1 * * *"
     },
     {
-      "path": "/api/cron/update-referral-stats",
+      "path": "/api/cron/update-referral-stats", 
       "schedule": "0 0 * * *"
     }
   ]
