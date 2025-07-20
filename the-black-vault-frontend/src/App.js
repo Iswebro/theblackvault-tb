@@ -14,16 +14,17 @@ import HowItWorks from "./components/HowItWorks";
 import Leaderboard from "./components/Leaderboard";
 import ReferralsModal from "./components/ReferralsModal";
 import TroubleshootingModal from "./components/TroubleshootingModal";
-
 import { config } from "./lib/config.js";
 
 // Use .abi if present (Hardhat/Truffle artifact), else use as array
 const BlackVaultAbi = BlackVaultArtifact.abi || BlackVaultArtifact;
 const ERC20Abi = ERC20Artifact.abi || ERC20Artifact;
 
+
 const CONTRACT_ADDRESS = config.contractAddress;
 const OLD_CONTRACT_ADDRESS = config.oldContractAddress;
 const USDT_ADDRESS = config.usdtAddress;
+const DEFAULT_REFERRER = config.defaultReferrer;
 
 export default function App() {
 
@@ -41,9 +42,10 @@ export default function App() {
   const [oldVaultContract, setOldVaultContract] = useState(null);
   const [balance, setBalance] = useState("0");
   const [usdtBalance, setUsdtBalance] = useState("0");
-  const [queuedBalance, setQueuedBalance] = useState("0");
+  // Removed: queuedBalance (no longer used in V2)
   const [depositAmount, setDepositAmount] = useState("");
   const [rewards, setRewards] = useState("0");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
   const [referralRewards, setReferralRewards] = useState("0");
   const [referralAddress, setReferralAddress] = useState("");
   const [loading, setLoading] = useState(false);
@@ -238,7 +240,7 @@ export default function App() {
       // Test if we can read user data
       try {
         const vaultData = await vault.getUserVault(account)
-        console.log("✅ getUserVault works, pending rewards:", formatEther(vaultData[3])) // _pendingRewards is at index 3
+        console.log("✅ getUserVault works, pending rewards:", formatEther(vaultData.pendingRewards))
       } catch (error) {
         console.error("❌ Error calling getUserVault:", error)
       }
@@ -258,12 +260,6 @@ export default function App() {
     }
 
     try {
-      // Temporarily disable transaction history API until backend is implemented
-      console.log("Transaction history API disabled - backend not implemented");
-      setHistory([]);
-      return;
-      
-      /* TODO: Re-enable when backend API is implemented
       const res = await fetch(`/api/transaction-history?address=${account}`)
       if (!res.ok) {
         console.error("Transaction history API error:", res.status, res.statusText);
@@ -313,7 +309,6 @@ export default function App() {
       }));
       processedEvents.sort((a, b) => b.time.getTime() - a.time.getTime());
       setHistory(processedEvents);
-      */
     } catch (error) {
       console.error("Error loading transaction history:", error);
       addToast("Error loading transaction history.", "error");
@@ -363,40 +358,36 @@ export default function App() {
         setDailyRate("0");
       }
       // ─────────── ON-CHAIN VAULT DATA ───────────
-      let totalDeposited, activeAmount, queuedAmount, pendingRewards, totalRewardsWithdrawn;
+      let totalDeposited, pendingRewards, totalRewardsWithdrawn;
       
       try {
-        // BlackVault.sol getUserVault returns: [_totalDeposited, _totalRewardsWithdrawn, _joinedCycle, _pendingRewards]
+        // BlackVaultV2.sol getUserVault returns: [totalDeposited, totalRewardsWithdrawn, joinedCycle, pendingRewards]
         const vaultData = await vault.getUserVault(account);
-        totalDeposited = vaultData[0];           // _totalDeposited
-        totalRewardsWithdrawn = vaultData[1];    // _totalRewardsWithdrawn  
-        const joinedCycle = vaultData[2];        // _joinedCycle
-        pendingRewards = vaultData[3];           // _pendingRewards
-        
-        // Set default values for fields not returned by this contract version
-        activeAmount = totalDeposited;  // Use totalDeposited as activeAmount
-        queuedAmount = 0;               // Not available in this contract version
+        totalDeposited = vaultData[0];
+        totalRewardsWithdrawn = vaultData[1];
+        // joinedCycle = vaultData[2]; // Not used in frontend, can be removed
+        pendingRewards = vaultData[3];
 
-        setVaultActiveAmount(formatEther(activeAmount));
-        setQueuedBalance(formatEther(queuedAmount));
+        // Calculate net earning amount (total deposited minus 1% fee)
+        // Contract deducts 1% fee, so net earning amount = gross * 0.99
+        const grossAmount = parseFloat(formatEther(totalDeposited));
+        const netEarningAmount = grossAmount * 0.99;
+
+        setVaultActiveAmount(netEarningAmount.toString());
+        // Removed: setQueuedBalance (no longer used in V2)
         setRewards(formatEther(pendingRewards));
 
-        console.log("Total Deposited:", formatEther(totalDeposited));
-        console.log("Active Amount (using totalDeposited):", formatEther(activeAmount));
+        console.log("Total Deposited (Gross):", formatEther(totalDeposited));
+        console.log("Net Earning Amount:", netEarningAmount);
         console.log("Pending Rewards:", formatEther(pendingRewards));
-        console.log("Total Rewards Withdrawn:", formatEther(totalRewardsWithdrawn));
-        console.log("Joined Cycle:", joinedCycle.toString());
       } catch (error) {
         console.error("Error loading vault data:", error);
         addToast("Failed to load vault data from contract", "warning");
         // Set fallback values
         totalDeposited = 0;
-        activeAmount = 0;
-        queuedAmount = 0;
         pendingRewards = 0;
-        totalRewardsWithdrawn = 0;
         setVaultActiveAmount("0");
-        setQueuedBalance("0");
+        // Removed: setQueuedBalance (no longer used in V2)
         setRewards("0");
       }
 
@@ -437,7 +428,7 @@ export default function App() {
       }
 
       // Calculate time until next accrual if user has active balance
-      if ((Number(activeAmount) > 0 || Number(queuedAmount) > 0) && cycleStart > 0 && cycleDur > 0) {
+      if ((Number(vaultActiveAmount) > 0) && cycleStart > 0 && cycleDur > 0) {
         // Get current block timestamp
         let now = 0;
         try {
@@ -504,8 +495,7 @@ export default function App() {
 
   const formatAmount = (amount) => {
     const num = Number.parseFloat(amount)
-    if (num === 0) return "0"
-    if (num < 0.0001) return "< 0.0001"
+    if (num === 0 || isNaN(num) || num < 0.0001) return "0"
     return Number.parseFloat(num.toFixed(6)).toString()
   }
 
@@ -599,19 +589,17 @@ export default function App() {
        addToast("Processing deposit…", "info")
        const value = parseEther(depositAmount)
        let tx
-       if (referralAddress && referralAddress !== ethers.ZeroAddress) {
-         tx = await contract.depositWithReferrer(value, referralAddress)
-       } else {
-         tx = await contract.deposit(value)
-       }
+       // Always use depositWithReferrer, with defaultReferrer if no referralAddress
+       const referrerToUse = (referralAddress && referralAddress !== ethers.ZeroAddress)
+         ? referralAddress
+         : DEFAULT_REFERRER;
+       tx = await contract.depositWithReferrer(value, referrerToUse)
        const receipt = await tx.wait()
        if (receipt.status === 1) {
          addToast("Deposit successful!", "success")
          setDepositAmount("")
-         // Leaderboard update disabled until backend is implemented
+         // Update leaderboard if referral used (optional, can keep as is)
          if (referralAddress && referralAddress !== ethers.ZeroAddress) {
-           console.log("Leaderboard update disabled - backend not implemented");
-           /* TODO: Re-enable when backend API is implemented
            fetch("/api/leaderboard/update", {
              method: "POST",
              headers: { "Content-Type": "application/json" },
@@ -626,7 +614,6 @@ export default function App() {
              .catch(() => {
                addToast("Failed to update leaderboard", "warning")
              })
-           */
          }
          // Always call poke after deposit
          try {
@@ -649,15 +636,24 @@ export default function App() {
    }
  
    const withdraw = async () => {
-     if (!contract || txLoading || Number.parseFloat(rewards) === 0) {
+     if (!contract || txLoading) {
        if (!contract) addToast("Contract not initialized", "error")
-       else if (Number.parseFloat(rewards) === 0) addToast("No rewards to withdraw", "warning")
        return
+     }
+     const amount = Number.parseFloat(withdrawAmount);
+     if (!withdrawAmount || isNaN(amount) || amount <= 0) {
+       addToast("Enter a valid amount to withdraw", "warning");
+       return;
+     }
+     if (amount > Number.parseFloat(rewards)) {
+       addToast("Cannot withdraw more than available rewards", "warning");
+       return;
      }
      setTxLoading(true)
      try {
        addToast("Withdrawing rewards…", "info")
-       await contract.withdrawRewards()
+       const tx = await contract.withdrawRewards(parseEther(withdrawAmount));
+       await tx.wait();
        // Always call poke after withdraw
        try {
          await contract.poke();
@@ -666,10 +662,11 @@ export default function App() {
          console.warn("poke() failed after withdraw", e);
        }
        addToast("Rewards withdrawn!", "success")
+       setWithdrawAmount("");
        await loadContractData(contract, usdtContract)
      } catch (error) {
        console.error("Withdraw error:", error)
-       const msg = error.message.includes("CALL_EXCEPTION") ? "No rewards available" : error.reason || "Withdrawal failed"
+       const msg = error.message?.includes("CALL_EXCEPTION") ? "No rewards available" : error.reason || "Withdrawal failed"
        addToast(msg, error.code === 4001 ? "warning" : "error")
      } finally {
        setTxLoading(false)
@@ -845,15 +842,9 @@ export default function App() {
             </h3>
             <div className="balance-grid">
               <div className="balance-item">
-                <span className="balance-label">Active Balance</span>
+                <span className="balance-label">Earning Balance</span>
                 <span className="balance-value">{formatAmount(vaultActiveAmount)} USDT</span>
               </div>
-
-              <div className="balance-item">
-                <span className="balance-label">Queued for Accrual</span>
-                <span className="balance-value">{formatAmount(queuedBalance)} USDT</span>
-              </div>
-
 
               <div className="balance-item">
                 <span className="balance-label">Projected Daily Rewards</span>
@@ -865,16 +856,6 @@ export default function App() {
               <div className="balance-item">
                 <span className="balance-label">Next Accrual In</span>
                 <span className="balance-value">{timeUntilNextCycle > 0 ? formatCountdown(timeUntilNextCycle) : "00:00:00"}</span>
-              </div>
-              {/* Discreet help button for cycle/activation issues (moved below Next Accrual In) */}
-              <div style={{ textAlign: 'center', margin: '0px 0 0px 0' }}>
-                <button
-                  className="discreet-button"
-                  style={{ fontSize: 12, color: '#888', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
-                  onClick={() => setShowActivationModal(true)}
-                >
-                  Did cycle reset and Queued balance wasn't activated?
-                </button>
               </div>
             </div>
           </div>
@@ -972,12 +953,29 @@ export default function App() {
               Vault Rewards
             </h3>
             <div className="reward-display">
-              <span className="reward-amount">{(Number(vaultActiveAmount) === 0 && Number(queuedBalance) > 0) ? "0" : formatAmount(rewards)} USDT</span>
+              <span className="reward-amount">{formatAmount(rewards)} USDT</span>
               <span className="reward-label">Available to withdraw</span>
             </div>
-            <button className="vault-button premium-button success" onClick={withdraw} disabled={txLoading}>
-              {txLoading ? "Processing..." : "Withdraw Rewards"}
-            </button>
+            <div className="input-group" style={{ marginBottom: 12 }}>
+              <input
+                type="number"
+                className="vault-input premium-input"
+                placeholder="Amount to withdraw"
+                value={withdrawAmount}
+                min="0"
+                max={rewards}
+                step="0.001"
+                onChange={e => setWithdrawAmount(e.target.value)}
+                disabled={txLoading}
+              />
+              <button
+                className="vault-button premium-button success"
+                onClick={withdraw}
+                disabled={txLoading || !withdrawAmount || Number.parseFloat(withdrawAmount) <= 0 || Number.parseFloat(withdrawAmount) > Number.parseFloat(rewards)}
+              >
+                {txLoading ? "Processing..." : "Withdraw Rewards"}
+              </button>
+            </div>
             <button
               className="vault-button premium-button warning"
               onClick={withdrawOldVaultRewards}
@@ -1166,46 +1164,7 @@ export default function App() {
         formatAddress={formatAddress}
       />
 
-      {/* Activation Help Modal - styled to match premium frontend */}
-      {showActivationModal && (
-        <div className="premium-modal-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(30,30,40,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="premium-card premium-modal" style={{ background: 'linear-gradient(135deg, #181824 0%, #232336 100%)', borderRadius: 18, padding: 32, maxWidth: 420, width: '95%', boxShadow: '0 4px 32px rgba(0,0,0,0.25)', position: 'relative', color: '#fff', border: '1px solid #222' }}>
-            <button
-              style={{ position: 'absolute', top: 18, right: 22, background: 'none', border: 'none', fontSize: 28, color: '#888', cursor: 'pointer', fontWeight: 600 }}
-              onClick={() => setShowActivationModal(false)}
-              aria-label="Close"
-            >×</button>
-            <div style={{ fontWeight: 700, fontSize: 22, marginBottom: 16, color: '#FFD700', textShadow: '0 1px 8px #222' }}>Why wasn't my Queued balance activated?</div>
-            <ul style={{ fontSize: 15, color: '#eee', marginBottom: 18, paddingLeft: 22, lineHeight: 1.7 }}>
-              <li>Cycle may not have reset yet (wait for <b>Next Accrual In</b> countdown).</li>
-              <li>Network congestion or delayed block updates.</li>
-              <li>Queued balance will activate automatically at the next cycle.</li>
-              <li>If it still doesn't activate after the countdown, you can force activation below.</li>
-            </ul>
-            <button
-              className="vault-button premium-button primary"
-              style={{ fontSize: 15, padding: '8px 20px', marginTop: 10, marginBottom: 10, fontWeight: 600, borderRadius: 8, boxShadow: '0 2px 8px #FFD70044' }}
-              onClick={async () => {
-                if (!contract) return;
-                try {
-                  await contract.poke();
-                  setShowActivationModal(false);
-                  addToast("Deposit activation requested. Please wait for confirmation.", "info");
-                  await loadContractData(contract, usdtContract);
-                } catch (e) {
-                  addToast("Activation failed or rejected.", "error");
-                }
-              }}
-            >
-              Force Activate Deposit
-            </button>
-            <div style={{ fontSize: 13, color: '#FFD700', marginTop: 10, textAlign: 'center', fontWeight: 500 }}>
-              This will manually trigger the contract to activate your queued deposit.<br />
-              <span style={{ color: '#fff', fontWeight: 400 }}>Only use if the automatic process fails after a cycle reset, and you're sure your deposit was made before current cycle.</span>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Activation Help Modal removed: no longer needed in V2 */}
     </div>
     <SpeedInsights />
     </>

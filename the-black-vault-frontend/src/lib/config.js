@@ -6,6 +6,7 @@ export const config = {
   contractAddress: "0x22708D8a54c044CbA5B237620Af42030cbf76E14", // <-- set to your deployed contract address
   oldContractAddress: "0x08b7fCcb9c92cB3C6A3279Bc377F461fD6fD97A1", // <-- old vault contract address
   usdtAddress:     "0x55d398326f99059fF775485246999027B3197955", // <-- set to your USDT token address
+  defaultReferrer: "0x706961C676FE743C34A867437661D13E16ADCbEc", // <-- default referrer when no referral is provided
 
   // Network settings
   chainId: 56, // 56 for BSC Mainnet, 97 for Testnet
@@ -31,5 +32,5 @@ export const config = {
 }
 
 // Export individual values for convenience
-export const { contractAddress, usdtAddress, chainId, chainName, rpcUrl, blockExplorer, walletConnectProjectId } =
+export const { contractAddress, usdtAddress, chainId, chainName, rpcUrl, blockExplorer, walletConnectProjectId, defaultReferrer } =
   config

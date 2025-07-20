@@ -26,7 +26,12 @@ export default function HowItWorks() {
     {
       icon: "📈",
       title: "Minimum Deposit",
-      description: "A minimum deposit of 50 USDT is required to activate your vault and start earning rewards.",
+      description: "A minimum deposit of 50 USDT is required to participate and start earning rewards.",
+    },
+    {
+      icon: "💳",
+      title: "Flexible Withdrawals",
+      description: "You can now withdraw any amount of your available rewards at any time. No more activation or queued states.",
     },
     {
       icon: "🛡️",
