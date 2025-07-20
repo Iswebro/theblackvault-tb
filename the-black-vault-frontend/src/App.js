@@ -283,7 +283,7 @@ export default function App() {
       }
       if (!isJson) {
         console.error("Transaction history API did not return JSON. Response:", text);
-        addToast("Transaction history API error. See console for details.", "error");
+        // addToast("Transaction history API error. See console for details.", "error"); // Suppressed until leaderboard work resumes
         setHistory([]);
         return;
       }
