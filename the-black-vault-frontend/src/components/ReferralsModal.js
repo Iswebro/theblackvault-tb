@@ -7,9 +7,12 @@ export default function ReferralsModal({ isOpen, onClose, contract, account, for
   const [loading, setLoading] = useState(false)
   const [totalReferralCount, setTotalReferralCount] = useState(0)
   const [uniqueReferrals, setUniqueReferrals] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(10)
 
   useEffect(() => {
     if (isOpen && contract && account) {
+      setCurrentPage(1) // Reset to page 1 when modal opens
       loadReferrals()
     }
   }, [isOpen, contract, account])
@@ -24,9 +27,9 @@ export default function ReferralsModal({ isOpen, onClose, contract, account, for
       const totalCount = referralData[2]?.toString() || "0"
       setTotalReferralCount(totalCount)
 
-      // Get all deposit events where this user is the referrer
+      // Get all deposit events where this user is the referrer (search more blocks for better coverage)
       const depositFilter = contract.filters.Deposited(null, null, account)
-      const depositEvents = await contract.queryFilter(depositFilter, -50000) // Last 50k blocks
+      const depositEvents = await contract.queryFilter(depositFilter, -200000) // Last 200k blocks for better coverage
 
       // Extract unique referee addresses
       const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))]
@@ -39,15 +42,15 @@ export default function ReferralsModal({ isOpen, onClose, contract, account, for
             const bonusInfo = await contract.getReferralBonusInfo(account, refereeAddress)
             return {
               address: refereeAddress,
-              bonusesUsed: bonusInfo.bonusesUsed.toString(),
-              bonusesRemaining: bonusInfo.bonusesRemaining.toString(),
+              bonusesUsed: parseInt(bonusInfo.used.toString()),
+              bonusesRemaining: parseInt(bonusInfo.remaining.toString()),
             }
           } catch (error) {
             console.error(`Error getting bonus info for ${refereeAddress}:`, error)
             return {
               address: refereeAddress,
-              bonusesUsed: "0",
-              bonusesRemaining: "3",
+              bonusesUsed: 0,
+              bonusesRemaining: 3,
             }
           }
         }),
@@ -65,6 +68,20 @@ export default function ReferralsModal({ isOpen, onClose, contract, account, for
   }
 
   if (!isOpen) return null
+
+  // Pagination logic
+  const totalPages = Math.ceil(referrals.length / pageSize)
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = startIndex + pageSize
+  const paginatedReferrals = referrals.slice(startIndex, endIndex)
+
+  const handlePrevPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1))
+  }
+
+  const handleNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1))
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -112,14 +129,57 @@ export default function ReferralsModal({ isOpen, onClose, contract, account, for
             <div className="referrals-list">
               <div className="referrals-header">
                 <span className="referral-col-address">Address</span>
-                <span className="referral-col-bonuses">Bonuses Remaining</span>
+                <span className="referral-col-bonuses">Rewards Used</span>
               </div>
-              {referrals.map((referral, index) => (
+              {paginatedReferrals.map((referral, index) => (
                 <div key={index} className="referral-row">
                   <span className="referral-address">{formatAddress(referral.address)}</span>
-                  <span className="referral-bonuses">{referral.bonusesRemaining}/3</span>
+                  <span className="referral-bonuses">{referral.bonusesUsed}/3</span>
                 </div>
               ))}
+              
+              {/* Pagination controls */}
+              {totalPages > 1 && (
+                <div style={{ 
+                  display: "flex", 
+                  justifyContent: "center", 
+                  alignItems: "center", 
+                  marginTop: "16px", 
+                  gap: "12px" 
+                }}>
+                  <button
+                    onClick={handlePrevPage}
+                    disabled={currentPage === 1}
+                    style={{ 
+                      padding: "6px 12px", 
+                      borderRadius: 6, 
+                      border: "none", 
+                      background: currentPage === 1 ? "#444" : "#666", 
+                      color: "#fff", 
+                      cursor: currentPage === 1 ? "not-allowed" : "pointer" 
+                    }}
+                  >
+                    Previous
+                  </button>
+                  <span style={{ color: "#fff", fontSize: "14px" }}>
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    style={{ 
+                      padding: "6px 12px", 
+                      borderRadius: 6, 
+                      border: "none", 
+                      background: currentPage === totalPages ? "#444" : "#666", 
+                      color: "#fff", 
+                      cursor: currentPage === totalPages ? "not-allowed" : "pointer" 
+                    }}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

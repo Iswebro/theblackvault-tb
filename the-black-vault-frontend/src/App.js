@@ -51,6 +51,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [txLoading, setTxLoading] = useState(false);
   const [referralCount, setReferralCount] = useState(0);
+  const [uniqueReferralCount, setUniqueReferralCount] = useState(0);
   const [minDeposit, setMinDeposit] = useState("0");
   const [usdtAllowance, setUsdtAllowance] = useState("0");
   const [vaultActiveAmount, setVaultActiveAmount] = useState("0");
@@ -387,11 +388,24 @@ export default function App() {
           setReferralCount(referralData[2]?.toString() || "0");
           console.log("Referral rewards (available):", formatEther(referralData[1]));
           console.log("Referral count:", referralData[2]?.toString() || "0");
+          
+          // Get unique referral count by checking deposit events
+          try {
+            const depositFilter = contract.filters.Deposited(null, null, account)
+            const depositEvents = await contract.queryFilter(depositFilter, -200000) // Search more blocks
+            const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))]
+            setUniqueReferralCount(uniqueReferees.length)
+            console.log("Unique referrals:", uniqueReferees.length);
+          } catch (eventError) {
+            console.warn("Error fetching unique referral count:", eventError);
+            setUniqueReferralCount(0);
+          }
         }
       } catch (e) {
         console.error("Error fetching referral rewards:", e);
         setReferralRewards("0");
         setReferralCount("0");
+        setUniqueReferralCount(0);
       }
 
 
@@ -824,6 +838,7 @@ export default function App() {
      setReferralRewards("0")
      setHistory([])
      setReferralCount("0")
+     setUniqueReferralCount(0)
      setMinDeposit("0")
      setVaultActiveAmount("0")
      setReferralBonusesRemaining("3")
@@ -1062,8 +1077,8 @@ export default function App() {
               <span className="reward-label">From referrals</span>
             </div>
             <div className="referral-stats">
-              <span className="referral-label">Total Referral Deposits:</span>
-              <span className="referral-value">{referralCount}</span>
+              <span className="referral-label">Referrals:</span>
+              <span className="referral-value">{uniqueReferralCount}</span>
             </div>
 
             <div className="referral-actions">
