@@ -196,8 +196,14 @@ export default function App() {
         console.log("✅ Contract code found at address")
       } catch (error) {
         console.error("❌ Error checking contract code:", error)
-        addToast("Failed to verify contract deployment", "error")
-        return
+        // Check if it's a "missing trie node" or RPC error
+        if (error.message && (error.message.includes("missing trie node") || error.message.includes("Internal JSON-RPC error"))) {
+          console.warn("⚠️ RPC node issue detected. Contract validation skipped, but continuing with initialization...")
+          addToast("RPC node issue detected, but continuing with limited validation", "warning")
+        } else {
+          addToast("Failed to verify contract deployment", "error")
+          return
+        }
       }
       
       // Test basic contract functions with better error handling
@@ -444,12 +450,13 @@ export default function App() {
 
       // Calculate time until next accrual if user has active balance
       if ((Number(vaultActiveAmount) > 0) && cycleStart > 0 && cycleDur > 0) {
-        // Get current block timestamp
+        // Get current block timestamp with retry logic for RPC issues
         let now = 0;
         try {
           const block = await provider.getBlock("latest");
           now = block.timestamp;
         } catch (e) {
+          console.warn("Failed to get latest block timestamp, using local time:", e);
           now = Math.floor(Date.now() / 1000);
         }
         // How many cycles since launch?

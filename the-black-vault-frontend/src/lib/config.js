@@ -11,7 +11,7 @@ export const config = {
   // Network settings
   chainId: 56, // 56 for BSC Mainnet, 97 for Testnet
   chainName: "Binance Smart Chain Mainnet",
-  rpcUrl: "https://bsc-dataseed.binance.org/",
+  rpcUrl: "https://rpc.ankr.com/bsc", // More reliable RPC endpoint
   blockExplorer: "https://bscscan.com",
 
   // WalletConnect
