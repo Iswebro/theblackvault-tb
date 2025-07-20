@@ -468,23 +468,36 @@ export default function App() {
   // ─── Countdown timer / auto-refresh ───
   useEffect(() => {
     let timer;
-    if (account && timeUntilNextCycle > 0) {
+    // Only start timer if all values are present and valid
+    if (
+      account &&
+      provider &&
+      Number(vaultActiveAmount) > 0 &&
+      Number(cycleStartTime) > 0 &&
+      Number(cycleDuration) > 0
+    ) {
+      // Calculate initial seconds left
+      const now = Math.floor(Date.now() / 1000);
+      const cyclesSinceLaunch = Math.floor((now - Number(cycleStartTime)) / Number(cycleDuration));
+      const nextCycleTime = Number(cycleStartTime) + (cyclesSinceLaunch + 1) * Number(cycleDuration);
+      let secondsLeft = nextCycleTime - now;
+      setTimeUntilNextCycle(secondsLeft > 0 ? secondsLeft : 0);
+
       timer = setInterval(() => {
         setTimeUntilNextCycle(prev => {
           if (prev <= 1) {
             clearInterval(timer);
-            if (provider && account) loadContractData();
+            // Optionally reload contract data here if needed
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
-    } else if (timeUntilNextCycle === 0 && provider && account) {
-      loadContractData();
-      // No automation needed: contract now handles queued-to-active in view logic
+    } else {
+      setTimeUntilNextCycle(0);
     }
     return () => clearInterval(timer);
-  }, [provider, account, timeUntilNextCycle]);
+  }, [account, provider, vaultActiveAmount, cycleStartTime, cycleDuration]);
 
   const formatAddress = (addr) => {
     if (!addr) return ""
