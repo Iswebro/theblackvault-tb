@@ -58,7 +58,6 @@ export default function App() {
   const [referralBonusesRemaining, setReferralBonusesRemaining] = useState(3);
   const [showReferralsModal, setShowReferralsModal] = useState(false);
   const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false);
-  const [showDefaultReferrerModal, setShowDefaultReferrerModal] = useState(false);
   const [dailyRate, setDailyRate] = useState("0");
   const [cycleStartTime, setCycleStartTime] = useState(0);
   const [cycleDuration, setCycleDuration] = useState(0);
@@ -265,7 +264,13 @@ export default function App() {
       // Test if we can read user data
       try {
         const vaultData = await vault.getUserVault(account)
-        console.log("✅ getUserVault works, pending rewards:", formatEther(vaultData.pendingRewards))
+        console.log("✅ getUserVault works, pending rewards:", formatEther(vaultData[3]))
+        console.log("✅ getUserVault full data:", {
+          totalDeposited: formatEther(vaultData[0]),
+          totalRewardsWithdrawn: formatEther(vaultData[1]), 
+          joinedCycle: vaultData[2]?.toString(),
+          pendingRewards: formatEther(vaultData[3])
+        })
       } catch (error) {
         console.error("❌ Error calling getUserVault:", error)
       }
@@ -383,7 +388,17 @@ export default function App() {
       // ─────────── REFERRAL REWARDS ───────────
       try {
         if (vault && account) {
+          console.log("🔍 DEBUG: Calling getUserReferralData for account:", account);
           const referralData = await vault.getUserReferralData(account);
+          console.log("🔍 DEBUG: Raw referralData:", referralData);
+          console.log("🔍 DEBUG: referralData structure:", {
+            0: referralData[0]?.toString(),
+            1: referralData[1]?.toString(), 
+            2: referralData[2]?.toString(),
+            3: referralData[3]?.toString(),
+            4: referralData[4]?.toString(),
+          });
+          
           // referralData: [_totalRewards, _availableRewards, _referredCount, _totalVolume, _totalWithdrawn]
           setReferralRewards(formatEther(referralData[1])); // _availableRewards
           setReferralCount(referralData[2]?.toString() || "0");
@@ -392,11 +407,21 @@ export default function App() {
           
           // Get unique referral count by checking deposit events
           try {
+            console.log("🔍 DEBUG: Searching for Deposited events with account as referrer:", account);
             const depositFilter = contract.filters.Deposited(null, null, account)
             const depositEvents = await contract.queryFilter(depositFilter, -200000) // Search more blocks
+            console.log("🔍 DEBUG: Found deposit events:", depositEvents.length);
+            depositEvents.forEach((event, i) => {
+              console.log(`🔍 DEBUG: Event ${i}:`, {
+                user: event.args.user,
+                amount: formatEther(event.args.amount), 
+                referrer: event.args.referrer,
+              });
+            });
             const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))]
             setUniqueReferralCount(uniqueReferees.length)
             console.log("Unique referrals:", uniqueReferees.length);
+            console.log("Unique referee addresses:", uniqueReferees);
           } catch (eventError) {
             console.warn("Error fetching unique referral count:", eventError);
             setUniqueReferralCount(0);
@@ -1082,25 +1107,6 @@ export default function App() {
               <span className="referral-value">{uniqueReferralCount}</span>
             </div>
 
-            {uniqueReferralCount === 0 && (
-              <div className="referral-note" style={{ 
-                background: "#2a2a2a", 
-                padding: "12px", 
-                borderRadius: "8px", 
-                marginBottom: "16px",
-                border: "1px solid #404040"
-              }}>
-                <div style={{ color: "#ffd700", fontSize: "14px", marginBottom: "8px" }}>
-                  💡 Testing Notes:
-                </div>
-                <div style={{ color: "#ccc", fontSize: "13px", lineHeight: "1.4" }}>
-                  • Deposits without referral codes use default referrer: <span style={{ fontFamily: "monospace", color: "#fff" }}>{formatAddress(DEFAULT_REFERRER)}</span><br/>
-                  • To see your referrals, others need to deposit using your referral link<br/>
-                  • Each user can earn max 3 referral rewards per referrer (including default)
-                </div>
-              </div>
-            )}
-
             <div className="referral-actions">
               <button className="copy-link-button" onClick={copyReferralLink}>
                 Copy Referral Link
@@ -1108,15 +1114,6 @@ export default function App() {
               <button className="see-referrals-button" onClick={() => setShowReferralsModal(true)}>
                 See Referrals
               </button>
-              {uniqueReferralCount === 0 && (
-                <button 
-                  className="see-referrals-button" 
-                  style={{ opacity: 0.7, fontSize: "12px" }}
-                  onClick={() => setShowDefaultReferrerModal(true)}
-                >
-                  Check Default Referrer
-                </button>
-              )}
             </div>
 
             <button className="vault-button premium-button purple" onClick={withdrawReferral} disabled={txLoading}>
@@ -1273,17 +1270,6 @@ export default function App() {
         contract={contract}
         account={account}
         formatAddress={formatAddress}
-      />
-
-      {/* Default Referrer Modal for Testing */}
-      <ReferralsModal
-        isOpen={showDefaultReferrerModal}
-        onClose={() => setShowDefaultReferrerModal(false)}
-        contract={contract}
-        account={DEFAULT_REFERRER}
-        formatAddress={formatAddress}
-        title="Default Referrer Stats (Testing)"
-        subtitle={`This shows referrals that used the default referrer (${formatAddress(DEFAULT_REFERRER)}). Your test deposits appear here.`}
       />
 
       {/* Activation Help Modal removed: no longer needed in V2 */}
