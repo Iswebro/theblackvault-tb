@@ -88,6 +88,9 @@ const getActiveUsers = async (contract) => {
 
 // Update default referrer stats
 const updateDefaultReferrerStats = async (contract) => {
+    // Helper: get event signature topics
+    const getEventTopic = (eventName) => contract.interface.getEventTopic(eventName);
+
   try {
     console.log("🔍 CRON: Updating default referrer stats...");
     
@@ -177,18 +180,55 @@ const updateDefaultReferrerStats = async (contract) => {
       }
     }
 
+    // --- SMARTER: If still no events, scan raw logs for both event signatures ---
+    let fallbackUsed = false;
+    if (allDepositEvents.length === 0) {
+      fallbackUsed = true;
+      console.log("🔍 CRON: No events found, scanning raw logs for both event signatures...");
+      const topics = [
+        getEventTopic("Deposited"),
+        getEventTopic("DepositWithReferrer")
+      ];
+      // Use recent blocks for performance
+      const fromBlock = Math.max(0, currentBlock - 20000);
+      const logs = await provider.getLogs({
+        address: CONTRACT_ADDRESS,
+        fromBlock,
+        toBlock: 'latest',
+        topics: [topics]
+      });
+      console.log(`🔍 CRON: Found ${logs.length} raw logs for deposit events`);
+      // Decode logs
+      allDepositEvents = logs.map(log => {
+        try {
+          const parsed = contract.interface.parseLog(log);
+          return { ...log, args: parsed.args, eventName: parsed.name };
+        } catch (e) {
+          return null;
+        }
+      }).filter(Boolean);
+      console.log(`🔍 CRON: Decoded ${allDepositEvents.length} deposit events from raw logs`);
+    }
+
     // Filter events where the referrer is the DEFAULT_REFERRER
     // This includes both explicit referrals AND automatic default assignments
     const defaultReferrerEvents = allDepositEvents.filter(event => 
-      event.args.referrer && event.args.referrer.toLowerCase() === DEFAULT_REFERRER.toLowerCase()
+      event.args && event.args.referrer && event.args.referrer.toLowerCase() === DEFAULT_REFERRER.toLowerCase()
     );
 
     // Get unique users who used default referrer (either explicitly or automatically)
     const uniqueDefaultReferees = [...new Set(defaultReferrerEvents.map(event => event.args.user.toLowerCase()))];
 
+    // Print sample addresses for debug
     console.log(`🔍 CRON: Found ${allDepositEvents.length} total deposit events (merged)`);
     console.log(`🔍 CRON: Found ${defaultReferrerEvents.length} events using default referrer`);
     console.log(`🔍 CRON: Found ${uniqueDefaultReferees.length} unique users using default referrer`);
+    if (uniqueDefaultReferees.length > 0) {
+      console.log(`🔍 CRON: Sample unique users:`, uniqueDefaultReferees.slice(0, 3));
+    }
+    if (fallbackUsed && allDepositEvents.length === 0) {
+      console.warn("⚠️ CRON: Even raw log scan found no events. Check contract deployment block and ABI.");
+    }
 
     const stats = {
       contractAddress: DEFAULT_REFERRER,
