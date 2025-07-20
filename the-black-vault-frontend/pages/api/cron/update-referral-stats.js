@@ -311,13 +311,17 @@ const updateDefaultReferrerStats = async (contract) => {
     console.log(`🔍 CRON: Event breakdown - Deposited: ${depositedEventsByType.length}, DepositWithReferrer: ${depositWithRefEventsByType.length}`);
 
     // Process BOTH event types for default referrer analysis with improved logic
-    const allDefaultReferrerEvents = allDepositEvents.filter(event => 
-      event.args && event.args.referrer && (
-        event.args.referrer.toLowerCase() === DEFAULT_REFERRER.toLowerCase() ||
-        event.args.referrer === ethers.ZeroAddress ||
-        event.args.referrer.toLowerCase() === "0x0000000000000000000000000000000000000000"
-      )
-    );
+    const allDefaultReferrerEvents = allDepositEvents.filter(event => {
+      if (!event.args || !event.args.referrer) return false;
+      
+      const referrer = event.args.referrer.toLowerCase();
+      const isDefaultOrZero = referrer === DEFAULT_REFERRER.toLowerCase() || 
+                             referrer === ethers.ZeroAddress.toLowerCase() || 
+                             referrer === "0x0000000000000000000000000000000000000000";
+      
+      console.log(`🔍 CRON: Event referrer: ${referrer}, isDefault: ${isDefaultOrZero}`);
+      return isDefaultOrZero;
+    });
     
     console.log(`🔍 CRON: Found ${allDefaultReferrerEvents.length} events using default referrer from ALL event types`);
     
@@ -354,17 +358,28 @@ const updateDefaultReferrerStats = async (contract) => {
       }
     });
     
-    // Find users who made deposits without referrals (deposits that used default referrer)
-    const usersWithoutReferralDeposits = Object.keys(userDepositPatterns).filter(user => 
-      userDepositPatterns[user].defaultReferrerDeposits > 0
-    );
+    // Find users who made deposits without referrals (deposits that used default referrer OR had only no-referral deposits)
+    const usersWithoutReferralDeposits = Object.keys(userDepositPatterns).filter(user => {
+      const pattern = userDepositPatterns[user];
+      // A user counts as "no referral" if they made ANY deposits without a real referrer
+      // This includes deposits with default referrer, zero address, or if they only made deposits without referrals
+      return pattern.defaultReferrerDeposits > 0;
+    });
     
     console.log(`🔍 CRON: Found ${usersWithoutReferralDeposits.length} unique users who made deposits without referrals`);
     
+    // Additional debug: let's also check for users who ONLY made deposits without referrals
+    const usersWithOnlyNoReferralDeposits = Object.keys(userDepositPatterns).filter(user => {
+      const pattern = userDepositPatterns[user];
+      return pattern.defaultReferrerDeposits > 0 && pattern.otherReferrerDeposits === 0;
+    });
+    
+    console.log(`🔍 CRON: Found ${usersWithOnlyNoReferralDeposits.length} users who made ONLY no-referral deposits`);
+    
     // Log pattern analysis for debugging
-    console.log("🔍 CRON: Sample user deposit patterns:");
-    Object.entries(userDepositPatterns).slice(0, 3).forEach(([user, pattern]) => {
-      console.log(`  User ${user.slice(0, 10)}...: ${pattern.totalDeposits} total, ${pattern.defaultReferrerDeposits} no-referral, ${pattern.otherReferrerDeposits} with-referral`);
+    console.log("🔍 CRON: All user deposit patterns:");
+    Object.entries(userDepositPatterns).forEach(([user, pattern]) => {
+      console.log(`  User ${user.slice(0, 10)}...: ${pattern.totalDeposits} total, ${pattern.defaultReferrerDeposits} no-referral, ${pattern.otherReferrerDeposits} with-referral, referrers: [${Array.from(pattern.referrers).join(', ')}]`);
     });
     
     // Log details of default referrer events
