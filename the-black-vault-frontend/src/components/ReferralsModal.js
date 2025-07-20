@@ -55,98 +55,143 @@ export default function ReferralsModal({
     try {
       console.log("🔍 DEBUG: Modal loading referrals for account:", account);
       
-      // Try to use API endpoint first to reduce RPC rate limiting
+      // Try to use cached background job data first (fast and reliable)
+      let referralDataFetched = false;
       try {
-        const response = await fetch(`/api/user-referrals?account=${account}`);
+        const response = await fetch(`/api/referral-stats?user=${account}`);
         if (response.ok) {
           const apiData = await response.json();
-          console.log("🔍 DEBUG: Modal API response:", apiData);
+          console.log("🔍 DEBUG: Modal cached referral API response:", apiData);
           
-          if (apiData.result) {
-            const { contractData, stats, referrals: apiReferrals, events } = apiData.result;
+          if (apiData.result && apiData.result.stats) {
+            const { contractData, stats, events } = apiData.result;
             
-            console.log("🔍 DEBUG: Modal using API data:", {
-              totalCount: stats.totalReferralCount,
-              uniqueCount: stats.uniqueReferrals,
-              apiReferrals: apiReferrals.length,
-              dataSource: apiData.cached ? "Redis cache" : "Fresh RPC query"
+            console.log("🔍 DEBUG: Modal using cached background job data:", {
+              dataSource: "background-job",
+              totalReferrals: stats.totalReferralCount,
+              uniqueReferrals: stats.uniqueReferrals,
+              eventsCount: events.length
             });
             
             setTotalReferralCount(stats.totalReferralCount || "0");
             setUniqueReferrals(stats.uniqueReferrals || 0);
-            setReferrals(apiReferrals || []);
             
-            if (events.truncated) {
-              console.log("⚠️ DEBUG: Modal data was truncated due to large number of referrals");
-            }
+            // Process events into referral format
+            const referralData = events.map(event => ({
+              address: event.user,
+              bonusesUsed: 1, // Assume 1 bonus used per deposit
+              bonusesRemaining: 2, // Default remaining bonuses
+            }));
             
-            return; // Successfully used API data
+            setReferrals(referralData);
+            
+            console.log("🔍 DEBUG: Modal cached stats set successfully");
+            referralDataFetched = true;
           }
         } else {
-          console.warn("⚠️ Modal API endpoint failed, falling back to direct RPC");
+          console.warn("⚠️ Modal: User not found in cached data, using fallback");
         }
-      } catch (apiError) {
-        console.warn("⚠️ Modal API error, falling back to direct RPC:", apiError.message);
+      } catch (cacheError) {
+        console.warn("⚠️ Modal: Cached API error, using fallback:", cacheError.message);
       }
       
-      // Fallback to direct RPC calls if API fails
-      console.log("🔍 DEBUG: Modal falling back to direct contract calls...");
-      
-      // Get referral data from contract (this gives us total referral count)
-      const referralData = await contract.getUserReferralData(account)
-      const totalCount = referralData[2]?.toString() || "0"
-      setTotalReferralCount(totalCount)
-      console.log("🔍 DEBUG: Modal total referral count:", totalCount);
-
-      // Get all deposit events where this user is the referrer (using rate limiting)
-      const depositFilter = contract.filters.Deposited(null, null, account)
-      console.log("🔍 DEBUG: Modal searching for deposit events...");
-      
-      const depositEvents = await queryEventsWithRetry(contract, depositFilter, [-20000, -8000, -3000]);
-      console.log("🔍 DEBUG: Modal deposit events found:", depositEvents.length);
-
-      // Extract unique referee addresses
-      const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))]
-      setUniqueReferrals(uniqueReferees.length)
-      console.log("🔍 DEBUG: Modal unique referees:", uniqueReferees.length);
-
-      if (uniqueReferees.length === 0) {
-        setReferrals([])
-        return
-      }
-
-      // Get bonus info for each referee (limit to prevent excessive RPC calls)
-      const maxRefereesToProcess = 15; // Reduced limit for fallback
-      const refereesToProcess = uniqueReferees.slice(0, maxRefereesToProcess);
-      
-      console.log("🔍 DEBUG: Modal getting bonus info for each referee...");
-      console.log(`🔍 DEBUG: Processing ${refereesToProcess.length} of ${uniqueReferees.length} referees`);
-      
-      const referralData2 = await Promise.all(
-        refereesToProcess.map(async (refereeAddress) => {
-          try {
-            const bonusInfo = await contract.getReferralBonusInfo(account, refereeAddress)
-            return {
-              address: refereeAddress,
-              bonusesUsed: parseInt(bonusInfo.used.toString()),
-              bonusesRemaining: parseInt(bonusInfo.remaining.toString()),
+      // Fallback to original API or direct RPC calls
+      if (!referralDataFetched) {
+        console.log("🔍 DEBUG: Modal fallback - trying original API...");
+        
+        // Try to use original API endpoint first to reduce RPC rate limiting
+        try {
+          const response = await fetch(`/api/user-referrals?account=${account}`);
+          if (response.ok) {
+            const apiData = await response.json();
+            console.log("🔍 DEBUG: Modal API response:", apiData);
+            
+            if (apiData.result) {
+              const { contractData, stats, referrals: apiReferrals, events } = apiData.result;
+              
+              console.log("🔍 DEBUG: Modal using API data:", {
+                totalCount: stats.totalReferralCount,
+                uniqueCount: stats.uniqueReferrals,
+                apiReferrals: apiReferrals.length,
+                dataSource: apiData.cached ? "Redis cache" : "Fresh RPC query"
+              });
+              
+              setTotalReferralCount(stats.totalReferralCount || "0");
+              setUniqueReferrals(stats.uniqueReferrals || 0);
+              setReferrals(apiReferrals || []);
+              
+              if (events.truncated) {
+                console.log("⚠️ DEBUG: Modal data was truncated due to large number of referrals");
+              }
+              
+              return; // Successfully used API data
             }
-          } catch (error) {
-            console.error(`Error getting bonus info for ${refereeAddress}:`, error)
-            return {
-              address: refereeAddress,
-              bonusesUsed: 0,
-              bonusesRemaining: 3,
-            }
+          } else {
+            console.warn("⚠️ Modal API endpoint failed, falling back to direct RPC");
           }
-        }),
-      )
+        } catch (apiError) {
+          console.warn("⚠️ Modal API error, falling back to direct RPC:", apiError.message);
+        }
+        
+        // Final fallback to direct RPC calls
+        console.log("🔍 DEBUG: Modal falling back to direct contract calls...");
+        
+        // Get referral data from contract (this gives us total referral count)
+        const referralData = await contract.getUserReferralData(account)
+        const totalCount = referralData[2]?.toString() || "0"
+        setTotalReferralCount(totalCount)
+        console.log("🔍 DEBUG: Modal total referral count:", totalCount);
 
-      console.log("🔍 DEBUG: Modal final referral data:", referralData2);
-      if (uniqueReferees.length > maxRefereesToProcess) {
-        console.log(`⚠️ DEBUG: Modal truncated referrals due to limit (${maxRefereesToProcess}/${uniqueReferees.length})`);
+        // Get all deposit events where this user is the referrer (using rate limiting)
+        const depositFilter = contract.filters.Deposited(null, null, account)
+        console.log("🔍 DEBUG: Modal searching for deposit events...");
+        
+        const depositEvents = await queryEventsWithRetry(contract, depositFilter, [-20000, -8000, -3000]);
+        console.log("🔍 DEBUG: Modal deposit events found:", depositEvents.length);
+
+        // Extract unique referee addresses
+        const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))]
+        setUniqueReferrals(uniqueReferees.length)
+        console.log("🔍 DEBUG: Modal unique referees:", uniqueReferees.length);
+
+        if (uniqueReferees.length === 0) {
+          setReferrals([])
+          return
+        }
+
+        // Get bonus info for each referee (limit to prevent excessive RPC calls)
+        const maxRefereesToProcess = 15; // Reduced limit for fallback
+        const refereesToProcess = uniqueReferees.slice(0, maxRefereesToProcess);
+        
+        console.log("🔍 DEBUG: Modal getting bonus info for each referee...");
+        console.log(`🔍 DEBUG: Processing ${refereesToProcess.length} of ${uniqueReferees.length} referees`);
+        
+        const referralData2 = await Promise.all(
+          refereesToProcess.map(async (refereeAddress) => {
+            try {
+              const bonusInfo = await contract.getReferralBonusInfo(account, refereeAddress)
+              return {
+                address: refereeAddress,
+                bonusesUsed: parseInt(bonusInfo.used.toString()),
+                bonusesRemaining: parseInt(bonusInfo.remaining.toString()),
+              }
+            } catch (error) {
+              console.error(`Error getting bonus info for ${refereeAddress}:`, error)
+              return {
+                address: refereeAddress,
+                bonusesUsed: 0,
+                bonusesRemaining: 3,
+              }
+            }
+          }),
+        )
+
+        console.log("🔍 DEBUG: Modal final referral data:", referralData2);
+        if (uniqueReferees.length > maxRefereesToProcess) {
+          console.log(`⚠️ DEBUG: Modal truncated referrals due to limit (${maxRefereesToProcess}/${uniqueReferees.length})`);
+        }
+        setReferrals(referralData2)
       }
-      setReferrals(referralData2)
     } catch (error) {
       console.error("Error loading referrals:", error)
       setReferrals([])
