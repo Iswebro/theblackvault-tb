@@ -610,13 +610,15 @@ export default function App() {
     }
   };
 
-  const loadContractData = async (vault = contract, usdt = usdtContract) => {
+  const loadContractData = async (vault = contract, usdt = usdtContract, forceRefresh = false) => {
     if (!vault || !provider || !account || !usdt) {
       console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt })
       return
     }
 
     try {
+      console.log(`🔄 Loading contract data${forceRefresh ? ' (forced refresh)' : ''}...`);
+      
       // ─────────── WALLET BALANCES ───────────
       let ethBal, usdtBal, allowance;
       for (let attempt = 1; attempt <= 3; attempt++) {
@@ -653,46 +655,50 @@ export default function App() {
         if (vault && account) {
           console.log("🔍 DEBUG: Loading user referral data for account:", account);
           
-          // Try to use cached background job data first (fast and reliable)
+          // Try to use cached background job data first (fast and reliable) - but skip if forced refresh
           let userReferralDataFetched = false;
-          try {
-            const userResponse = await fetch(`/api/referral-stats?user=${account}`);
-            if (userResponse.ok) {
-              const userApiData = await userResponse.json();
-              console.log("🔍 DEBUG: Cached user referral API response:", userApiData);
-              
-              if (userApiData.result && userApiData.result.stats) {
-                const { contractData, stats } = userApiData.result;
+          if (!forceRefresh) {
+            try {
+              const userResponse = await fetch(`/api/referral-stats?user=${account}`);
+              if (userResponse.ok) {
+                const userApiData = await userResponse.json();
+                console.log("🔍 DEBUG: Cached user referral API response:", userApiData);
                 
-                console.log("🔍 DEBUG: Using cached background job data for user referrals:", {
-                  availableRewards: contractData.availableRewards,
-                  totalReferrals: stats.totalReferralCount,
-                  uniqueReferrals: stats.uniqueReferrals,
-                  dataSource: "background-job"
-                });
-                
-                setReferralRewards(contractData.availableRewards || "0");
-                setReferralCount(stats.totalReferralCount || "0");
-                setUniqueReferralCount(stats.uniqueReferrals || 0);
-                
-                console.log("Referral rewards (available) from cache:", contractData.availableRewards);
-                console.log("Referral count from cache:", stats.totalReferralCount);
-                console.log("Unique referral count from cache:", stats.uniqueReferrals);
-                
-                userReferralDataFetched = true;
+                if (userApiData.result && userApiData.result.stats) {
+                  const { contractData, stats } = userApiData.result;
+                  
+                  console.log("🔍 DEBUG: Using cached background job data for user referrals:", {
+                    availableRewards: contractData.availableRewards,
+                    totalReferrals: stats.totalReferralCount,
+                    uniqueReferrals: stats.uniqueReferrals,
+                    dataSource: "background-job"
+                  });
+                  
+                  setReferralRewards(contractData.availableRewards || "0");
+                  setReferralCount(stats.totalReferralCount || "0");
+                  setUniqueReferralCount(stats.uniqueReferrals || 0);
+                  
+                  console.log("Referral rewards (available) from cache:", contractData.availableRewards);
+                  console.log("Referral count from cache:", stats.totalReferralCount);
+                  console.log("Unique referral count from cache:", stats.uniqueReferrals);
+                  
+                  userReferralDataFetched = true;
+                }
+              } else {
+                console.warn("⚠️ User not found in cached data (API returned status:", userResponse.status, "), using direct contract call");
+                // Log API error details
+                try {
+                  const errorData = await userResponse.text();
+                  console.warn("⚠️ User API error details:", errorData);
+                } catch (e) {
+                  console.warn("⚠️ Could not read user API error response");
+                }
               }
-            } else {
-              console.warn("⚠️ User not found in cached data (API returned status:", userResponse.status, "), using direct contract call");
-              // Log API error details
-              try {
-                const errorData = await userResponse.text();
-                console.warn("⚠️ User API error details:", errorData);
-              } catch (e) {
-                console.warn("⚠️ Could not read user API error response");
-              }
+            } catch (userApiError) {
+              console.warn("⚠️ Cached user referral API error, using direct contract call:", userApiError.message);
             }
-          } catch (userApiError) {
-            console.warn("⚠️ Cached user referral API error, using direct contract call:", userApiError.message);
+          } else {
+            console.log("🔄 Forced refresh - skipping cached data, using direct contract call");
           }
           
           // Fallback to direct contract call WITH event queries (same as ReferralsModal)
@@ -913,7 +919,27 @@ export default function App() {
         setTimeUntilNextCycle(prev => {
           if (prev <= 1) {
             clearInterval(timer);
-            // Optionally reload contract data here if needed
+            console.log("🔄 Cycle ended - auto-refreshing data...");
+            
+            // Automatically refresh data when cycle resets
+            setTimeout(async () => {
+              try {
+                console.log("🔄 Refreshing data after cycle reset...");
+                if (contract && usdtContract && account) {
+                  await loadContractData(contract, usdtContract, true); // Force refresh after cycle reset
+                  console.log("✅ Data refreshed successfully after cycle reset");
+                }
+              } catch (error) {
+                console.error("❌ Error refreshing data after cycle reset:", error);
+                // Try again after a delay
+                setTimeout(() => {
+                  if (contract && usdtContract && account) {
+                    loadContractData(contract, usdtContract, true);
+                  }
+                }, 5000);
+              }
+            }, 2000); // Wait 2 seconds for blockchain to update
+            
             return 0;
           }
           return prev - 1;
@@ -1091,6 +1117,7 @@ export default function App() {
        addToast("Withdrawing rewards…", "info")
        const tx = await contract.withdrawRewards(parseEther(withdrawAmount));
        await tx.wait();
+       
        // Always call poke after withdraw
        try {
          await contract.poke();
@@ -1098,9 +1125,36 @@ export default function App() {
        } catch (e) {
          console.warn("poke() failed after withdraw", e);
        }
+       
        addToast("Rewards withdrawn!", "success")
        setWithdrawAmount("");
-       await loadContractData(contract, usdtContract)
+       
+       // Add delay to ensure blockchain state is updated before fetching
+       await new Promise(resolve => setTimeout(resolve, 2000));
+       
+       // Force fresh data reload with multiple attempts
+       let retries = 3;
+       while (retries > 0) {
+         try {
+           console.log("🔄 Forcing fresh data reload after vault withdrawal...");
+           await loadContractData(contract, usdtContract, true); // Force refresh
+           
+           // Verify the update worked by checking if rewards decreased
+           const updatedVaultData = await contract.getUserVault(account);
+           const currentPendingRewards = formatEther(updatedVaultData[3]);
+           console.log("📊 Updated pending rewards after withdrawal:", currentPendingRewards);
+           
+           // Update the state directly to ensure UI reflects the change
+           setRewards(currentPendingRewards);
+           break;
+         } catch (reloadError) {
+           console.warn(`Data reload attempt failed (${4-retries}/3):`, reloadError.message);
+           retries--;
+           if (retries > 0) {
+             await new Promise(resolve => setTimeout(resolve, 1000));
+           }
+         }
+       }
      } catch (error) {
        console.error("Withdraw error:", error)
        const msg = error.message?.includes("CALL_EXCEPTION") ? "No rewards available" : error.reason || "Withdrawal failed"
@@ -1143,7 +1197,9 @@ export default function App() {
      setTxLoading(true)
      try {
        addToast("Withdrawing referral rewards…", "info")
-       await contract.withdrawReferralRewards()
+       const tx = await contract.withdrawReferralRewards()
+       await tx.wait()
+       
        // Always call poke after referral withdraw
        try {
          await contract.poke();
@@ -1151,8 +1207,35 @@ export default function App() {
        } catch (e) {
          console.warn("poke() failed after referral withdraw", e);
        }
+       
        addToast("Referral rewards withdrawn!", "success")
-       await loadContractData(contract, usdtContract)
+       
+       // Add delay to ensure blockchain state is updated before fetching
+       await new Promise(resolve => setTimeout(resolve, 2000));
+       
+       // Force fresh data reload with multiple attempts
+       let retries = 3;
+       while (retries > 0) {
+         try {
+           console.log("🔄 Forcing fresh data reload after referral withdrawal...");
+           await loadContractData(contract, usdtContract, true); // Force refresh
+           
+           // Verify the update worked by checking if referral rewards decreased
+           const updatedReferralData = await contract.getUserReferralData(account);
+           const currentAvailableRewards = formatEther(updatedReferralData[1]);
+           console.log("📊 Updated referral rewards after withdrawal:", currentAvailableRewards);
+           
+           // Update the state directly to ensure UI reflects the change
+           setReferralRewards(currentAvailableRewards);
+           break;
+         } catch (reloadError) {
+           console.warn(`Data reload attempt failed (${4-retries}/3):`, reloadError.message);
+           retries--;
+           if (retries > 0) {
+             await new Promise(resolve => setTimeout(resolve, 1000));
+           }
+         }
+       }
      } catch (error) {
        console.error("Referral withdraw error:", error)
        const msg = error.message.includes("CALL_EXCEPTION") ? "No referral rewards" : error.reason || "Referral withdrawal failed"
@@ -1265,6 +1348,25 @@ export default function App() {
             <span className="header-title">BLACK VAULT</span>
           </div>
           <div className="header-account">
+            <button 
+              className="refresh-button"
+              onClick={() => loadContractData(contract, usdtContract, true)}
+              disabled={txLoading}
+              title="Refresh Balance Data"
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '6px',
+                color: 'white',
+                padding: '6px 12px',
+                marginRight: '12px',
+                cursor: txLoading ? 'not-allowed' : 'pointer',
+                fontSize: '12px',
+                opacity: txLoading ? 0.5 : 1
+              }}
+            >
+              {txLoading ? "⏳" : "🔄"}
+            </button>
             <span className="account-label">Connected</span>
             <span className="account-address">{formatAddress(account)}</span>
           </div>
