@@ -421,81 +421,69 @@ export default function App() {
       console.log("🔍 DEBUG: Current connected account:", account);
       console.log("🔍 DEBUG: Is current account the default referrer?", account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase());
       
-      // Get default referrer's referral data
-      const defaultReferralData = await vault.getUserReferralData(DEFAULT_REFERRER);
-      console.log("🔍 DEBUG: Default referrer raw data:", defaultReferralData);
-      console.log("🔍 DEBUG: Default referrer data breakdown:", {
-        totalRewards: defaultReferralData[0]?.toString(),
-        availableRewards: defaultReferralData[1]?.toString(),
-        referredCount: defaultReferralData[2]?.toString(),
-        totalVolume: defaultReferralData[3]?.toString(),
-        totalWithdrawn: defaultReferralData[4]?.toString(),
-      });
-      
-      // Get unique referral count by checking deposit events for default referrer
-      console.log("🔍 DEBUG: Searching for Deposited events with default referrer...");
-      const defaultDepositFilter = vault.filters.Deposited(null, null, DEFAULT_REFERRER);
-      console.log("🔍 DEBUG: Filter created:", defaultDepositFilter);
-      
-      const defaultDepositEvents = await queryEventsWithRetry(vault, defaultDepositFilter, [-20000, -10000, -5000]);
-      console.log("🔍 DEBUG: Default referrer deposit events found:", defaultDepositEvents.length);
-      
-      if (defaultDepositEvents.length > 0) {
-        console.log("🔍 DEBUG: Sample events:");
-        defaultDepositEvents.slice(0, 5).forEach((event, i) => {
-          console.log(`🔍 DEBUG: Event ${i}:`, {
-            user: event.args.user,
-            amount: formatEther(event.args.amount),
-            referrer: event.args.referrer,
-            cycle: event.args.cycle?.toString(),
-            blockNumber: event.blockNumber,
-            transactionHash: event.transactionHash
-          });
-        });
-      } else {
-        console.log("🔍 DEBUG: No events found - checking if this is expected...");
-        
-        // Let's also try searching for ANY Deposited events to see if the contract is working
-        console.log("🔍 DEBUG: Searching for ANY Deposited events to verify contract...");
-        const anyDepositFilter = vault.filters.Deposited();
-        const anyDepositEvents = await queryEventsWithRetry(vault, anyDepositFilter, [-5000, -2000, -1000]);
-        console.log("🔍 DEBUG: Total deposit events found:", anyDepositEvents.length);
-        
-        if (anyDepositEvents.length > 0) {
-          console.log("🔍 DEBUG: Recent deposits found, showing first few:");
-          anyDepositEvents.slice(0, 3).forEach((event, i) => {
-            console.log(`🔍 DEBUG: Recent Event ${i}:`, {
-              user: event.args.user,
-              amount: formatEther(event.args.amount),
-              referrer: event.args.referrer,
-              isDefaultReferrer: event.args.referrer?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase()
-            });
-          });
-        }
+      // Use API endpoint to get cached default referrer data (reduces RPC rate limiting)
+      const response = await fetch('/api/referrer-events');
+      if (!response.ok) {
+        console.warn("⚠️ API endpoint failed, falling back to direct RPC calls");
+        throw new Error(`API error: ${response.status}`);
       }
       
-      const uniqueDefaultReferees = [...new Set(defaultDepositEvents.map((event) => event.args.user.toLowerCase()))];
-      console.log("🔍 DEBUG: Unique users referred by default referrer:", uniqueDefaultReferees.length);
-      console.log("🔍 DEBUG: Default referrer unique referee addresses:", uniqueDefaultReferees);
+      const apiData = await response.json();
+      console.log("🔍 DEBUG: API response:", apiData);
       
-      const stats = {
-        totalReferrals: defaultReferralData[2]?.toString() || "0",
-        uniqueReferrals: uniqueDefaultReferees.length,
-        totalRewards: formatEther(defaultReferralData[0] || 0),
-        availableRewards: formatEther(defaultReferralData[1] || 0)
-      };
+      if (apiData.result && apiData.result.stats) {
+        const stats = apiData.result.stats;
+        console.log("🔍 DEBUG: Using cached API data:", stats);
+        console.log("🔍 DEBUG: Data source:", apiData.cached ? "Redis cache" : "Fresh RPC query");
+        console.log("🔍 DEBUG: Last updated:", apiData.result.lastUpdated);
+        
+        setDefaultReferrerStats({
+          totalReferrals: stats.totalReferrals || "0",
+          uniqueReferrals: stats.uniqueReferrals || 0,
+          totalRewards: stats.totalRewards || "0",
+          availableRewards: stats.availableRewards || "0"
+        });
+        return;
+      }
       
-      console.log("🔍 DEBUG: Final stats being set:", stats);
-      setDefaultReferrerStats(stats);
+    } catch (apiError) {
+      console.warn("⚠️ API endpoint failed, falling back to direct RPC calls:", apiError.message);
       
-    } catch (error) {
-      console.error("❌ Error loading default referrer data:", error);
-      setDefaultReferrerStats({
-        totalReferrals: 0,
-        uniqueReferrals: 0,
-        totalRewards: "0",
-        availableRewards: "0"
-      });
+      // Fallback to direct RPC calls if API fails
+      try {
+        // Get default referrer's referral data
+        const defaultReferralData = await vault.getUserReferralData(DEFAULT_REFERRER);
+        console.log("🔍 DEBUG: Fallback - Default referrer raw data:", defaultReferralData);
+        
+        // Get unique referral count by checking deposit events for default referrer
+        console.log("🔍 DEBUG: Fallback - Searching for Deposited events with default referrer...");
+        const defaultDepositFilter = vault.filters.Deposited(null, null, DEFAULT_REFERRER);
+        
+        const defaultDepositEvents = await queryEventsWithRetry(vault, defaultDepositFilter, [-20000, -10000, -5000]);
+        console.log("🔍 DEBUG: Fallback - Default referrer deposit events found:", defaultDepositEvents.length);
+        
+        const uniqueDefaultReferees = [...new Set(defaultDepositEvents.map((event) => event.args.user.toLowerCase()))];
+        console.log("🔍 DEBUG: Fallback - Unique users referred by default referrer:", uniqueDefaultReferees.length);
+        
+        const stats = {
+          totalReferrals: defaultReferralData[2]?.toString() || "0",
+          uniqueReferrals: uniqueDefaultReferees.length,
+          totalRewards: formatEther(defaultReferralData[0] || 0),
+          availableRewards: formatEther(defaultReferralData[1] || 0)
+        };
+        
+        console.log("🔍 DEBUG: Fallback - Final stats being set:", stats);
+        setDefaultReferrerStats(stats);
+        
+      } catch (fallbackError) {
+        console.error("❌ Both API and fallback failed for default referrer data:", fallbackError);
+        setDefaultReferrerStats({
+          totalReferrals: 0,
+          uniqueReferrals: 0,
+          totalRewards: "0",
+          availableRewards: "0"
+        });
+      }
     }
   };
 
