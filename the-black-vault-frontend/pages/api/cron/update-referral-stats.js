@@ -24,7 +24,7 @@ const BLACK_VAULT_ABI = [
 ];
 
 // Helper function to query events with aggressive rate limiting - focusing on recent blocks
-const queryEventsWithRetry = async (contract, filter, blockRanges = [-10000, -25000, -50000, -100000, -200000]) => {
+const queryEventsWithRetry = async (contract, filter, blockRanges = [-5000, -10000, -25000]) => {
   console.log(`🔍 CRON: Starting queryEventsWithRetry with filter:`, filter);
   console.log(`🔍 CRON: Block ranges to try:`, blockRanges);
   
@@ -33,20 +33,20 @@ const queryEventsWithRetry = async (contract, filter, blockRanges = [-10000, -25
     try {
       console.log(`🔍 CRON: Trying event query with ${Math.abs(blockRange)} block range...`);
       if (i > 0) {
-        // Add longer delays between retries for background processing
-        console.log(`🔍 CRON: Adding delay of ${1000 * i}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * i));
+        // Add short delays between retries
+        console.log(`🔍 CRON: Adding delay of ${500 * i}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, 500 * i));
       }
       
-      console.log(`🔍 CRON: Calling contract.queryFilter with range ${blockRange}...`);
       const events = await contract.queryFilter(filter, blockRange);
       console.log(`🔍 CRON: Successfully found ${events.length} events with ${Math.abs(blockRange)} range`);
       
       if (events.length > 0) {
         // Log some sample events for debugging
-        console.log(`🔍 CRON: Sample event data:`, events.slice(0, 2).map(e => ({
+        console.log(`🔍 CRON: Sample event data:`, events.slice(0, 1).map(e => ({
           blockNumber: e.blockNumber,
           transactionHash: e.transactionHash,
+          eventName: e.fragment?.name || 'Unknown',
           args: e.args ? {
             user: e.args.user,
             amount: e.args.amount?.toString(),
@@ -54,17 +54,10 @@ const queryEventsWithRetry = async (contract, filter, blockRanges = [-10000, -25
             cycle: e.args.cycle?.toString()
           } : 'No args'
         })));
-      } else {
-        console.log(`🔍 CRON: No events found with range ${blockRange}`);
       }
       return events;
     } catch (error) {
       console.warn(`⚠️ CRON: Event query failed with ${Math.abs(blockRange)} range:`, error.message);
-      console.warn(`⚠️ CRON: Error details:`, {
-        code: error.code,
-        reason: error.reason,
-        action: error.action
-      });
       if (i === blockRanges.length - 1) {
         console.error("❌ CRON: All event query attempts failed");
         return [];
@@ -79,7 +72,7 @@ const getActiveUsers = async (contract) => {
   try {
     console.log("🔍 CRON: Getting active users from recent deposits...");
     const depositFilter = contract.filters.Deposited();
-    const depositEvents = await queryEventsWithRetry(contract, depositFilter, [-10000, -25000, -50000]);
+    const depositEvents = await queryEventsWithRetry(contract, depositFilter, [-5000, -10000]);
     
     // Get unique users who have made deposits
     const uniqueUsers = [...new Set(depositEvents.map(event => event.args.user.toLowerCase()))];
@@ -93,7 +86,7 @@ const getActiveUsers = async (contract) => {
     )];
     console.log(`🔍 CRON: Found ${uniqueReferrers.length} unique referrers`);
     
-    return { users: uniqueUsers.slice(0, 200), referrers: uniqueReferrers.slice(0, 100) }; // Limit to prevent excessive processing
+    return { users: uniqueUsers.slice(0, 50), referrers: uniqueReferrers.slice(0, 20) }; // Reduced limits
   } catch (error) {
     console.error("❌ CRON: Error getting active users:", error);
     return { users: [], referrers: [] };
@@ -188,21 +181,29 @@ const updateDefaultReferrerStats = async (contract) => {
     console.log("🔍 CRON: Contract interface events:", contract.interface?.events ? Object.keys(contract.interface.events) : "No events found");
     console.log("🔍 CRON: Available contract filter methods:", contract.filters ? Object.keys(contract.filters) : "No filters found");
 
-    // Query both event types in recent blocks
-    console.log("🔍 CRON: Starting event queries with filters...");
+    // Query both event types in recent blocks (simplified approach)
+    console.log("🔍 CRON: Starting simplified event queries...");
     let depositedEvents = [];
     let depositWithRefEvents = [];
     
     if (depositedFilter) {
-      depositedEvents = await queryEventsWithRetry(contract, depositedFilter, [-10000, -25000, -50000, -100000]);
-      console.log(`🔍 CRON: Deposited events query completed: ${depositedEvents.length} events`);
+      try {
+        depositedEvents = await queryEventsWithRetry(contract, depositedFilter, [-5000, -10000]);
+        console.log(`🔍 CRON: Deposited events query completed: ${depositedEvents.length} events`);
+      } catch (error) {
+        console.warn("⚠️ CRON: Deposited events query failed:", error.message);
+      }
     } else {
       console.warn("⚠️ CRON: Skipping Deposited events query - filter creation failed");
     }
     
     if (depositWithRefFilter) {
-      depositWithRefEvents = await queryEventsWithRetry(contract, depositWithRefFilter, [-10000, -25000, -50000, -100000]);
-      console.log(`🔍 CRON: DepositWithReferrer events query completed: ${depositWithRefEvents.length} events`);
+      try {
+        depositWithRefEvents = await queryEventsWithRetry(contract, depositWithRefFilter, [-5000, -10000]);
+        console.log(`🔍 CRON: DepositWithReferrer events query completed: ${depositWithRefEvents.length} events`);
+      } catch (error) {
+        console.warn("⚠️ CRON: DepositWithReferrer events query failed:", error.message);
+      }
     } else {
       console.warn("⚠️ CRON: Skipping DepositWithReferrer events query - filter creation failed");
     }
@@ -211,152 +212,31 @@ const updateDefaultReferrerStats = async (contract) => {
     let allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
     console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events, ${depositWithRefEvents.length} DepositWithReferrer events, merged total: ${allDepositEvents.length}`);
 
-    // If still no events, try broader range from deployment block
+    // If no events found in recent blocks, try a broader range (but not too broad to avoid timeouts)
     if (allDepositEvents.length === 0) {
-      console.log("🔍 CRON: Trying broader range from block 42296467 (approximate contract deployment)...");
+      console.log("🔍 CRON: No events in recent blocks, trying broader range...");
       try {
-        const fromBlock = 42296467; // Approximate deployment block
-        
         if (depositedFilter) {
-          depositedEvents = await contract.queryFilter(depositedFilter, fromBlock);
-          console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events from deployment block`);
+          depositedEvents = await contract.queryFilter(depositedFilter, -50000); // Last ~40 hours on BSC
+          console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events in last 50k blocks`);
         }
         
         if (depositWithRefFilter) {
-          depositWithRefEvents = await contract.queryFilter(depositWithRefFilter, fromBlock);
-          console.log(`🔍 CRON: Found ${depositWithRefEvents.length} DepositWithReferrer events from deployment block`);
+          depositWithRefEvents = await contract.queryFilter(depositWithRefFilter, -50000);
+          console.log(`🔍 CRON: Found ${depositWithRefEvents.length} DepositWithReferrer events in last 50k blocks`);
         }
         
         allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
-        console.log(`🔍 CRON: Found ${allDepositEvents.length} events from deployment block`);
+        console.log(`🔍 CRON: Found ${allDepositEvents.length} total events in broader range`);
       } catch (broadError) {
-        console.warn("⚠️ CRON: Broad range query also failed:", broadError.message);
-      }
-    }
-
-    // If STILL no events, try even more recent blocks (last 10000 blocks)
-    if (allDepositEvents.length === 0) {
-      console.log("🔍 CRON: Trying very recent blocks (last 10000 - about 8 hours on BSC)...");
-      try {
-        if (depositedFilter) {
-          depositedEvents = await contract.queryFilter(depositedFilter, -10000);
-          console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events in last 10000 blocks`);
-        }
-        
-        if (depositWithRefFilter) {
-          depositWithRefEvents = await contract.queryFilter(depositWithRefFilter, -10000);
-          console.log(`🔍 CRON: Found ${depositWithRefEvents.length} DepositWithReferrer events in last 10000 blocks`);
-        }
-        
-        allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
-        console.log(`🔍 CRON: Found ${allDepositEvents.length} events in last 10000 blocks`);
-      } catch (recentError) {
-        console.warn("⚠️ CRON: Recent blocks query also failed:", recentError.message);
-      }
-    }
-
-    // Last resort: try to get ALL events without block filtering
-    if (allDepositEvents.length === 0) {
-      console.log("🔍 CRON: Last resort - trying to get ALL deposit events (no block limit)...");
-      try {
-        if (depositedFilter) {
-          depositedEvents = await contract.queryFilter(depositedFilter);
-          console.log(`🔍 CRON: Found ${depositedEvents.length} Deposited events with no block limit`);
-        }
-        
-        if (depositWithRefFilter) {
-          depositWithRefEvents = await contract.queryFilter(depositWithRefFilter);
-          console.log(`🔍 CRON: Found ${depositWithRefEvents.length} DepositWithReferrer events with no block limit`);
-        }
-        
-        allDepositEvents = [...depositedEvents, ...depositWithRefEvents];
-        console.log(`🔍 CRON: Found ${allDepositEvents.length} events with no block limit`);
-      } catch (allEventsError) {
-        console.warn("⚠️ CRON: All events query failed:", allEventsError.message);
-      }
-    }
-
-    // --- SMARTER: If still no events, scan raw logs for both event signatures ---
-    let fallbackUsed = false;
-    if (allDepositEvents.length === 0) {
-      fallbackUsed = true;
-      console.log("🔍 CRON: No events found, scanning raw logs for both event signatures...");
-      try {
-        const depositedTopic = getEventTopic("Deposited");
-        const depositWithRefTopic = getEventTopic("DepositWithReferrer");
-        console.log("🔍 CRON: Event topics:", { depositedTopic, depositWithRefTopic });
-        
-        // Only proceed if we have at least one valid topic
-        const validTopics = [depositedTopic, depositWithRefTopic].filter(Boolean);
-        if (validTopics.length === 0) {
-          console.warn("⚠️ CRON: No valid event topics found, skipping raw log scan");
-        } else {
-          // Use recent blocks for performance
-          const fromBlock = Math.max(0, currentBlock - 20000);
-          console.log(`🔍 CRON: Scanning logs from block ${fromBlock} to latest`);
-          
-          const logs = await provider.getLogs({
-            address: CONTRACT_ADDRESS,
-            fromBlock,
-            toBlock: 'latest',
-            topics: [validTopics] // Use OR logic for topics
-          });
-          console.log(`🔍 CRON: Found ${logs.length} raw logs for deposit events`);
-          
-          // Decode logs
-          allDepositEvents = logs.map(log => {
-            try {
-              const parsed = contract.interface.parseLog(log);
-              return { ...log, args: parsed.args, eventName: parsed.name };
-            } catch (e) {
-              console.warn("⚠️ CRON: Failed to parse log:", e.message);
-              return null;
-            }
-          }).filter(Boolean);
-          console.log(`🔍 CRON: Decoded ${allDepositEvents.length} deposit events from raw logs`);
-        }
-      } catch (rawLogError) {
-        console.error("❌ CRON: Raw log scanning failed:", rawLogError.message);
-      }
-    }
-    // If STILL no events, try using a simple block range approach from deployment
-    if (allDepositEvents.length === 0) {
-      console.log("🔍 CRON: Final fallback - trying from known deployment block range...");
-      try {
-        // Use a safe deployment block from a few weeks ago
-        const deploymentBlock = 42296467;
-        const recentBlock = Math.max(deploymentBlock, currentBlock - 100000); // Last 100k blocks or from deployment
-        
-        console.log(`🔍 CRON: Trying from block ${recentBlock} to current (${currentBlock})`);
-        
-        // Try with simpler topic filter - just get ALL contract events and filter later
-        const allLogs = await provider.getLogs({
-          address: CONTRACT_ADDRESS,
-          fromBlock: recentBlock,
-          toBlock: 'latest'
-        });
-        console.log(`🔍 CRON: Found ${allLogs.length} total contract logs`);
-        
-        // Parse and filter for deposit events
-        allDepositEvents = allLogs.map(log => {
-          try {
-            const parsed = contract.interface.parseLog(log);
-            if (parsed.name === 'Deposited' || parsed.name === 'DepositWithReferrer') {
-              return { ...log, args: parsed.args, eventName: parsed.name };
-            }
-            return null;
-          } catch (e) {
-            return null;
-          }
-        }).filter(Boolean);
-        console.log(`🔍 CRON: Found ${allDepositEvents.length} deposit events after filtering`);
-      } catch (finalError) {
-        console.error("❌ CRON: Final fallback also failed:", finalError.message);
+        console.warn("⚠️ CRON: Broader range query failed:", broadError.message);
       }
     }
 
     // Prioritize Deposited events for processing
-    const depositEvents = allDepositEvents.filter(event => event.eventName === 'Deposited');
+    const depositEvents = allDepositEvents.filter(event => 
+      event.fragment?.name === 'Deposited' || event.eventName === 'Deposited'
+    );
 
     // Filter events where the referrer is the DEFAULT_REFERRER
     const defaultReferrerEvents = depositEvents.filter(event => 
@@ -373,8 +253,8 @@ const updateDefaultReferrerStats = async (contract) => {
     if (uniqueDefaultReferees.length > 0) {
       console.log(`🔍 CRON: Sample unique users:`, uniqueDefaultReferees.slice(0, 3));
     }
-    if (fallbackUsed && allDepositEvents.length === 0) {
-      console.warn("⚠️ CRON: Even raw log scan found no events. Check contract deployment block and ABI.");
+    if (allDepositEvents.length === 0) {
+      console.warn("⚠️ CRON: No deposit events found. This might indicate an ABI issue or the contract has no deposits yet.");
     }
 
     const stats = {
