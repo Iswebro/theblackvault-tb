@@ -8,6 +8,7 @@ export default function Leaderboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [weekInfo, setWeekInfo] = useState(null)
+  const [currentWeekIndex, setCurrentWeekIndex] = useState(null) // Track actual current week
   const [showLifetimeModal, setShowLifetimeModal] = useState(false)
   const [showWeekSelector, setShowWeekSelector] = useState(false)
   const [selectedWeek, setSelectedWeek] = useState(null)
@@ -35,6 +36,11 @@ export default function Leaderboard() {
         isPreviousWeek: week !== null && week !== data.weekIndex,
         message: data.message,
       });
+      
+      // Store the current week index if this is the initial load (no week specified)
+      if (week === null) {
+        setCurrentWeekIndex(data.weekIndex);
+      }
     } catch (error) {
       console.error("Error loading weekly leaderboard:", error);
       setError(error.message);
@@ -56,13 +62,16 @@ export default function Leaderboard() {
   }
 
   const getWeekDisplayText = () => {
-    if (!weekInfo) return "Loading..."
+    if (!weekInfo || currentWeekIndex === null) return "Loading..."
 
-    if (weekInfo.isPreviousWeek) {
-      return `Week ${weekInfo.weekIndex + 1} (Previous Week)`
+    const displayWeekNumber = weekInfo.weekIndex + 1;
+    const isCurrentWeek = weekInfo.weekIndex === currentWeekIndex;
+
+    if (isCurrentWeek) {
+      return `Week ${displayWeekNumber} (Current)`;
+    } else {
+      return `Week ${displayWeekNumber} (Previous Week)`;
     }
-
-    return `Week ${weekInfo.weekIndex + 1} (Current)`
   }
 
   return (
@@ -91,12 +100,17 @@ export default function Leaderboard() {
             <label htmlFor="week-select" style={{ marginRight: 8, color: "#fff", fontWeight: 500, fontSize: 15 }}>Select Week:</label>
             <select
               id="week-select"
-              value={selectedWeek ?? weekInfo?.weekIndex ?? 0}
-              onChange={e => setSelectedWeek(Number(e.target.value))}
+              value={selectedWeek ?? currentWeekIndex ?? 0}
+              onChange={e => {
+                const selectedWeekValue = Number(e.target.value);
+                setSelectedWeek(selectedWeekValue === currentWeekIndex ? null : selectedWeekValue);
+              }}
               style={{ padding: "6px 12px", borderRadius: 6, background: "#fff", color: "#222", fontWeight: 500, fontSize: 15, border: "1px solid #333" }}
             >
-              {[...Array((weekInfo?.weekIndex ?? 0) + 1).keys()].map(i => (
-                <option key={i} value={i}>Week {i + 1}</option>
+              {[...Array((currentWeekIndex ?? 0) + 1).keys()].map(i => (
+                <option key={i} value={i}>
+                  Week {i + 1} {i === currentWeekIndex ? "(Current)" : ""}
+                </option>
               ))}
             </select>
           </div>
