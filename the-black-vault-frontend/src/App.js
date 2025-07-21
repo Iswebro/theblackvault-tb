@@ -636,138 +636,63 @@ export default function App() {
           console.log("USDT allowance:",       formatEther(allowance))
           break; // Success, exit retry loop
         } catch (balanceError) {
-          console.warn(`Error fetching wallet balances (attempt ${attempt}/3):`, balanceError)
+          console.warn(`Error fetching wallet balances (attempt ${attempt}/3):`, balanceError);
           if (attempt === 3) {
-            console.error("Failed to fetch wallet balances after 3 attempts")
-            // Set fallback values
-            setBalance("0")
-            setUsdtBalance("0")
-            setUsdtAllowance("0")
-          } else {
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            console.error("Failed to fetch wallet balances after 3 attempts");
           }
         }
       }
-
       // ─────────── REFERRAL REWARDS ───────────
       try {
         if (vault && account) {
-          console.log("🔍 DEBUG: Loading user referral data for account:", account);
-          
-          // Try to use cached background job data first (fast and reliable) - but skip if forced refresh
-          let userReferralDataFetched = false;
-          if (!forceRefresh) {
-            try {
-              const userResponse = await fetch(`/api/referral-stats?user=${account}`);
-              if (userResponse.ok) {
-                const userApiData = await userResponse.json();
-                console.log("🔍 DEBUG: Cached user referral API response:", userApiData);
-                
-                if (userApiData.result && userApiData.result.stats) {
-                  const { contractData, stats } = userApiData.result;
-                  
-                  console.log("🔍 DEBUG: Using cached background job data for user referrals:", {
-                    availableRewards: contractData.availableRewards,
-                    totalReferrals: stats.totalReferralCount,
-                    uniqueReferrals: stats.uniqueReferrals,
-                    dataSource: "background-job"
-                  });
-                  
-                  setReferralRewards(contractData.availableRewards || "0");
-                  setReferralCount(stats.totalReferralCount || "0");
-                  setUniqueReferralCount(stats.uniqueReferrals || 0);
-                  
-                  console.log("Referral rewards (available) from cache:", contractData.availableRewards);
-                  console.log("Referral count from cache:", stats.totalReferralCount);
-                  console.log("Unique referral count from cache:", stats.uniqueReferrals);
-                  
-                  userReferralDataFetched = true;
-                }
-              } else {
-                console.warn("⚠️ User not found in cached data (API returned status:", userResponse.status, "), using direct contract call");
-                // Log API error details
+          console.log("🔍 DEBUG: Loading user referral data for account (contract only):", account);
+          const referralData = await vault.getUserReferralData(account);
+          console.log("🔍 DEBUG: Raw referralData (contract):", referralData);
+          setReferralRewards(formatEther(referralData[1])); // _availableRewards
+          const contractReferralCount = referralData[2]?.toString() || "0";
+          setReferralCount(contractReferralCount);
+          console.log("Referral rewards (available) from contract:", formatEther(referralData[1]));
+          console.log("Referral count from contract:", contractReferralCount);
+          // Now do event queries to get unique count (same logic as ReferralsModal)
+          try {
+            console.log("🔍 DEBUG: Querying deposit events for unique referral count...");
+            const queryEventsWithRetry = async (contract, filter, blockRanges = [-20000, -8000, -3000]) => {
+              for (let i = 0; i < blockRanges.length; i++) {
+                const blockRange = blockRanges[i];
                 try {
-                  const errorData = await userResponse.text();
-                  console.warn("⚠️ User API error details:", errorData);
-                } catch (e) {
-                  console.warn("⚠️ Could not read user API error response");
-                }
-              }
-            } catch (userApiError) {
-              console.warn("⚠️ Cached user referral API error, using direct contract call:", userApiError.message);
-            }
-          } else {
-            console.log("🔄 Forced refresh - skipping cached data, using direct contract call");
-          }
-          
-          // Fallback to direct contract call WITH event queries (same as ReferralsModal)
-          if (!userReferralDataFetched) {
-            console.log("🔍 DEBUG: Fallback - using direct contract call WITH events (same as modal)...");
-            
-            const referralData = await vault.getUserReferralData(account);
-            console.log("🔍 DEBUG: Raw referralData:", referralData);
-            
-            // Set basic rewards and total count from contract
-            setReferralRewards(formatEther(referralData[1])); // _availableRewards
-            const contractReferralCount = referralData[2]?.toString() || "0";
-            setReferralCount(contractReferralCount);
-            
-            console.log("Referral rewards (available) from contract:", formatEther(referralData[1]));
-            console.log("Referral count from contract:", contractReferralCount);
-            
-            // Now do event queries to get unique count (same logic as ReferralsModal)
-            try {
-              console.log("🔍 DEBUG: Querying deposit events for unique referral count...");
-              
-              // Helper function for event queries with retry (same as ReferralsModal)
-              const queryEventsWithRetry = async (contract, filter, blockRanges = [-20000, -8000, -3000]) => {
-                for (let i = 0; i < blockRanges.length; i++) {
-                  const blockRange = blockRanges[i];
-                  try {
-                    console.log(`🔍 DEBUG: Trying event query with ${Math.abs(blockRange)}k block range...`);
-                    if (i > 0) {
-                      await new Promise(resolve => setTimeout(resolve, 1000 * i));
-                    }
-                    const events = await contract.queryFilter(filter, blockRange);
-                    console.log(`🔍 DEBUG: Successfully found ${events.length} events with ${Math.abs(blockRange)}k range`);
-                    return events;
-                  } catch (error) {
-                    console.warn(`⚠️ Event query failed with ${Math.abs(blockRange)}k range:`, error.message);
-                    if (i === blockRanges.length - 1) {
-                      console.error("❌ All event query attempts failed");
-                      return [];
-                    }
+                  console.log(`🔍 DEBUG: Trying event query with ${Math.abs(blockRange)}k block range...`);
+                  if (i > 0) { await new Promise(resolve => setTimeout(resolve, 1000 * i)); }
+                  const events = await contract.queryFilter(filter, blockRange);
+                  console.log(`🔍 DEBUG: Successfully found ${events.length} events with ${Math.abs(blockRange)}k range`);
+                  return events;
+                } catch (error) {
+                  console.warn(`⚠️ Event query failed with ${Math.abs(blockRange)}k range:`, error.message);
+                  if (i === blockRanges.length - 1) {
+                    console.error("❌ All event query attempts failed");
+                    return [];
                   }
                 }
-                return [];
-              };
-              
-              // Get deposit events where this user is the referrer (same as ReferralsModal)
-              const depositFilter = vault.filters.Deposited(null, null, account);
-              const depositEvents = await queryEventsWithRetry(vault, depositFilter, [-20000, -8000, -3000]);
-              console.log("🔍 DEBUG: Deposit events found:", depositEvents.length);
-              
-              // Extract unique referee addresses
-              const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))];
-              setUniqueReferralCount(uniqueReferees.length);
-              
-              console.log("🔍 DEBUG: Unique referees found:", uniqueReferees.length);
-              console.log("✅ Successfully used same logic as ReferralsModal");
-              
-            } catch (eventError) {
-              console.warn("⚠️ Event queries failed, setting unique count to 0:", eventError.message);
-              setUniqueReferralCount(0);
-            }
+              }
+              return [];
+            };
+            const depositFilter = vault.filters.Deposited(null, null, account);
+            const depositEvents = await queryEventsWithRetry(vault, depositFilter, [-20000, -8000, -3000]);
+            console.log("🔍 DEBUG: Deposit events found:", depositEvents.length);
+            const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))];
+            setUniqueReferralCount(uniqueReferees.length);
+            console.log("🔍 DEBUG: Unique referees found:", uniqueReferees.length);
+            console.log("✅ Successfully used same logic as ReferralsModal");
+          } catch (eventError) {
+            console.warn("⚠️ Event queries failed, setting unique count to 0:", eventError.message);
+            setUniqueReferralCount(0);
           }
         }
-      } catch (e) {
-        console.error("Error fetching referral rewards:", e);
+      } catch (referralError) {
+        console.error("Error fetching referral data:", referralError);
         setReferralRewards("0");
         setReferralCount("0");
         setUniqueReferralCount(0);
       }
-
 
       // ─────────── DAILY RATE ───────────
       try {
@@ -779,44 +704,29 @@ export default function App() {
         setDailyRate("0");
       }
       // ─────────── ON-CHAIN VAULT DATA ───────────
-      let totalDeposited, pendingRewards, totalRewardsWithdrawn;
-      
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          // BlackVaultV2.sol getUserVault returns: [totalDeposited, totalRewardsWithdrawn, joinedCycle, pendingRewards]
-          const vaultData = await vault.getUserVault(account);
-          totalDeposited = vaultData[0];
-          totalRewardsWithdrawn = vaultData[1];
-          // joinedCycle = vaultData[2]; // Not used in frontend, can be removed
-          pendingRewards = vaultData[3];
+      try {
+        // BlackVaultV2.sol getUserVault returns: [totalDeposited, totalRewardsWithdrawn, joinedCycle, pendingRewards]
+        const vaultData = await vault.getUserVault(account);
+        const totalDeposited = vaultData[0];
+        const totalRewardsWithdrawn = vaultData[1];
+        // joinedCycle = vaultData[2]; // Not used in frontend, can be removed
+        const pendingRewards = vaultData[3];
 
-          // Calculate net earning amount (total deposited minus 1% fee)
-          // Contract deducts 1% fee, so net earning amount = gross * 0.99
-          const grossAmount = parseFloat(formatEther(totalDeposited));
-          const netEarningAmount = grossAmount * 0.99;
+        // Calculate net earning amount (total deposited minus 1% fee)
+        // Contract deducts 1% fee, so net earning amount = gross * 0.99
+        const grossAmount = parseFloat(formatEther(totalDeposited));
+        const netEarningAmount = grossAmount * 0.99;
 
-          setVaultActiveAmount(netEarningAmount.toString());
-          // Removed: setQueuedBalance (no longer used in V2)
-          setRewards(formatEther(pendingRewards));
+        setVaultActiveAmount(netEarningAmount.toString());
+        setRewards(formatEther(pendingRewards));
 
-          console.log("Total Deposited (Gross):", formatEther(totalDeposited));
-          console.log("Net Earning Amount:", netEarningAmount);
-          console.log("Pending Rewards:", formatEther(pendingRewards));
-          break; // Success, exit retry loop
-        } catch (error) {
-          console.warn(`Error loading vault data (attempt ${attempt}/3):`, error);
-          if (attempt === 3) {
-            console.error("Failed to load vault data after 3 attempts");
-            // Set fallback values
-            totalDeposited = 0;
-            pendingRewards = 0;
-            setVaultActiveAmount("0");
-            setRewards("0");
-          } else {
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          }
-        }
+        console.log("Total Deposited (Gross):", formatEther(totalDeposited));
+        console.log("Net Earning Amount:", netEarningAmount);
+        console.log("Pending Rewards:", formatEther(pendingRewards));
+      } catch (vaultDataError) {
+        console.error("Error fetching vault data:", vaultDataError);
+        setVaultActiveAmount("0");
+        setRewards("0");
       }
 
       // ─────────── ALL-TIME ROI ───────────
@@ -879,16 +789,12 @@ export default function App() {
       // Load default referrer statistics
       await loadDefaultReferrerData(vault);
       
-      await loadTransactionHistory(vault, usdt)
+      await loadTransactionHistory(vault, usdt);
     } catch (error) {
-      console.error("Error loading contract data:", error)
-      addToast("Error loading data from contract", "error")
-      // reset just these three so UI doesn’t hang
-      setVaultActiveAmount("0")
-      setRewards          ("0")
-      setTimeUntilNextCycle(0)
+      console.error("Error loading contract data:", error);
+      addToast("Error loading contract data", "error");
     }
-  }
+  } // End of loadContractData function
  
   // ─── Re-load whenever provider or account changes ───
   // Always force refresh on wallet connect or provider/account change
@@ -950,7 +856,7 @@ export default function App() {
       setTimeUntilNextCycle(0);
     }
     return () => clearInterval(timer);
-  }, [account, provider, vaultActiveAmount, cycleStartTime, cycleDuration]);
+  }, [account, provider, vaultActiveAmount, cycleStartTime, cycleDuration]); // <-- Properly close useEffect
 
   const formatAddress = (addr) => {
     if (!addr) return ""
@@ -1715,6 +1621,7 @@ export default function App() {
       {/* Activation Help Modal removed: no longer needed in V2 */}
     </div>
     <SpeedInsights />
+
     </>
   );
 }
