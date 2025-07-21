@@ -31,6 +31,8 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [showActivationModal, setShowActivationModal] = useState(false);
   const [roi, setRoi] = useState({ invested: "0", earned: "0", roiBP: "0" });
   const [provider, setProvider] = useState(null);
@@ -96,7 +98,7 @@ export default function App() {
   };
 
   // Derived variables (after all state hooks)
-  const pageSize = 10;
+  const pageSize = 5; // Changed to 5 transactions per page in modal
   const totalPages = Math.ceil(history.length / pageSize);
   const paginatedHistory = history.slice((historyPage - 1) * pageSize, historyPage * pageSize);
   const closeHistoryToast = () => {
@@ -314,100 +316,58 @@ export default function App() {
     }
   }
 
-  // Fetch transaction history from BscScan API proxy (with Redis cache)
-  const loadTransactionHistory = async (vault, usdt) => {
-    if (!vault || !account) {
-      console.log("Skipping loadTransactionHistory: missing vault or account")
+  // Load transaction history on-demand using Ankr-powered API
+  const loadTransactionHistory = async () => {
+    if (!account || historyLoading) {
+      console.log("Skipping loadTransactionHistory: missing account or already loading");
       return;
     }
 
+    setHistoryLoading(true);
     try {
-      console.log("🔍 DEBUG: Loading transaction history for account:", account);
-      console.log("🔍 DEBUG: Using contract address:", CONTRACT_ADDRESS);
+      console.log("🔍 Loading transaction history for account:", account);
       
-      const res = await fetch(`/api/bscscan?wallet=${account}&vault=${CONTRACT_ADDRESS}`)
+      const res = await fetch(`/api/transaction-history?wallet=${account}`);
       if (!res.ok) {
         console.error("Transaction history API error:", res.status, res.statusText);
         addToast("Failed to load transaction history.", "error");
         setHistory([]);
         return;
       }
-      const text = await res.text();
-      if (!text.trim()) {
-        console.error("Transaction history API returned empty response");
-        addToast("Transaction history API returned empty response.", "error");
-        setHistory([]);
-        return;
-      }
-      let isJson = false;
-      try {
-        JSON.parse(text);
-        isJson = true;
-      } catch {
-        // not JSON
-      }
-      if (!isJson) {
-        console.error("Transaction history API did not return JSON. Response:", text);
-        // addToast("Transaction history API error. See console for details.", "error"); // Suppressed until leaderboard work resumes
-        setHistory([]);
-        return;
-      }
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (jsonError) {
-        console.error("Transaction history API returned invalid JSON:", jsonError);
-        addToast("Transaction history API returned invalid JSON.", "error");
-        setHistory([]);
-        return;
-      }
       
-      console.log("🔍 DEBUG: BscScan API response:", data);
+      const data = await res.json();
+      console.log("🔍 Transaction history API response:", data);
       
       if (!data.result) {
-        console.log("🔍 DEBUG: No transaction results found");
+        console.log("🔍 No transaction results found");
         setHistory([]);
         return;
       }
       
-      console.log("🔍 DEBUG: Found transactions:", data.result.length);
+      // Convert string dates back to Date objects
+      const processedTransactions = data.result.map(tx => ({
+        ...tx,
+        time: new Date(tx.time)
+      }));
       
-      // Map BscScan txs to history format
-      const processedEvents = data.result.map(tx => {
-        console.log("🔍 DEBUG: Processing transaction:", {
-          hash: tx.hash,
-          from: tx.from,
-          to: tx.to,
-          value: tx.value,
-          tokenSymbol: tx.tokenSymbol,
-          timeStamp: tx.timeStamp
-        });
-        
-        // Determine transaction type based on direction
-        let type = 'Transfer';
-        if (tx.to.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
-          type = 'Deposit';
-        } else if (tx.from.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
-          type = 'Withdrawal';
-        }
-        
-        return {
-          type: type,
-          amount: (parseFloat(tx.value) / Math.pow(10, parseInt(tx.tokenDecimal || 18))).toString(),
-          time: new Date(parseInt(tx.timeStamp) * 1000),
-          txHash: tx.hash,
-        };
-      });
+      console.log("✅ Loaded", processedTransactions.length, "transactions");
+      setHistory(processedTransactions);
+      setHistoryLoaded(true);
       
-      processedEvents.sort((a, b) => b.time.getTime() - a.time.getTime());
-      console.log("🔍 DEBUG: Processed events:", processedEvents);
-      setHistory(processedEvents);
+      if (data.source === 'cache') {
+        console.log("📋 Data served from cache");
+      } else {
+        console.log("� Data fetched live from blockchain");
+      }
+      
     } catch (error) {
       console.error("Error loading transaction history:", error);
       addToast("Error loading transaction history.", "error");
       setHistory([]);
+    } finally {
+      setHistoryLoading(false);
     }
-  }
+  };
 
   // ─────────── loadContractData ───────────
   const loadDefaultReferrerData = async (vault) => {
@@ -808,11 +768,11 @@ export default function App() {
         setTimeUntilNextCycle(0);
       }
 
-      // ─────────── YOUR REFERRAL + CONSTANTS + TIMING + HISTORY FOLLOWS ───────────
+      // ─────────── YOUR REFERRAL + CONSTANTS + TIMING ───────────
       // Load default referrer statistics
       await loadDefaultReferrerData(vault);
       
-      await loadTransactionHistory(vault, usdt);
+      // Note: Transaction history is loaded on-demand, not during initial load
     } catch (error) {
       console.error("Error loading contract data:", error);
       addToast("Error loading contract data", "error");
@@ -1207,6 +1167,7 @@ export default function App() {
      setReferralRewards("0")
      setTotalReferralRewards("0")
      setHistory([])
+     setHistoryLoaded(false)
      setReferralCount("0")
      setUniqueReferralCount(0)
      setMinDeposit("0")
@@ -1504,7 +1465,27 @@ export default function App() {
               <span className="card-icon">📊</span>
               Transaction History
             </h3>
-            {history.length === 0 ? (
+            {!historyLoaded && history.length === 0 ? (
+              <div className="empty-state">
+                <p className="empty-message">Transaction history</p>
+                <p className="empty-submessage">View your deposits and withdrawals</p>
+                <button
+                  className="vault-button premium-button"
+                  onClick={loadTransactionHistory}
+                  disabled={historyLoading}
+                  style={{ marginTop: "12px" }}
+                >
+                  {historyLoading ? (
+                    <>
+                      <div className="loading-spinner"></div>
+                      Loading transactions...
+                    </>
+                  ) : (
+                    "Load Transaction History"
+                  )}
+                </button>
+              </div>
+            ) : historyLoaded && history.length === 0 ? (
               <div className="empty-state">
                 <p className="empty-message">No transactions yet</p>
                 <p className="empty-submessage">Your deposits and withdrawals will appear here</p>
