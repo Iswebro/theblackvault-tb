@@ -13,12 +13,7 @@ const redis = new Redis({
 // Contract addresses and configuration
 const CONTRACT_ADDRESS = "0x22708D8a54c044CbA5B237620Af42030cbf76E14";
 const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
-const ANKR_RPC_URL = "https://rpc.ankr.com/bsc/608da03fc0a1cb8d5a5a6df34cb8bc598dfa27f71213d822afb470aaf0018ee4"; // Premium Ankr endpoint with API key
-
-// Contract event signatures for identifying transaction types
-const DEPOSIT_SIGNATURE = "0x90890809c654f11d6e72a28fa60149770a0d11ec6c92319d6ceb2bb0a4ea1a15"; // Deposited event
-const WITHDRAW_REWARDS_SIGNATURE = "0x7084f5476618d8e60b11ef0d7d3f06914655adb8793e28ff7f018d4c76d505d5"; // WithdrawRewards event
-const WITHDRAW_REFERRAL_SIGNATURE = "0x4ac8af8a2cd87193d64dfc7a3b8d9923b714ec528b18725d080aa1299be0c5e4"; // WithdrawReferralRewards event
+const ANKR_RPC_URL = "https://rpc.ankr.com/bsc/608da03fc0a1cb8d5a5a6df34cb8bc598dfa27f71213d822afb470aaf0018ee4"; // BSC-specific endpoint with API key
 
 export default async function handler(req, res) {
   const { wallet } = req.query;
@@ -57,15 +52,16 @@ export default async function handler(req, res) {
 
     // Get current block for range limiting
     const currentBlock = await provider.getBlockNumber();
-    const fromBlock = Math.max(0, currentBlock - 50000); // Last ~50k blocks (about 1-2 days on BSC)
+    const fromBlock = Math.max(0, currentBlock - 200000); // Last ~200k blocks (about 7 days on BSC)
 
     console.log("📊 Searching blocks:", fromBlock, "to", currentBlock);
 
     // Create contract instance for event filtering
+    // Note: Both deposit() and depositWithReferrer() emit the same "Deposited" event
     const contractInterface = new ethers.Interface([
-      "event Deposited(address indexed user, uint256 amount, address indexed referrer)",
-      "event WithdrawRewards(address indexed user, uint256 amount)",
-      "event WithdrawReferralRewards(address indexed user, uint256 amount)"
+      "event Deposited(address indexed user, uint256 amount, address indexed referrer, uint256 cycle)",
+      "event RewardsWithdrawn(address indexed user, uint256 amount, uint256 cycle)",
+      "event ReferralRewardsWithdrawn(address indexed user, uint256 amount)"
     ]);
 
     // Query contract events for this user
@@ -82,7 +78,7 @@ export default async function handler(req, res) {
     const withdrawRewardsFilter = {
       address: CONTRACT_ADDRESS,
       topics: [
-        contractInterface.getEvent('WithdrawRewards').topicHash,
+        contractInterface.getEvent('RewardsWithdrawn').topicHash,
         ethers.zeroPadValue(wallet, 32) // user address in topic[1]
       ],
       fromBlock: fromBlock,
@@ -92,7 +88,7 @@ export default async function handler(req, res) {
     const withdrawReferralFilter = {
       address: CONTRACT_ADDRESS,
       topics: [
-        contractInterface.getEvent('WithdrawReferralRewards').topicHash,
+        contractInterface.getEvent('ReferralRewardsWithdrawn').topicHash,
         ethers.zeroPadValue(wallet, 32) // user address in topic[1]
       ],
       fromBlock: fromBlock,
@@ -123,7 +119,8 @@ export default async function handler(req, res) {
           time: new Date(block.timestamp * 1000),
           txHash: log.transactionHash,
           blockNumber: log.blockNumber,
-          referrer: decoded.args.referrer
+          referrer: decoded.args.referrer,
+          cycle: Number(decoded.args.cycle)
         });
       } catch (e) {
         console.warn("⚠️ Error processing deposit log:", e.message);
@@ -141,7 +138,8 @@ export default async function handler(req, res) {
           amount: ethers.formatEther(decoded.args.amount),
           time: new Date(block.timestamp * 1000),
           txHash: log.transactionHash,
-          blockNumber: log.blockNumber
+          blockNumber: log.blockNumber,
+          cycle: Number(decoded.args.cycle)
         });
       } catch (e) {
         console.warn("⚠️ Error processing withdraw rewards log:", e.message);
