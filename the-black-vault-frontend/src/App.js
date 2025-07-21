@@ -953,12 +953,15 @@ export default function App() {
          setDepositAmount("")
          // Update leaderboard if referral used (optional, can keep as is)
          if (referralAddress && referralAddress !== ethers.ZeroAddress) {
+           // Calculate referral reward amount (10% of deposit)
+           const referralReward = (BigInt(value) * BigInt(10)) / BigInt(100);
+           
            fetch("/api/leaderboard/update", {
              method: "POST",
              headers: { "Content-Type": "application/json" },
              body: JSON.stringify({
                referrer: referralAddress,
-               amount: value.toString(), // value is already in wei
+               amount: referralReward.toString(), // Send actual referral reward amount
              }),
            })
              .then(() => {

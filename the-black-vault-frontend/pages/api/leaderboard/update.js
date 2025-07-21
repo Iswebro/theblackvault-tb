@@ -1,6 +1,9 @@
 import { Redis } from '@upstash/redis';
 
-const redis = Redis.fromEnv();
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+});
 
 // Helper to get current week index
 function getCurrentWeekIndex() {
@@ -43,8 +46,14 @@ export default async function handler(req, res) {
         totalRewards: amt.toString(),
       });
     }
-    // Sort and re-rank
-    lifetime.sort((a, b) => BigInt(b.totalRewards) - BigInt(a.totalRewards));
+    // Sort and re-rank - properly handle BigInt comparison
+    lifetime.sort((a, b) => {
+      const aRewards = BigInt(a.totalRewards);
+      const bRewards = BigInt(b.totalRewards);
+      if (bRewards > aRewards) return 1;
+      if (bRewards < aRewards) return -1;
+      return 0;
+    });
     lifetime.forEach((entry, i) => (entry.rank = i + 1));
     await redis.set('leaderboard:lifetime', lifetime);
 
@@ -70,7 +79,14 @@ export default async function handler(req, res) {
         totalRewards: amt.toString(),
       });
     }
-    weekly.sort((a, b) => BigInt(b.totalRewards) - BigInt(a.totalRewards));
+    // Sort and re-rank - properly handle BigInt comparison
+    weekly.sort((a, b) => {
+      const aRewards = BigInt(a.totalRewards);
+      const bRewards = BigInt(b.totalRewards);
+      if (bRewards > aRewards) return 1;
+      if (bRewards < aRewards) return -1;
+      return 0;
+    });
     weekly.forEach((entry, i) => (entry.rank = i + 1));
     await redis.set(weekKey, weekly);
 
