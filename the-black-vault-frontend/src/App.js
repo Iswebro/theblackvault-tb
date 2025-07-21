@@ -645,46 +645,48 @@ export default function App() {
       // ─────────── REFERRAL REWARDS ───────────
       try {
         if (vault && account) {
-          console.log("🔍 DEBUG: Loading user referral data for account (contract only):", account);
-          const referralData = await vault.getUserReferralData(account);
-          console.log("🔍 DEBUG: Raw referralData (contract):", referralData);
-          setReferralRewards(formatEther(referralData[1])); // _availableRewards
-          const contractReferralCount = referralData[2]?.toString() || "0";
-          setReferralCount(contractReferralCount);
-          console.log("Referral rewards (available) from contract:", formatEther(referralData[1]));
-          console.log("Referral count from contract:", contractReferralCount);
-          // Now do event queries to get unique count (same logic as ReferralsModal)
+          console.log("🔍 DEBUG: Loading user referral data using cached API for account:", account);
+          
+          // Use the reliable cached API endpoint instead of direct RPC calls
           try {
-            console.log("🔍 DEBUG: Querying deposit events for unique referral count...");
-            const queryEventsWithRetry = async (contract, filter, blockRanges = [-20000, -8000, -3000]) => {
-              for (let i = 0; i < blockRanges.length; i++) {
-                const blockRange = blockRanges[i];
-                try {
-                  console.log(`🔍 DEBUG: Trying event query with ${Math.abs(blockRange)}k block range...`);
-                  if (i > 0) { await new Promise(resolve => setTimeout(resolve, 1000 * i)); }
-                  const events = await contract.queryFilter(filter, blockRange);
-                  console.log(`🔍 DEBUG: Successfully found ${events.length} events with ${Math.abs(blockRange)}k range`);
-                  return events;
-                } catch (error) {
-                  console.warn(`⚠️ Event query failed with ${Math.abs(blockRange)}k range:`, error.message);
-                  if (i === blockRanges.length - 1) {
-                    console.error("❌ All event query attempts failed");
-                    return [];
-                  }
-                }
+            const response = await fetch(`/api/user-referrals?account=${account}`);
+            if (response.ok) {
+              const apiData = await response.json();
+              console.log("🔍 DEBUG: User referrals API response:", apiData);
+              
+              if (apiData.result && apiData.result.contractData) {
+                const { contractData, stats } = apiData.result;
+                
+                // Set referral rewards and counts from cached API data
+                setReferralRewards(contractData.availableRewards);
+                setReferralCount(contractData.referredCount);
+                setUniqueReferralCount(stats.uniqueReferrals);
+                
+                console.log("✅ Successfully loaded referral data from cached API:");
+                console.log("- Available rewards:", contractData.availableRewards);
+                console.log("- Total referral count:", contractData.referredCount);
+                console.log("- Unique referrals:", stats.uniqueReferrals);
+              } else {
+                throw new Error("Invalid API response structure");
               }
-              return [];
-            };
-            const depositFilter = vault.filters.Deposited(null, account, null);
-            const depositEvents = await queryEventsWithRetry(vault, depositFilter, [-20000, -8000, -3000]);
-            console.log("🔍 DEBUG: Deposit events found:", depositEvents.length);
-            const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))];
-            setUniqueReferralCount(uniqueReferees.length);
-            console.log("🔍 DEBUG: Unique referees found:", uniqueReferees.length);
-            console.log("✅ Successfully used same logic as ReferralsModal");
-          } catch (eventError) {
-            console.warn("⚠️ Event queries failed, setting unique count to 0:", eventError.message);
+            } else {
+              throw new Error(`API returned status ${response.status}`);
+            }
+          } catch (apiError) {
+            console.warn("⚠️ User referrals API failed, falling back to contract calls:", apiError.message);
+            
+            // Fallback to direct contract calls
+            const referralData = await vault.getUserReferralData(account);
+            console.log("🔍 DEBUG: Fallback - Raw referralData (contract):", referralData);
+            setReferralRewards(formatEther(referralData[1])); // _availableRewards
+            const contractReferralCount = referralData[2]?.toString() || "0";
+            setReferralCount(contractReferralCount);
+            console.log("Fallback - Referral rewards (available) from contract:", formatEther(referralData[1]));
+            console.log("Fallback - Referral count from contract:", contractReferralCount);
+            
+            // For unique count, set to 0 since direct event queries are unreliable
             setUniqueReferralCount(0);
+            console.warn("⚠️ Setting unique referral count to 0 due to API failure - use cached API for accurate count");
           }
         }
       } catch (referralError) {
