@@ -1444,9 +1444,6 @@ export default function App() {
                   <span style={{ color: '#ccc' }}>Total Default Rewards:</span>
                   <span style={{ color: '#fff' }}>{formatAmount(defaultReferrerStats.totalRewards)} USDT</span>
                 </div>
-                <div style={{ fontSize: '10px', color: '#666', marginTop: '8px', fontStyle: 'italic' }}>
-                  Debug: Connected as {formatAddress(account)} | Default: {formatAddress(DEFAULT_REFERRER)} | Match: {account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase() ? 'YES' : 'NO'}
-                </div>
               </div>
             )}
 
