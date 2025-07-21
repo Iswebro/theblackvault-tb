@@ -675,7 +675,7 @@ export default function App() {
               }
               return [];
             };
-            const depositFilter = vault.filters.Deposited(null, null, account);
+            const depositFilter = vault.filters.Deposited(null, account, null);
             const depositEvents = await queryEventsWithRetry(vault, depositFilter, [-20000, -8000, -3000]);
             console.log("🔍 DEBUG: Deposit events found:", depositEvents.length);
             const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))];
