@@ -1426,7 +1426,11 @@ export default function App() {
             </div>
             <div className="referral-stats">
               <span className="referral-label">Your Referrals:</span>
-              <span className="referral-value">{uniqueReferralCount}</span>
+              <span className="referral-value">
+                {account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase() 
+                  ? defaultReferrerStats.uniqueReferrals 
+                  : uniqueReferralCount}
+              </span>
             </div>
             
             {account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase() && (
