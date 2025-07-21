@@ -891,11 +891,12 @@ export default function App() {
   }
  
   // ─── Re-load whenever provider or account changes ───
+  // Always force refresh on wallet connect or provider/account change
   useEffect(() => {
-    if (provider && account) {
-      loadContractData();
+    if (provider && account && contract && usdtContract) {
+      loadContractData(contract, usdtContract, true);
     }
-  }, [provider, account]);
+  }, [provider, account, contract, usdtContract]);
  
   // ─── Countdown timer / auto-refresh ───
   useEffect(() => {
@@ -1348,25 +1349,6 @@ export default function App() {
             <span className="header-title">BLACK VAULT</span>
           </div>
           <div className="header-account">
-            <button 
-              className="refresh-button"
-              onClick={() => loadContractData(contract, usdtContract, true)}
-              disabled={txLoading}
-              title="Refresh Balance Data"
-              style={{
-                background: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '6px',
-                color: 'white',
-                padding: '6px 12px',
-                marginRight: '12px',
-                cursor: txLoading ? 'not-allowed' : 'pointer',
-                fontSize: '12px',
-                opacity: txLoading ? 0.5 : 1
-              }}
-            >
-              {txLoading ? "⏳" : "🔄"}
-            </button>
             <span className="account-label">Connected</span>
             <span className="account-address">{formatAddress(account)}</span>
           </div>
