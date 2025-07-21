@@ -46,6 +46,7 @@ export default function App() {
   const [rewards, setRewards] = useState("0");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [referralRewards, setReferralRewards] = useState("0");
+  const [totalReferralRewards, setTotalReferralRewards] = useState("0"); // Total referral rewards earned (for ROI calculation)
   const [referralAddress, setReferralAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [txLoading, setTxLoading] = useState(false);
@@ -659,11 +660,13 @@ export default function App() {
                 
                 // Set referral rewards and counts from cached API data
                 setReferralRewards(contractData.availableRewards);
+                setTotalReferralRewards(contractData.totalRewards || "0"); // Total referral rewards earned
                 setReferralCount(contractData.referredCount);
                 setUniqueReferralCount(stats.uniqueReferrals);
                 
                 console.log("✅ Successfully loaded referral data from cached API:");
                 console.log("- Available rewards:", contractData.availableRewards);
+                console.log("- Total referral rewards:", contractData.totalRewards || "0");
                 console.log("- Total referral count:", contractData.referredCount);
                 console.log("- Unique referrals:", stats.uniqueReferrals);
               } else {
@@ -679,9 +682,11 @@ export default function App() {
             const referralData = await vault.getUserReferralData(account);
             console.log("🔍 DEBUG: Fallback - Raw referralData (contract):", referralData);
             setReferralRewards(formatEther(referralData[1])); // _availableRewards
+            setTotalReferralRewards(formatEther(referralData[0])); // _totalRewards
             const contractReferralCount = referralData[2]?.toString() || "0";
             setReferralCount(contractReferralCount);
             console.log("Fallback - Referral rewards (available) from contract:", formatEther(referralData[1]));
+            console.log("Fallback - Total referral rewards from contract:", formatEther(referralData[0]));
             console.log("Fallback - Referral count from contract:", contractReferralCount);
             
             // For unique count, set to 0 since direct event queries are unreliable
@@ -692,6 +697,7 @@ export default function App() {
       } catch (referralError) {
         console.error("Error fetching referral data:", referralError);
         setReferralRewards("0");
+        setTotalReferralRewards("0");
         setReferralCount("0");
         setUniqueReferralCount(0);
       }
@@ -706,13 +712,14 @@ export default function App() {
         setDailyRate("0");
       }
       // ─────────── ON-CHAIN VAULT DATA ───────────
+      let totalDeposited, totalRewardsWithdrawn, pendingRewards;
       try {
         // BlackVaultV2.sol getUserVault returns: [totalDeposited, totalRewardsWithdrawn, joinedCycle, pendingRewards]
         const vaultData = await vault.getUserVault(account);
-        const totalDeposited = vaultData[0];
-        const totalRewardsWithdrawn = vaultData[1];
+        totalDeposited = vaultData[0];
+        totalRewardsWithdrawn = vaultData[1];
         // joinedCycle = vaultData[2]; // Not used in frontend, can be removed
-        const pendingRewards = vaultData[3];
+        pendingRewards = vaultData[3];
 
         // Calculate net earning amount (total deposited minus 1% fee)
         // Contract deducts 1% fee, so net earning amount = gross * 0.99
@@ -729,18 +736,32 @@ export default function App() {
         console.error("Error fetching vault data:", vaultDataError);
         setVaultActiveAmount("0");
         setRewards("0");
+        // Set default values for ROI calculation
+        totalDeposited = 0;
+        totalRewardsWithdrawn = 0;
+        pendingRewards = 0;
       }
 
       // ─────────── ALL-TIME ROI ───────────
       try {
         const invested = parseFloat(formatEther(totalDeposited));
-        const earned = parseFloat(formatEther(pendingRewards)) + parseFloat(formatEther(totalRewardsWithdrawn));
-        const roiBP = invested > 0 ? ((earned / invested) * 10000).toFixed(0) : "0";
+        const vaultEarned = parseFloat(formatEther(pendingRewards)) + parseFloat(formatEther(totalRewardsWithdrawn));
+        const referralEarned = parseFloat(totalReferralRewards);
+        const totalEarned = vaultEarned + referralEarned;
+        const roiBP = invested > 0 ? ((totalEarned / invested) * 10000).toFixed(0) : "0";
+        
         setRoi({
           invested: invested.toString(),
-          earned: earned.toString(),
+          earned: totalEarned.toString(),
           roiBP: roiBP,
         });
+        
+        console.log("📊 ROI Calculation:");
+        console.log("- Total Invested:", invested);
+        console.log("- Vault Earnings:", vaultEarned, "(pending + withdrawn)");
+        console.log("- Referral Earnings:", referralEarned);
+        console.log("- Total Earnings:", totalEarned);
+        console.log("- ROI %:", invested > 0 ? ((totalEarned / invested) * 100).toFixed(2) + "%" : "0.00%");
       } catch (error) {
         console.error("Error calculating ROI:", error);
         setRoi({
@@ -1184,6 +1205,7 @@ export default function App() {
      setUsdtAllowance("0")
      setRewards("0")
      setReferralRewards("0")
+     setTotalReferralRewards("0")
      setHistory([])
      setReferralCount("0")
      setUniqueReferralCount(0)
