@@ -846,10 +846,18 @@ export default function App() {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`
   }
 
+  // Show up to 3 decimals for display
   const formatAmount = (amount) => {
     const num = Number.parseFloat(amount)
     if (num === 0 || isNaN(num) || num < 0.0001) return "0"
-    return Number.parseFloat(num.toFixed(6)).toString()
+    return num.toFixed(3).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
+  }
+
+  // For Max button: always paste with 2 decimals (rounded down)
+  const formatAmountForInput = (amount) => {
+    const num = Number.parseFloat(amount)
+    if (num === 0 || isNaN(num)) return "0"
+    return Math.floor(num * 100) / 100 + ''
   }
 
   const formatCountdown = (seconds) => {
@@ -862,7 +870,7 @@ export default function App() {
   const handleMaxDeposit = () => {
     const maxAmount = Number.parseFloat(usdtBalance)
     if (maxAmount > 0) {
-      setDepositAmount(maxAmount.toString())
+      setDepositAmount(formatAmountForInput(maxAmount))
     }
   }
 
