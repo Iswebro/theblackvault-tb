@@ -520,8 +520,19 @@ const updateUserStats = async (contract, users) => {
   
   // Store all user stats in Redis with 25 hour expiry (longer than daily cron interval)
   if (userStats && Object.keys(userStats).length > 0) {
+    // Store individual user data in separate keys (what the frontend API expects)
+    for (const [userAddress, userData] of Object.entries(userStats)) {
+      const keyOriginal = `user-referrals:${userAddress}`;
+      const keyLower = `user-referrals:${userAddress.toLowerCase()}`;
+      
+      // Store the same data in both formats
+      await redis.set(keyOriginal, userData, { ex: 90000 });
+      await redis.set(keyLower, userData, { ex: 90000 });
+    }
+    
+    // Also store aggregate data for reference
     await redis.set('referral-stats:users', userStats, { ex: 90000 });
-    console.log(`✅ CRON: Updated stats for ${Object.keys(userStats).length} users`);
+    console.log(`✅ CRON: Updated individual user data for ${Object.keys(userStats).length} users`);
   } else {
     console.log("🔍 CRON: No user stats to store");
   }
