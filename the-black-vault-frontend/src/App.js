@@ -1369,7 +1369,16 @@ export default function App() {
               Vault Rewards
             </h3>
             <div className="reward-display">
-              <span className="reward-amount">{formatAmount(rewards)} USDT</span>
+              <span
+                className="reward-amount"
+                style={{ cursor: 'pointer' }}
+                title="Click to auto-fill withdraw amount"
+                onClick={() => {
+                  if (Number.parseFloat(rewards) > 0) setWithdrawAmount(formatAmount(rewards));
+                }}
+              >
+                {formatAmount(rewards)} USDT
+              </span>
               <span className="reward-label">Available to withdraw</span>
             </div>
             <div className="input-group" style={{ marginBottom: 12 }}>
