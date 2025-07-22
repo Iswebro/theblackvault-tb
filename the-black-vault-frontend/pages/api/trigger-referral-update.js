@@ -13,10 +13,14 @@ export default async function handler(req, res) {
     console.log('🔄 Manually triggering referral stats update...');
     
     // Import and run the cron job logic
-    const cronHandler = require('./cron/update-referral-stats.js');
+    const cronModule = await import('./cron/update-referral-stats.js');
+    const cronHandler = cronModule.default;
     
     // Create a mock request/response for the cron job
-    const mockReq = { method: 'POST' };
+    const mockReq = { 
+      method: 'POST',
+      headers: {}  // Add headers object
+    };
     const mockRes = {
       status: (code) => ({
         json: (data) => {
@@ -26,7 +30,7 @@ export default async function handler(req, res) {
       })
     };
     
-    await cronHandler.default(mockReq, mockRes);
+    await cronHandler(mockReq, mockRes);
     
     return res.status(200).json({
       success: true,
