@@ -486,6 +486,30 @@ const updateUserStats = async (contract, users) => {
           
           const uniqueReferees = [...new Set(depositEvents.map(event => event.args.user.toLowerCase()))];
           
+          // Get detailed referee information with bonus data (limit to prevent too many RPC calls)
+          const maxRefereesToProcess = Math.min(uniqueReferees.length, 20);
+          const refereesToProcess = uniqueReferees.slice(0, maxRefereesToProcess);
+          
+          const refereeData = await Promise.all(
+            refereesToProcess.map(async (refereeAddress) => {
+              try {
+                const bonusInfo = await contract.getReferralBonusInfo(user, refereeAddress);
+                return {
+                  address: refereeAddress,
+                  bonusesUsed: parseInt(bonusInfo.used.toString()),
+                  bonusesRemaining: parseInt(bonusInfo.remaining.toString()),
+                };
+              } catch (error) {
+                console.warn(`⚠️ CRON: Error getting bonus info for ${refereeAddress}:`, error.message);
+                return {
+                  address: refereeAddress,
+                  bonusesUsed: 0,
+                  bonusesRemaining: 3,
+                };
+              }
+            })
+          );
+          
           userStats[user] = {
             contractData: {
               totalRewards: ethers.formatEther(referralData[0] || 0),
@@ -497,7 +521,10 @@ const updateUserStats = async (contract, users) => {
             events: {
               totalEvents: depositEvents.length,
               uniqueReferees: uniqueReferees.length,
+              processedReferees: refereesToProcess.length,
+              truncated: uniqueReferees.length > maxRefereesToProcess
             },
+            referrals: refereeData, // Add the detailed referrals array that the modal needs
             stats: {
               totalReferralCount: referralData[2]?.toString() || "0",
               uniqueReferrals: uniqueReferees.length,
