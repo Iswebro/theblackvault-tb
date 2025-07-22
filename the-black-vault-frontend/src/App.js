@@ -383,6 +383,8 @@ export default function App() {
       
       // Use fast cached API endpoint (no expensive RPC calls)
       const response = await fetch('/api/referral-stats?type=default');
+      console.log("🔍 DEBUG: Default referrer API response status:", response.status);
+      
       if (response.ok) {
         const apiData = await response.json();
         console.log("🔍 DEBUG: Cached referral stats API response:", apiData);
@@ -391,8 +393,8 @@ export default function App() {
           const stats = apiData.result.stats;
           console.log("🔍 DEBUG: Cached stats:", stats);
           
-          // Temporarily disable the fallback forcing to see what API returns
-          console.log("🔍 DEBUG: Using cached API data (fallback forcing disabled for debugging):", stats);
+          // Use cached API data
+          console.log("🔍 DEBUG: Using cached API data:", stats);
           console.log("🔍 DEBUG: Data source: cached API");
           console.log("🔍 DEBUG: Last updated:", apiData.result.lastUpdated);
           
@@ -406,13 +408,7 @@ export default function App() {
         }
       } else {
         console.warn("⚠️ Cached referral stats not available (API returned status:", response.status, "), using fallback");
-        // Log more details about the API failure
-        try {
-          const errorData = await response.text();
-          console.warn("⚠️ API error details:", errorData);
-        } catch (e) {
-          console.warn("⚠️ Could not read error response");
-        }
+        // Don't try to read the error response if it's 404, just proceed to fallback
       }
       
       // Fallback with event querying (same as other functions)
@@ -434,104 +430,16 @@ export default function App() {
         try {
           console.log("🔍 DEBUG: Querying deposit events to find default referrer beneficiaries...");
           
-          // Helper function for event queries with retry (same as user referrals)
-          const queryEventsWithRetry = async (contract, filter, blockRanges = [-20000, -8000, -3000]) => {
-            for (let i = 0; i < blockRanges.length; i++) {
-              const blockRange = blockRanges[i];
-              try {
-                console.log(`🔍 DEBUG: Default referrer - trying event query with ${Math.abs(blockRange)}k block range...`);
-                if (i > 0) {
-                  await new Promise(resolve => setTimeout(resolve, 1000 * i));
-                }
-                const events = await contract.queryFilter(filter, blockRange);
-                console.log(`🔍 DEBUG: Default referrer - found ${events.length} events with ${Math.abs(blockRange)}k range`);
-                return events;
-              } catch (error) {
-                console.warn(`⚠️ Default referrer event query failed with ${Math.abs(blockRange)}k range:`, error.message);
-                if (i === blockRanges.length - 1) {
-                  console.error("❌ Default referrer - all event query attempts failed");
-                  return [];
-                }
-              }
-            }
-            return [];
-          };
-          
-          // Get ALL deposit events
-          const depositFilter = vault.filters.Deposited();
-          const depositEvents = await queryEventsWithRetry(vault, depositFilter, [-20000, -8000, -3000]);
-          console.log("🔍 DEBUG: Default referrer - total deposit events found:", depositEvents.length);
-          
-          // Filter for deposits that benefited the default referrer
-          // This includes: deposits without referral (auto-assigned to default) AND explicit default referrer usage
-          const defaultReferrerEvents = depositEvents.filter(event => {
-            const referrer = event.args?.referrer;
-            const isDefaultReferrer = referrer && referrer.toLowerCase() === DEFAULT_REFERRER.toLowerCase();
-            const isZeroAddress = referrer && (referrer === ethers.ZeroAddress || referrer.toLowerCase() === "0x0000000000000000000000000000000000000000");
-            return isDefaultReferrer || isZeroAddress;
-          });
-          
-          console.log("🔍 DEBUG: Default referrer - events using default referrer or zero address:", defaultReferrerEvents.length);
-          
-          // More importantly: find ALL deposits and identify which users made deposits without using ANY referral
-          // We need to find users who have made deposits where the referrer was assigned as default (not chosen by user)
-          console.log("🔍 DEBUG: Analyzing deposit patterns to find no-referral users...");
-          
-          // Group deposits by user to analyze their referral patterns
-          const userDepositPatterns = {};
-          depositEvents.forEach(event => {
-            const user = event.args?.user?.toLowerCase();
-            const referrer = event.args?.referrer?.toLowerCase();
-            
-            if (user && referrer) {
-              if (!userDepositPatterns[user]) {
-                userDepositPatterns[user] = {
-                  totalDeposits: 0,
-                  defaultReferrerDeposits: 0,
-                  otherReferrerDeposits: 0,
-                  referrers: new Set()
-                };
-              }
-              
-              userDepositPatterns[user].totalDeposits++;
-              userDepositPatterns[user].referrers.add(referrer);
-              
-              const isDefaultOrZero = referrer === DEFAULT_REFERRER.toLowerCase() || 
-                                     referrer === ethers.ZeroAddress.toLowerCase() || 
-                                     referrer === "0x0000000000000000000000000000000000000000";
-              
-              if (isDefaultOrZero) {
-                userDepositPatterns[user].defaultReferrerDeposits++;
-              } else {
-                userDepositPatterns[user].otherReferrerDeposits++;
-              }
-            }
-          });
-          
-          // Find users who made deposits without referrals (deposits that used default referrer)
-          const usersWithoutReferralDeposits = Object.keys(userDepositPatterns).filter(user => 
-            userDepositPatterns[user].defaultReferrerDeposits > 0
-          );
-          
-          console.log("🔍 DEBUG: Users who made deposits without referral links:", usersWithoutReferralDeposits.length);
-          console.log("🔍 DEBUG: User deposit patterns:", Object.fromEntries(
-            Object.entries(userDepositPatterns).slice(0, 3).map(([user, pattern]) => [
-              user.slice(0, 10) + '...', 
-              {
-                total: pattern.totalDeposits,
-                defaultRef: pattern.defaultReferrerDeposits,
-                otherRef: pattern.otherReferrerDeposits,
-                referrerCount: pattern.referrers.size
-              }
-            ])
-          ));
+          // For now, skip the complex event queries that are failing
+          // Just use the basic contract stats until the background job populates the cache
+          console.warn("⚠️ Skipping event queries for now - using basic contract stats only");
           
           setDefaultReferrerStats({
             ...basicStats,
-            uniqueReferrals: usersWithoutReferralDeposits.length
+            uniqueReferrals: 0 // Will be populated by background job later
           });
           
-          console.log("✅ Successfully used event querying for default referrer stats");
+          console.log("✅ Using basic contract stats for default referrer (unique count will be available when background job runs)");
           
         } catch (eventError) {
           console.warn("⚠️ Default referrer event queries failed, using basic stats only:", eventError.message);
@@ -629,8 +537,12 @@ export default function App() {
               }
             } else {
               const errorText = await response.text();
-              console.warn("⚠️ User referrals API failed with status:", response.status, "Error:", errorText);
-              throw new Error(`API returned status ${response.status}: ${errorText}`);
+              console.warn("⚠️ User referrals API failed with status:", response.status);
+              // Don't log the full error text for 404s, just the status
+              if (response.status !== 404) {
+                console.warn("⚠️ Error details:", errorText);
+              }
+              throw new Error(`API returned status ${response.status}`);
             }
           } catch (apiError) {
             console.warn("⚠️ User referrals API failed, falling back to contract calls:", apiError.message);
