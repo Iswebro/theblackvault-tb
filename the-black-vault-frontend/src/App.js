@@ -391,27 +391,18 @@ export default function App() {
           const stats = apiData.result.stats;
           console.log("🔍 DEBUG: Cached stats:", stats);
           
-          // Check if cached data seems valid (has totalReferrals > 0 but uniqueReferrals = 0)
-          // This indicates the cron job found contract data but failed to find events
-          const hasReferrals = parseInt(stats.totalReferrals || "0") > 0;
-          const hasUniqueCount = parseInt(stats.uniqueReferrals || "0") > 0;
+          // Temporarily disable the fallback forcing to see what API returns
+          console.log("🔍 DEBUG: Using cached API data (fallback forcing disabled for debugging):", stats);
+          console.log("🔍 DEBUG: Data source: cached API");
+          console.log("🔍 DEBUG: Last updated:", apiData.result.lastUpdated);
           
-          if (hasReferrals && !hasUniqueCount) {
-            console.log("🔍 DEBUG: Cached data seems incomplete (has referrals but no unique count), forcing fallback...");
-            // Force fallback by continuing to fallback logic
-          } else {
-            console.log("🔍 DEBUG: Using cached background job data:", stats);
-            console.log("🔍 DEBUG: Data source: background job");
-            console.log("🔍 DEBUG: Last updated:", apiData.result.lastUpdated);
-            
-            setDefaultReferrerStats({
-              totalReferrals: stats.totalReferrals || "0",
-              uniqueReferrals: stats.uniqueReferrals || 0,
-              totalRewards: stats.totalRewards || "0",
-              availableRewards: stats.availableRewards || "0"
-            });
-            return; // Use cached data and exit
-          }
+          setDefaultReferrerStats({
+            totalReferrals: stats.totalReferrals || "0",
+            uniqueReferrals: stats.uniqueReferrals || 0,
+            totalRewards: stats.totalRewards || "0",
+            availableRewards: stats.availableRewards || "0"
+          });
+          return; // Use cached data and exit
         }
       } else {
         console.warn("⚠️ Cached referral stats not available (API returned status:", response.status, "), using fallback");
@@ -610,7 +601,10 @@ export default function App() {
           
           // Use the reliable cached API endpoint instead of direct RPC calls
           try {
+            console.log("🔍 DEBUG: Fetching user referrals from API for account:", account);
             const response = await fetch(`/api/user-referrals?account=${account}`);
+            console.log("🔍 DEBUG: User referrals API response status:", response.status);
+            
             if (response.ok) {
               const apiData = await response.json();
               console.log("🔍 DEBUG: User referrals API response:", apiData);
@@ -630,10 +624,13 @@ export default function App() {
                 console.log("- Total referral count:", contractData.referredCount);
                 console.log("- Unique referrals:", stats.uniqueReferrals);
               } else {
+                console.warn("⚠️ Invalid API response structure:", apiData);
                 throw new Error("Invalid API response structure");
               }
             } else {
-              throw new Error(`API returned status ${response.status}`);
+              const errorText = await response.text();
+              console.warn("⚠️ User referrals API failed with status:", response.status, "Error:", errorText);
+              throw new Error(`API returned status ${response.status}: ${errorText}`);
             }
           } catch (apiError) {
             console.warn("⚠️ User referrals API failed, falling back to contract calls:", apiError.message);
@@ -652,6 +649,7 @@ export default function App() {
             // For unique count, set to 0 since direct event queries are unreliable
             setUniqueReferralCount(0);
             console.warn("⚠️ Setting unique referral count to 0 due to API failure - use cached API for accurate count");
+            console.warn("⚠️ API Error Details:", apiError);
           }
         }
       } catch (referralError) {
