@@ -575,18 +575,38 @@ export default async function handler(req, res) {
   }
 
   // Verify cron secret (optional security)
+  // For Vercel cron jobs, check if the request is coming from Vercel's cron system
   const authHeader = req.headers.authorization;
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const userAgent = req.headers['user-agent'];
+  const isVercelCron = userAgent && userAgent.includes('vercel-cron');
+  
+  if (process.env.CRON_SECRET && !isVercelCron && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    console.log("❌ CRON: Unauthorized access attempt");
+    console.log("- User-Agent:", userAgent);
+    console.log("- Authorization header:", authHeader ? "present" : "missing");
     return res.status(401).json({ error: 'Unauthorized' });
   }
+  
+  console.log("✅ CRON: Authorization check passed", { isVercelCron, hasAuth: !!authHeader });
 
   try {
     console.log("🚀 CRON: Starting referral stats update job...");
     const startTime = Date.now();
     
+    // Validate required environment variables
+    if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+      throw new Error("Redis environment variables not configured");
+    }
+    
+    if (!RPC_URL) {
+      throw new Error("RPC URL not configured");
+    }
+    
+    console.log("✅ CRON: Environment variables validated");
+    
     // Initialize provider and contract with error handling
     console.log("🔗 CRON: Initializing provider and contract...");
-    console.log("🔗 CRON: Using RPC URL:", RPC_URL);
+    console.log("🔗 CRON: Using RPC URL:", RPC_URL.substring(0, 50) + "...");
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     
     // Test provider connection first
@@ -603,24 +623,49 @@ export default async function handler(req, res) {
     
     // Get active users and referrers
     const { users, referrers } = await getActiveUsers(contract);
+    console.log(`🔍 CRON: Found ${users.length} users, ${referrers.length} referrers`);
     
-    // Update default referrer stats
-    const defaultStats = await updateDefaultReferrerStats(contract);
+    // Update default referrer stats (with error handling)
+    let defaultStats = null;
+    try {
+      defaultStats = await updateDefaultReferrerStats(contract);
+      console.log("✅ CRON: Default referrer stats updated successfully");
+    } catch (defaultError) {
+      console.error("❌ CRON: Failed to update default referrer stats:", defaultError.message);
+      // Don't fail the entire job, continue with user stats
+    }
     
-    // Update user stats for active referrers
-    const userStats = await updateUserStats(contract, referrers);
+    // Update user stats for active referrers (with error handling)
+    let userStats = {};
+    try {
+      userStats = await updateUserStats(contract, referrers);
+      console.log(`✅ CRON: User stats updated for ${Object.keys(userStats).length} users`);
+    } catch (userError) {
+      console.error("❌ CRON: Failed to update user stats:", userError.message);
+      // Don't fail the entire job if user stats fail
+    }
     
-    // Store summary stats
+    // Store summary stats with more details for debugging
     const summary = {
       totalUsers: users ? users.length : 0,
       totalReferrers: referrers ? referrers.length : 0,
       processedUsers: userStats ? Object.keys(userStats).length : 0,
       defaultReferrerProcessed: !!defaultStats,
+      defaultReferrerSuccess: defaultStats !== null,
+      userStatsSuccess: Object.keys(userStats).length > 0,
       lastRun: new Date().toISOString(),
-      executionTime: Date.now() - startTime
+      executionTime: Date.now() - startTime,
+      rpcUrl: RPC_URL ? "configured" : "missing",
+      redisConnection: "working" // If we get here, Redis is working
     };
     
-    await redis.set('referral-stats:summary', summary, { ex: 7200 }); // 2 hours
+    // Always store the summary, even if some parts failed
+    try {
+      await redis.set('referral-stats:summary', summary, { ex: 7200 }); // 2 hours
+      console.log("✅ CRON: Summary stats stored successfully");
+    } catch (summaryError) {
+      console.error("❌ CRON: Failed to store summary:", summaryError.message);
+    }
     
     console.log("✅ CRON: Referral stats update completed");
     console.log(`📊 CRON: Summary:`, summary);
