@@ -1,0 +1,17 @@
+[
+  {
+    "timestamp": "2025-07-24T03:17:05.257Z",
+    "blockNumber": 55105437,
+    "yourBonusUsage": {
+      "used": 3,
+      "remaining": 0
+    },
+    "defaultReferrerStats": {
+      "totalRewards": "20.0",
+      "availableRewards": "5.0",
+      "totalReferrals": 7,
+      "totalVolume": "410.0",
+      "totalWithdrawn": "15.0"
+    }
+  }
+]
