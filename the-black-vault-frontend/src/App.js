@@ -15,6 +15,7 @@ import ReferralsModal from "./components/ReferralsModal";
 import TroubleshootingModal from "./components/TroubleshootingModal";
 import ProjectIntroduction from "./components/ProjectIntroduction";
 import { config } from "./lib/config.js";
+import securityUtils from "./utils/security.js";
 
 // Use .abi if present (Hardhat/Truffle artifact), else use as array
 const BlackVaultAbi = BlackVaultArtifact.abi || BlackVaultArtifact;
@@ -900,79 +901,170 @@ export default function App() {
      }
    }
  
-   const approveUsdt = async () => {
-     if (!usdtContract || txLoading || Number.parseFloat(depositAmount) <= 0) return
-     setTxLoading(true)
-     try {
-       addToast("Approving USDT…", "info")
-       const tx = await usdtContract.approve(CONTRACT_ADDRESS, parseEther(depositAmount))
-       await tx.wait()
-       addToast("USDT approved!", "success")
-       await loadContractData(contract, usdtContract)
-     } catch (error) {
-       console.error("Approval failed:", error)
-       addToast(error.code === 4001 ? "Transaction cancelled" : "Approval failed", error.code === 4001 ? "warning" : "error")
-     } finally {
-       setTxLoading(false)
+  // Enhanced validation and security utilities
+  const validateAddress = (address) => {
+    if (!address || address === ethers.ZeroAddress || address === "0x0000000000000000000000000000000000000000") {
+      return false;
+    }
+    try {
+      return ethers.isAddress(address);
+    } catch {
+      return false;
+    }
+  };
+
+  const validateAmount = (amount, maxAmount = null, minAmount = 0) => {
+    const numAmount = Number.parseFloat(amount);
+    if (!amount || isNaN(numAmount) || numAmount <= minAmount) {
+      return { valid: false, error: `Enter a valid amount greater than ${minAmount}` };
+    }
+    if (maxAmount !== null && numAmount > Number.parseFloat(maxAmount)) {
+      return { valid: false, error: `Cannot exceed maximum amount of ${maxAmount}` };
+    }
+    return { valid: true };
+  };
+
+  const safeContractCall = async (contractCall, errorMessage = "Transaction failed") => {
+    try {
+      const tx = await contractCall();
+      const receipt = await tx.wait();
+      
+      if (receipt.status !== 1) {
+        throw new Error("Transaction failed - receipt status is not 1");
+      }
+      
+      return { success: true, receipt };
+    } catch (error) {
+      console.error("Contract call failed:", error);
+      
+      // Handle specific error types
+      if (error.code === 4001) {
+        throw new Error("Transaction cancelled by user");
+      } else if (error.code === "INSUFFICIENT_FUNDS") {
+        throw new Error("Insufficient funds for transaction");
+      } else if (error.code === "UNPREDICTABLE_GAS_LIMIT") {
+        throw new Error("Transaction would fail - please check requirements");
+      } else if (error.reason) {
+        throw new Error(error.reason);
+      } else if (error.message) {
+        throw new Error(error.message);
+      } else {
+        throw new Error(errorMessage);
+      }
+    }
+  };
+
+  const approveUsdt = async () => {
+    if (!usdtContract || txLoading) return;
+    
+    // Enhanced validation using security utilities
+    const amountValidation = securityUtils.validateAmount(depositAmount, null, 50); // Min 50 USDT
+    if (!amountValidation.valid) {
+      addToast(amountValidation.error, "error");
+      return;
+    }
+
+    // Validate contract address
+    const addressValidation = securityUtils.validateAddress(CONTRACT_ADDRESS);
+    if (!addressValidation.valid) {
+      addToast(`Invalid contract address: ${addressValidation.error}`, "error");
+      return;
+    }
+
+    setTxLoading(true);
+    try {
+      addToast("Approving USDT…", "info");
+      
+      const result = await securityUtils.safeContractCall(
+        () => usdtContract.approve(CONTRACT_ADDRESS, parseEther(depositAmount)),
+        "USDT approval failed"
+      );
+      
+      if (result.success) {
+        addToast("USDT approved!", "success");
+        await loadContractData(contract, usdtContract);
+      }
+    } catch (error) {
+      console.error("Approval failed:", error);
+      addToast(error.message || "Approval failed", "error");
+    } finally {
+      setTxLoading(false);
+    }
+  };   const deposit = async () => {
+     if (!contract || txLoading) {
+       if (!contract) addToast("Contract not initialized", "error");
+       return;
      }
-   }
- 
-   const deposit = async () => {
-     if (!contract || txLoading || Number.parseFloat(depositAmount) <= 0) return
+
+     // Enhanced validation using security utilities
+     const amountValidation = securityUtils.validateAmount(depositAmount, null, 50); // Min 50 USDT
+     if (!amountValidation.valid) {
+       addToast(amountValidation.error, "error");
+       return;
+     }
+
+     // Check allowance
      if (Number.parseFloat(usdtAllowance) < Number.parseFloat(depositAmount)) {
-       return addToast("Please approve USDT first", "error")
+       return addToast("Please approve USDT first", "error");
      }
-     setTxLoading(true)
+
+     // Validate referrer address if provided
+     const referrerToUse = (referralAddress && referralAddress !== ethers.ZeroAddress) ? referralAddress : DEFAULT_REFERRER;
+     const referrerValidation = securityUtils.validateAddress(referrerToUse);
+     if (!referrerValidation.valid) {
+       addToast(`Invalid referrer address: ${referrerValidation.error}`, "error");
+       return;
+     }
+
+     setTxLoading(true);
      try {
-       addToast("Processing deposit…", "info")
-       const value = parseEther(depositAmount)
-       let tx
-       // Always use depositWithReferrer, with defaultReferrer if no referralAddress
-       const referrerToUse = (referralAddress && referralAddress !== ethers.ZeroAddress)
-         ? referralAddress
-         : DEFAULT_REFERRER;
-       tx = await contract.depositWithReferrer(value, referrerToUse)
-       const receipt = await tx.wait()
-       if (receipt.status === 1) {
-         addToast("Deposit successful!", "success")
-         setDepositAmount("")
-         // Update leaderboard if referral used (optional, can keep as is)
+       addToast("Processing deposit…", "info");
+       const value = parseEther(depositAmount);
+
+       const result = await securityUtils.safeContractCall(
+         () => contract.depositWithReferrer(value, referrerToUse),
+         "Deposit transaction failed"
+       );
+
+       if (result.success) {
+         addToast("Deposit successful!", "success");
+         setDepositAmount("");
+
+         // Update leaderboard if referral used
          if (referralAddress && referralAddress !== ethers.ZeroAddress) {
-           // Calculate referral reward amount (10% of deposit)
-           const referralReward = (BigInt(value) * BigInt(10)) / BigInt(100);
-           
-           fetch("/api/leaderboard/update", {
-             method: "POST",
-             headers: { "Content-Type": "application/json" },
-             body: JSON.stringify({
-               referrer: referralAddress,
-               amount: referralReward.toString(), // Send actual referral reward amount
-             }),
-           })
-             .then(() => {
-               addToast("Leaderboard updated!", "success")
-             })
-             .catch(() => {
-               addToast("Failed to update leaderboard", "warning")
-             })
+           try {
+             const referralReward = (BigInt(value) * BigInt(10)) / BigInt(100);
+             
+             await fetch("/api/leaderboard/update", {
+               method: "POST",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({
+                 referrer: referralAddress,
+                 amount: referralReward.toString(),
+               }),
+             });
+             addToast("Leaderboard updated!", "success");
+           } catch (leaderboardError) {
+             console.warn("Leaderboard update failed:", leaderboardError);
+             addToast("Failed to update leaderboard", "warning");
+           }
          }
-         // Always call poke after deposit
+
+         // Always call poke after deposit with error handling
          try {
            await contract.poke();
            console.log("poke() called after deposit");
          } catch (e) {
            console.warn("poke() failed after deposit", e);
          }
-         await loadContractData(contract, usdtContract)
-       } else {
-         addToast("Deposit failed on-chain", "error")
+
+         await loadContractData(contract, usdtContract);
        }
      } catch (error) {
-       console.error("Deposit error:", error)
-       const msg = error.data?.message || error.message || "Deposit failed"
-       addToast(msg, error.code === 4001 ? "warning" : "error")
+       console.error("Deposit error:", error);
+       addToast(error.message || "Deposit failed", "error");
      } finally {
-       setTxLoading(false)
+       setTxLoading(false);
      }
    }
  
@@ -981,62 +1073,65 @@ export default function App() {
        if (!contract) addToast("Contract not initialized", "error")
        return
      }
-     const amount = Number.parseFloat(withdrawAmount);
-     if (!withdrawAmount || isNaN(amount) || amount <= 0) {
-       addToast("Enter a valid amount to withdraw", "warning");
+     
+     // Enhanced validation using security utilities
+     const amountValidation = securityUtils.validateAmount(withdrawAmount, rewards, 0);
+     if (!amountValidation.valid) {
+       addToast(amountValidation.error, "error");
        return;
      }
-     if (amount > Number.parseFloat(rewards)) {
-       addToast("Cannot withdraw more than available rewards", "warning");
-       return;
-     }
+     
      setTxLoading(true)
      try {
        addToast("Withdrawing rewards…", "info")
-       const tx = await contract.withdrawRewards(parseEther(withdrawAmount));
-       await tx.wait();
        
-       // Always call poke after withdraw
-       try {
-         await contract.poke();
-         console.log("poke() called after withdraw");
-       } catch (e) {
-         console.warn("poke() failed after withdraw", e);
-       }
+       const result = await securityUtils.safeContractCall(
+         () => contract.withdrawRewards(parseEther(withdrawAmount)),
+         "Withdrawal failed"
+       );
        
-       addToast("Rewards withdrawn!", "success")
-       setWithdrawAmount("");
-       
-       // Add delay to ensure blockchain state is updated before fetching
-       await new Promise(resolve => setTimeout(resolve, 2000));
-       
-       // Force fresh data reload with multiple attempts
-       let retries = 3;
-       while (retries > 0) {
+       if (result.success) {
+         // Always call poke after withdraw
          try {
-           console.log("🔄 Forcing fresh data reload after vault withdrawal...");
-           await loadContractData(contract, usdtContract, true); // Force refresh
-           
-           // Verify the update worked by checking if rewards decreased
-           const updatedVaultData = await contract.getUserVault(account);
-           const currentPendingRewards = formatEther(updatedVaultData[3]);
-           console.log("📊 Updated pending rewards after withdrawal:", currentPendingRewards);
-           
-           // Update the state directly to ensure UI reflects the change
-           setRewards(currentPendingRewards);
-           break;
-         } catch (reloadError) {
-           console.warn(`Data reload attempt failed (${4-retries}/3):`, reloadError.message);
-           retries--;
-           if (retries > 0) {
-             await new Promise(resolve => setTimeout(resolve, 1000));
+           await contract.poke();
+           console.log("poke() called after withdraw");
+         } catch (e) {
+           console.warn("poke() failed after withdraw", e);
+         }
+         
+         addToast("Rewards withdrawn!", "success")
+         setWithdrawAmount("");
+         
+         // Add delay to ensure blockchain state is updated before fetching
+         await new Promise(resolve => setTimeout(resolve, 2000));
+         
+         // Force fresh data reload with multiple attempts
+         let retries = 3;
+         while (retries > 0) {
+           try {
+             console.log("🔄 Forcing fresh data reload after vault withdrawal...");
+             await loadContractData(contract, usdtContract, true); // Force refresh
+             
+             // Verify the update worked by checking if rewards decreased
+             const updatedVaultData = await contract.getUserVault(account);
+             const currentPendingRewards = formatEther(updatedVaultData[3]);
+             console.log("📊 Updated pending rewards after withdrawal:", currentPendingRewards);
+             
+             // Update the state directly to ensure UI reflects the change
+             setRewards(currentPendingRewards);
+             break;
+           } catch (reloadError) {
+             console.warn(`Data reload attempt failed (${4-retries}/3):`, reloadError.message);
+             retries--;
+             if (retries > 0) {
+               await new Promise(resolve => setTimeout(resolve, 1000));
+             }
            }
          }
        }
      } catch (error) {
        console.error("Withdraw error:", error)
-       const msg = error.message?.includes("CALL_EXCEPTION") ? "No rewards available" : error.reason || "Withdrawal failed"
-       addToast(msg, error.code === 4001 ? "warning" : "error")
+       addToast(error.message || "Withdrawal failed", "error")
      } finally {
        setTxLoading(false)
      }
@@ -1072,63 +1167,68 @@ export default function App() {
        else addToast("No referral rewards", "warning")
        return
      }
+     
      setTxLoading(true)
      try {
        addToast("Withdrawing referral rewards…", "info")
-       const tx = await contract.withdrawReferralRewards()
-       await tx.wait()
        
-       // Always call poke after referral withdraw
-       try {
-         await contract.poke();
-         console.log("poke() called after referral withdraw");
-       } catch (e) {
-         console.warn("poke() failed after referral withdraw", e);
-       }
+       const result = await securityUtils.safeContractCall(
+         () => contract.withdrawReferralRewards(),
+         "Referral withdrawal failed"
+       );
        
-       addToast("Referral rewards withdrawn!", "success")
-       
-       // Clear API cache to ensure fresh data
-       try {
-         console.log("🔄 Clearing user referrals cache after withdrawal...");
-         await fetch(`/api/clear-user-cache?account=${account}`, { method: 'POST' });
-       } catch (cacheError) {
-         console.warn("Cache clear failed:", cacheError.message);
-       }
-       
-       // Add delay to ensure blockchain state is updated before fetching
-       await new Promise(resolve => setTimeout(resolve, 2000));
-       
-       // Force fresh data reload with multiple attempts, bypassing cache
-       let retries = 3;
-       while (retries > 0) {
+       if (result.success) {
+         // Always call poke after referral withdraw
          try {
-           console.log("🔄 Forcing fresh data reload after referral withdrawal...");
-           
-           // First try direct contract call to get immediate updated values
-           const updatedReferralData = await contract.getUserReferralData(account);
-           const currentAvailableRewards = formatEther(updatedReferralData[1]);
-           console.log("📊 Updated referral rewards after withdrawal (direct contract):", currentAvailableRewards);
-           
-           // Update the state directly to ensure UI reflects the change immediately
-           setReferralRewards(currentAvailableRewards);
-           setTotalReferralRewards(formatEther(updatedReferralData[0]));
-           
-           // Then reload all contract data to ensure everything is in sync
-           await loadContractData(contract, usdtContract, true); // Force refresh
-           break;
-         } catch (reloadError) {
-           console.warn(`Data reload attempt failed (${4-retries}/3):`, reloadError.message);
-           retries--;
-           if (retries > 0) {
-             await new Promise(resolve => setTimeout(resolve, 1000));
+           await contract.poke();
+           console.log("poke() called after referral withdraw");
+         } catch (e) {
+           console.warn("poke() failed after referral withdraw", e);
+         }
+         
+         addToast("Referral rewards withdrawn!", "success")
+         
+         // Clear API cache to ensure fresh data
+         try {
+           console.log("🔄 Clearing user referrals cache after withdrawal...");
+           await fetch(`/api/clear-user-cache?account=${account}`, { method: 'POST' });
+         } catch (cacheError) {
+           console.warn("Cache clear failed:", cacheError.message);
+         }
+         
+         // Add delay to ensure blockchain state is updated before fetching
+         await new Promise(resolve => setTimeout(resolve, 2000));
+         
+         // Force fresh data reload with multiple attempts, bypassing cache
+         let retries = 3;
+         while (retries > 0) {
+           try {
+             console.log("🔄 Forcing fresh data reload after referral withdrawal...");
+             
+             // First try direct contract call to get immediate updated values
+             const updatedReferralData = await contract.getUserReferralData(account);
+             const currentAvailableRewards = formatEther(updatedReferralData[1]);
+             console.log("📊 Updated referral rewards after withdrawal (direct contract):", currentAvailableRewards);
+             
+             // Update the state directly to ensure UI reflects the change immediately
+             setReferralRewards(currentAvailableRewards);
+             setTotalReferralRewards(formatEther(updatedReferralData[0]));
+             
+             // Then reload all contract data to ensure everything is in sync
+             await loadContractData(contract, usdtContract, true); // Force refresh
+             break;
+           } catch (reloadError) {
+             console.warn(`Data reload attempt failed (${4-retries}/3):`, reloadError.message);
+             retries--;
+             if (retries > 0) {
+               await new Promise(resolve => setTimeout(resolve, 1000));
+             }
            }
          }
        }
      } catch (error) {
        console.error("Referral withdraw error:", error)
-       const msg = error.message.includes("CALL_EXCEPTION") ? "No referral rewards" : error.reason || "Referral withdrawal failed"
-       addToast(msg, error.code === 4001 ? "warning" : "error")
+       addToast(error.message || "Referral withdrawal failed", "error")
      } finally {
        setTxLoading(false)
      }
@@ -1329,7 +1429,13 @@ export default function App() {
                   minDeposit !== "0" ? `Min. deposit ${formatAmount(minDeposit)} USDT` : "Min. deposit: 50 USDT"
                 }
                 value={depositAmount}
-                onChange={(e) => setDepositAmount(e.target.value)}
+                onChange={(e) => {
+                  const sanitized = securityUtils.sanitizeInput(e.target.value, 'number');
+                  const lengthValidation = securityUtils.validateInputLength(sanitized, 20);
+                  if (lengthValidation.valid) {
+                    setDepositAmount(sanitized);
+                  }
+                }}
                 step="0.001"
                 min="0"
               />
@@ -1392,7 +1498,13 @@ export default function App() {
                 min="0"
                 max={rewards}
                 step="0.001"
-                onChange={e => setWithdrawAmount(e.target.value)}
+                onChange={e => {
+                  const sanitized = securityUtils.sanitizeInput(e.target.value, 'number');
+                  const lengthValidation = securityUtils.validateInputLength(sanitized, 20);
+                  if (lengthValidation.valid) {
+                    setWithdrawAmount(sanitized);
+                  }
+                }}
                 disabled={txLoading}
               />
               <button
