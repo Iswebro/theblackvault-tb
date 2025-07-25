@@ -1,5 +1,5 @@
 // src/components/ProjectIntroduction.js
-export default function ProjectIntroduction({ globalStats = null, onConnectWallet, onShowTroubleshooting, loading = false }) {
+export default function ProjectIntroduction({ globalStats = null, onConnectWallet, onShowTroubleshooting, loading = false, middleContent = null }) {
   // Use dynamic stats if available, otherwise fall back to defaults
   const totalVolume = globalStats?.totalDeposited || "410+";
   const userCount = globalStats?.totalUsers || "7+";
@@ -140,6 +140,9 @@ export default function ProjectIntroduction({ globalStats = null, onConnectWalle
           </div>
         </div>
       </div>
+
+      {/* Inject middle content here (e.g., DeFi Intelligence) */}
+      {middleContent}
 
       <div className="intro-cta">
         <h3 className="cta-title">Ready to Start Earning?</h3>

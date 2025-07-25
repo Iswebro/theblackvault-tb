@@ -14,6 +14,7 @@ import Leaderboard from "./components/Leaderboard";
 import ReferralsModal from "./components/ReferralsModal";
 import TroubleshootingModal from "./components/TroubleshootingModal";
 import ProjectIntroduction from "./components/ProjectIntroduction";
+import SmartDeFiInsights from "./components/SmartDeFiInsights";
 import { config } from "./lib/config.js";
 import securityUtils from "./utils/security.js";
 
@@ -1303,6 +1304,15 @@ export default function App() {
               onConnectWallet={connectWallet}
               onShowTroubleshooting={() => setShowTroubleshootingModal(true)}
               loading={loading}
+              middleContent={
+                <div style={{ maxWidth: '600px', margin: '20px auto' }}>
+                  <SmartDeFiInsights 
+                    account={null} // Pass null to show preview mode
+                    vaultBalance="0"
+                    contractAddress={config.blackVaultContract}
+                  />
+                </div>
+              }
             />
 
             <button className="connect-button premium-button" onClick={connectWallet} disabled={loading}>
@@ -1585,7 +1595,6 @@ export default function App() {
             </button>
           </div>
 
-
           <div className="vault-card premium-card">
             <h3 className="card-title">
               <span className="card-icon">📊</span>
@@ -1730,6 +1739,13 @@ export default function App() {
           </div>
 
           <Leaderboard />
+
+          {/* De.Fi Intelligence Panel */}
+          <SmartDeFiInsights 
+            account={account}
+            vaultBalance={vaultActiveAmount}
+            contractAddress={config.blackVaultContract}
+          />
 
           <HowItWorks />
 
