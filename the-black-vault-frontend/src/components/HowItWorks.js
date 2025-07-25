@@ -8,19 +8,19 @@ export default function HowItWorks() {
     },
     {
       icon: "💸",
-      title: "Daily Rewards)",
-      description: "Earn a fixed daily reward rate of 2.5% on your active USDT amount. ⏰ IMPORTANT: Your deposits must complete ONE full 24-hour cycles before rewards begin accruing on the subsequent cycle. This means your first rewards will appear approximately 2 days after your initial deposit.",
+      title: "Daily Rewards",
+      description: "Earn a fixed daily reward rate of 2.5% on your active USDT amount.",
     },
     {
       icon: "⏱️",
       title: "Reward Timing Explained",
-      description: "Deposits made today activate after 2 complete cycles. For example: Deposit on Monday → Rewards start Wednesday. Your balance must be held for complete 24-hour periods to earn rewards, ensuring fair distribution for all users.",
+      description: "Deposits made today activate after 1 complete cycle to get the rewards on the subsequent cycle. For example: Deposit on Monday → Rewards received on Wednesday. Your balance must be held for a complete 24-hour period to earn rewards, ensuring fair distribution for all users.",
     },
     {
       icon: "🔗",
       title: "Referral System",
       description:
-        "Invite new users and earn a 10% referral bonus on their first 3 deposits. Share your referral link and grow your passive income!",
+        "Invite new users and earn a 10% referral bonus on their first 3 deposits. Share your referral link and grow your passive income! (Only active users are eligible for referral rewards!)",
     },
     {
       icon: "💰",
