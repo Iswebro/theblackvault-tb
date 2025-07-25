@@ -545,63 +545,78 @@ export default function App() {
       // ─────────── REFERRAL REWARDS ───────────
       try {
         if (vault && account) {
-          console.log("🔍 DEBUG: Loading user referral data using cached API for account:", account);
+          console.log("🔍 DEBUG: Loading user referral data for account:", account, forceRefresh ? "(force refresh)" : "(cached API)");
           
-          // Use the reliable cached API endpoint instead of direct RPC calls
-          try {
-            console.log("🔍 DEBUG: Fetching user referrals from API for account:", account);
-            const response = await fetch(`/api/user-referrals?account=${account}`);
-            console.log("🔍 DEBUG: User referrals API response status:", response.status);
-            
-            if (response.ok) {
-              const apiData = await response.json();
-              console.log("🔍 DEBUG: User referrals API response:", apiData);
-              
-              if (apiData.result && apiData.result.contractData) {
-                const { contractData, stats } = apiData.result;
-                
-                // Set referral rewards and counts from cached API data
-                setReferralRewards(contractData.availableRewards);
-                setTotalReferralRewards(contractData.totalRewards || "0"); // Total referral rewards earned
-                setReferralCount(contractData.referredCount);
-                setUniqueReferralCount(stats.uniqueReferrals);
-                
-                console.log("✅ Successfully loaded referral data from cached API:");
-                console.log("- Available rewards:", contractData.availableRewards);
-                console.log("- Total referral rewards:", contractData.totalRewards || "0");
-                console.log("- Total referral count:", contractData.referredCount);
-                console.log("- Unique referrals:", stats.uniqueReferrals);
-              } else {
-                console.warn("⚠️ Invalid API response structure:", apiData);
-                throw new Error("Invalid API response structure");
-              }
-            } else {
-              const errorText = await response.text();
-              console.warn("⚠️ User referrals API failed with status:", response.status);
-              // Don't log the full error text for 404s, just the status
-              if (response.status !== 404) {
-                console.warn("⚠️ Error details:", errorText);
-              }
-              throw new Error(`API returned status ${response.status}`);
-            }
-          } catch (apiError) {
-            console.warn("⚠️ User referrals API failed, falling back to contract calls:", apiError.message);
-            
-            // Fallback to direct contract calls
+          // If forceRefresh is true, skip cache and go directly to contract
+          if (forceRefresh) {
+            console.log("🔍 DEBUG: Force refresh mode - using direct contract calls");
             const referralData = await vault.getUserReferralData(account);
-            console.log("🔍 DEBUG: Fallback - Raw referralData (contract):", referralData);
+            console.log("🔍 DEBUG: Direct contract referralData:", referralData);
             setReferralRewards(formatEther(referralData[1])); // _availableRewards
             setTotalReferralRewards(formatEther(referralData[0])); // _totalRewards
             const contractReferralCount = referralData[2]?.toString() || "0";
             setReferralCount(contractReferralCount);
-            console.log("Fallback - Referral rewards (available) from contract:", formatEther(referralData[1]));
-            console.log("Fallback - Total referral rewards from contract:", formatEther(referralData[0]));
-            console.log("Fallback - Referral count from contract:", contractReferralCount);
-            
-            // For unique count, set to 0 since direct event queries are unreliable
-            setUniqueReferralCount(0);
-            console.warn("⚠️ Setting unique referral count to 0 due to API failure - use cached API for accurate count");
-            console.warn("⚠️ API Error Details:", apiError);
+            setUniqueReferralCount(0); // Will be updated from API later if needed
+            console.log("✅ Force refresh - Referral rewards (available):", formatEther(referralData[1]));
+            console.log("✅ Force refresh - Total referral rewards:", formatEther(referralData[0]));
+            console.log("✅ Force refresh - Referral count:", contractReferralCount);
+          } else {
+            // Use the reliable cached API endpoint for normal loads
+            try {
+              console.log("🔍 DEBUG: Fetching user referrals from API for account:", account);
+              const response = await fetch(`/api/user-referrals?account=${account}`);
+              console.log("🔍 DEBUG: User referrals API response status:", response.status);
+              
+              if (response.ok) {
+                const apiData = await response.json();
+                console.log("🔍 DEBUG: User referrals API response:", apiData);
+                
+                if (apiData.result && apiData.result.contractData) {
+                  const { contractData, stats } = apiData.result;
+                  
+                  // Set referral rewards and counts from cached API data
+                  setReferralRewards(contractData.availableRewards);
+                  setTotalReferralRewards(contractData.totalRewards || "0"); // Total referral rewards earned
+                  setReferralCount(contractData.referredCount);
+                  setUniqueReferralCount(stats.uniqueReferrals);
+                  
+                  console.log("✅ Successfully loaded referral data from cached API:");
+                  console.log("- Available rewards:", contractData.availableRewards);
+                  console.log("- Total referral rewards:", contractData.totalRewards || "0");
+                  console.log("- Total referral count:", contractData.referredCount);
+                  console.log("- Unique referrals:", stats.uniqueReferrals);
+                } else {
+                  console.warn("⚠️ Invalid API response structure:", apiData);
+                  throw new Error("Invalid API response structure");
+                }
+              } else {
+                const errorText = await response.text();
+                console.warn("⚠️ User referrals API failed with status:", response.status);
+                // Don't log the full error text for 404s, just the status
+                if (response.status !== 404) {
+                  console.warn("⚠️ Error details:", errorText);
+                }
+                throw new Error(`API returned status ${response.status}`);
+              }
+            } catch (apiError) {
+              console.warn("⚠️ User referrals API failed, falling back to contract calls:", apiError.message);
+              
+              // Fallback to direct contract calls
+              const referralData = await vault.getUserReferralData(account);
+              console.log("🔍 DEBUG: Fallback - Raw referralData (contract):", referralData);
+              setReferralRewards(formatEther(referralData[1])); // _availableRewards
+              setTotalReferralRewards(formatEther(referralData[0])); // _totalRewards
+              const contractReferralCount = referralData[2]?.toString() || "0";
+              setReferralCount(contractReferralCount);
+              console.log("Fallback - Referral rewards (available) from contract:", formatEther(referralData[1]));
+              console.log("Fallback - Total referral rewards from contract:", formatEther(referralData[0]));
+              console.log("Fallback - Referral count from contract:", contractReferralCount);
+              
+              // For unique count, set to 0 since direct event queries are unreliable
+              setUniqueReferralCount(0);
+              console.warn("⚠️ Setting unique referral count to 0 due to API failure - use cached API for accurate count");
+              console.warn("⚠️ API Error Details:", apiError);
+            }
           }
         }
       } catch (referralError) {
@@ -1061,23 +1076,34 @@ export default function App() {
        
        addToast("Referral rewards withdrawn!", "success")
        
+       // Clear API cache to ensure fresh data
+       try {
+         console.log("🔄 Clearing user referrals cache after withdrawal...");
+         await fetch(`/api/clear-user-cache?account=${account}`, { method: 'POST' });
+       } catch (cacheError) {
+         console.warn("Cache clear failed:", cacheError.message);
+       }
+       
        // Add delay to ensure blockchain state is updated before fetching
        await new Promise(resolve => setTimeout(resolve, 2000));
        
-       // Force fresh data reload with multiple attempts
+       // Force fresh data reload with multiple attempts, bypassing cache
        let retries = 3;
        while (retries > 0) {
          try {
            console.log("🔄 Forcing fresh data reload after referral withdrawal...");
-           await loadContractData(contract, usdtContract, true); // Force refresh
            
-           // Verify the update worked by checking if referral rewards decreased
+           // First try direct contract call to get immediate updated values
            const updatedReferralData = await contract.getUserReferralData(account);
            const currentAvailableRewards = formatEther(updatedReferralData[1]);
-           console.log("📊 Updated referral rewards after withdrawal:", currentAvailableRewards);
+           console.log("📊 Updated referral rewards after withdrawal (direct contract):", currentAvailableRewards);
            
-           // Update the state directly to ensure UI reflects the change
+           // Update the state directly to ensure UI reflects the change immediately
            setReferralRewards(currentAvailableRewards);
+           setTotalReferralRewards(formatEther(updatedReferralData[0]));
+           
+           // Then reload all contract data to ensure everything is in sync
+           await loadContractData(contract, usdtContract, true); // Force refresh
            break;
          } catch (reloadError) {
            console.warn(`Data reload attempt failed (${4-retries}/3):`, reloadError.message);
