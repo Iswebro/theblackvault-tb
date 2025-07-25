@@ -372,7 +372,7 @@ export default function ReferralsModal({
         
         // Try to use original API endpoint first to reduce RPC rate limiting
         try {
-          const response = await fetch(`/api/user-referrals?account=${account}`);
+          const response = await fetch(`/api/user-referrals-v2?account=${account}`);
           if (response.ok) {
             const apiData = await response.json();
             console.log("🔍 DEBUG: Modal API response:", apiData);

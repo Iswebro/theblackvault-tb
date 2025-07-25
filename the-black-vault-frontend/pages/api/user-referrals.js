@@ -10,8 +10,14 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN,
 });
 
-// RPC configuration
-const RPC_URL = process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org/';
+// RPC configuration with fallbacks for better reliability
+const RPC_URLS = [
+  process.env.BSC_RPC_URL || 'https://rpc.ankr.com/bsc/d074aa9b547a0e06b9e9b1bb3c78f25b6a9cf86b24c96f13b67bccb42c19fa22',
+  'https://bsc-dataseed.binance.org/',
+  'https://bsc-dataseed1.defibit.io/',
+  'https://bsc-dataseed1.ninicoin.io/',
+  'https://rpc.ankr.com/bsc'
+];
 const CONTRACT_ADDRESS = '0x22708D8a54c044CbA5B237620Af42030cbf76E14';
 
 // BlackVault ABI - only the parts we need
@@ -22,14 +28,14 @@ const BLACK_VAULT_ABI = [
 ];
 
 // Helper function to query events with rate limiting and retry logic
-const queryEventsWithRetry = async (contract, filter, blockRanges = [-20000, -8000, -3000]) => {
+const queryEventsWithRetry = async (contract, filter, blockRanges = [-50000, -30000, -15000, -8000, -3000]) => {
   for (let i = 0; i < blockRanges.length; i++) {
     const blockRange = blockRanges[i];
     try {
       console.log(`🔍 USER-API: Trying event query with ${Math.abs(blockRange)}k block range...`);
       if (i > 0) {
         // Add delay between retries to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000 * i));
+        await new Promise(resolve => setTimeout(resolve, 1500 * i));
       }
       const events = await contract.queryFilter(filter, blockRange);
       console.log(`🔍 USER-API: Successfully found ${events.length} events with ${Math.abs(blockRange)}k range`);
@@ -38,7 +44,16 @@ const queryEventsWithRetry = async (contract, filter, blockRanges = [-20000, -80
       console.warn(`⚠️ USER-API: Event query failed with ${Math.abs(blockRange)}k range:`, error.message);
       if (i === blockRanges.length - 1) {
         console.error("❌ USER-API: All event query attempts failed");
-        return [];
+        // Try with even smaller range as last resort
+        try {
+          console.log("🔍 USER-API: Last resort - trying with 1000 block range...");
+          const lastResortEvents = await contract.queryFilter(filter, -1000);
+          console.log(`🔍 USER-API: Last resort found ${lastResortEvents.length} events`);
+          return lastResortEvents;
+        } catch (lastError) {
+          console.error("❌ USER-API: Even last resort failed:", lastError.message);
+          return [];
+        }
       }
     }
   }
@@ -88,14 +103,28 @@ export default async function handler(req, res) {
     // Continue to fetch fresh data
   }
 
-  // Initialize provider and contract
+  // Initialize provider and contract with fallback RPC URLs
   let provider, contract;
-  try {
-    provider = new ethers.JsonRpcProvider(RPC_URL);
-    contract = new ethers.Contract(CONTRACT_ADDRESS, BLACK_VAULT_ABI, provider);
-  } catch (error) {
-    console.error("❌ USER-API: Failed to initialize provider/contract:", error);
-    return res.status(500).json({ error: 'Failed to initialize blockchain connection' });
+  let providerInitialized = false;
+  
+  for (let i = 0; i < RPC_URLS.length && !providerInitialized; i++) {
+    try {
+      console.log(`🔍 USER-API: Trying RPC ${i + 1}/${RPC_URLS.length}: ${RPC_URLS[i]}`);
+      provider = new ethers.JsonRpcProvider(RPC_URLS[i]);
+      
+      // Test the connection
+      await provider.getBlockNumber();
+      
+      contract = new ethers.Contract(CONTRACT_ADDRESS, BLACK_VAULT_ABI, provider);
+      providerInitialized = true;
+      console.log(`✅ USER-API: Successfully connected to RPC ${i + 1}`);
+    } catch (error) {
+      console.warn(`⚠️ USER-API: RPC ${i + 1} failed:`, error.message);
+      if (i === RPC_URLS.length - 1) {
+        console.error("❌ USER-API: All RPC providers failed");
+        return res.status(500).json({ error: 'Failed to initialize blockchain connection' });
+      }
+    }
   }
 
   try {
@@ -112,10 +141,60 @@ export default async function handler(req, res) {
     });
 
     // Get deposit events where this user is the referrer
+    console.log("🔍 USER-API: Querying deposit events for referrer:", account);
     const depositFilter = contract.filters.Deposited(null, null, account);
-    const depositEvents = await queryEventsWithRetry(contract, depositFilter, [-20000, -8000, -3000]);
     
-    console.log("🔍 USER-API: User deposit events found:", depositEvents.length);
+    // Try multiple strategies to get events
+    let depositEvents = [];
+    
+    // Strategy 1: Try with extended block ranges
+    depositEvents = await queryEventsWithRetry(contract, depositFilter, [-50000, -30000, -15000, -8000, -3000]);
+    
+    // Strategy 2: If we found fewer events than the contract says, try querying much further back
+    if (depositEvents.length < parseInt(referralData[2].toString()) / 3) { // If we found less than 1/3 of expected referrals
+      console.log(`🔍 USER-API: Found only ${depositEvents.length} events but contract shows ${referralData[2].toString()} referrals`);
+      console.log("🔍 USER-API: Trying extended historical search...");
+      
+      try {
+        const currentBlock = await provider.getBlockNumber();
+        const chunkSize = 10000;
+        const maxBlocks = 500000; // Go back up to 500k blocks (several months of history)
+        let foundInExtendedSearch = 0;
+        
+        for (let startBlock = currentBlock - chunkSize; startBlock > currentBlock - maxBlocks; startBlock -= chunkSize) {
+          try {
+            const endBlock = startBlock + chunkSize;
+            const chunkEvents = await contract.queryFilter(depositFilter, startBlock, endBlock);
+            if (chunkEvents.length > 0) {
+              // Add new events (avoid duplicates)
+              const existingTxHashes = new Set(depositEvents.map(e => e.transactionHash));
+              const newEvents = chunkEvents.filter(e => !existingTxHashes.has(e.transactionHash));
+              depositEvents.push(...newEvents);
+              foundInExtendedSearch += newEvents.length;
+              console.log(`✅ USER-API: Found ${newEvents.length} new events in chunk (total: ${depositEvents.length})`);
+            }
+            
+            // Add delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            // Stop if we found most of the expected referrals
+            if (depositEvents.length >= parseInt(referralData[2].toString()) * 0.8) {
+              console.log("🔍 USER-API: Found sufficient events, stopping extended search");
+              break;
+            }
+          } catch (chunkError) {
+            console.warn(`⚠️ USER-API: Extended chunk query failed:`, chunkError.message);
+            // Continue with next chunk
+          }
+        }
+        
+        console.log(`🔍 USER-API: Extended search found ${foundInExtendedSearch} additional events`);
+      } catch (extendedError) {
+        console.warn("⚠️ USER-API: Extended search failed:", extendedError.message);
+      }
+    }
+    
+    console.log("🔍 USER-API: Total deposit events found:", depositEvents.length);
 
     // Extract unique referee addresses
     const uniqueReferees = [...new Set(depositEvents.map((event) => event.args.user.toLowerCase()))];

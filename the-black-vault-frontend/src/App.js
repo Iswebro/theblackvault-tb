@@ -561,61 +561,73 @@ export default function App() {
             console.log("✅ Force refresh - Total referral rewards:", formatEther(referralData[0]));
             console.log("✅ Force refresh - Referral count:", contractReferralCount);
           } else {
-            // Use the reliable cached API endpoint for normal loads
+            // Use the enhanced V2 API endpoint that prioritizes Upstash data
             try {
-              console.log("🔍 DEBUG: Fetching user referrals from API for account:", account);
-              const response = await fetch(`/api/user-referrals?account=${account}`);
-              console.log("🔍 DEBUG: User referrals API response status:", response.status);
+              console.log("🔍 DEBUG: Fetching user referrals from V2 API for account:", account);
+              const response = await fetch(`/api/user-referrals-v2?account=${account}`);
+              console.log("🔍 DEBUG: User referrals V2 API response status:", response.status);
               
               if (response.ok) {
                 const apiData = await response.json();
-                console.log("🔍 DEBUG: User referrals API response:", apiData);
+                console.log("🔍 DEBUG: User referrals V2 API response:", apiData);
                 
                 if (apiData.result && apiData.result.contractData) {
                   const { contractData, stats } = apiData.result;
                   
-                  // Set referral rewards and counts from cached API data
+                  // Set referral rewards and counts from V2 API data
                   setReferralRewards(contractData.availableRewards);
-                  setTotalReferralRewards(contractData.totalRewards || "0"); // Total referral rewards earned
+                  setTotalReferralRewards(contractData.totalRewards || "0");
                   setReferralCount(contractData.referredCount);
                   setUniqueReferralCount(stats.uniqueReferrals);
                   
-                  console.log("✅ Successfully loaded referral data from cached API:");
+                  console.log("✅ Successfully loaded referral data from V2 API:");
                   console.log("- Available rewards:", contractData.availableRewards);
                   console.log("- Total referral rewards:", contractData.totalRewards || "0");
                   console.log("- Total referral count:", contractData.referredCount);
                   console.log("- Unique referrals:", stats.uniqueReferrals);
+                  console.log("- Data source:", apiData.result.events.source);
                 } else {
-                  console.warn("⚠️ Invalid API response structure:", apiData);
-                  throw new Error("Invalid API response structure");
+                  console.warn("⚠️ Invalid V2 API response structure:", apiData);
+                  throw new Error("Invalid V2 API response structure");
                 }
               } else {
                 const errorText = await response.text();
-                console.warn("⚠️ User referrals API failed with status:", response.status);
-                // Don't log the full error text for 404s, just the status
-                if (response.status !== 404) {
-                  console.warn("⚠️ Error details:", errorText);
-                }
-                throw new Error(`API returned status ${response.status}`);
+                console.warn("⚠️ User referrals V2 API failed with status:", response.status);
+                throw new Error(`V2 API returned status ${response.status}`);
               }
             } catch (apiError) {
-              console.warn("⚠️ User referrals API failed, falling back to contract calls:", apiError.message);
+              console.warn("⚠️ User referrals V2 API failed, falling back to V1 API:", apiError.message);
               
-              // Fallback to direct contract calls
-              const referralData = await vault.getUserReferralData(account);
-              console.log("🔍 DEBUG: Fallback - Raw referralData (contract):", referralData);
-              setReferralRewards(formatEther(referralData[1])); // _availableRewards
-              setTotalReferralRewards(formatEther(referralData[0])); // _totalRewards
-              const contractReferralCount = referralData[2]?.toString() || "0";
-              setReferralCount(contractReferralCount);
-              console.log("Fallback - Referral rewards (available) from contract:", formatEther(referralData[1]));
-              console.log("Fallback - Total referral rewards from contract:", formatEther(referralData[0]));
-              console.log("Fallback - Referral count from contract:", contractReferralCount);
-              
-              // For unique count, set to 0 since direct event queries are unreliable
-              setUniqueReferralCount(0);
-              console.warn("⚠️ Setting unique referral count to 0 due to API failure - use cached API for accurate count");
-              console.warn("⚠️ API Error Details:", apiError);
+              // Fallback to V1 API
+              try {
+                const response = await fetch(`/api/user-referrals?account=${account}`);
+                if (response.ok) {
+                  const apiData = await response.json();
+                  if (apiData.result && apiData.result.contractData) {
+                    const { contractData, stats } = apiData.result;
+                    setReferralRewards(contractData.availableRewards);
+                    setTotalReferralRewards(contractData.totalRewards || "0");
+                    setReferralCount(contractData.referredCount);
+                    setUniqueReferralCount(stats.uniqueReferrals);
+                    console.log("✅ Fallback V1 API - Loaded referral data");
+                  } else {
+                    throw new Error("Invalid V1 API response structure");
+                  }
+                } else {
+                  throw new Error(`V1 API returned status ${response.status}`);
+                }
+              } catch (v1Error) {
+                console.warn("⚠️ Both V2 and V1 APIs failed, falling back to contract calls:", v1Error.message);
+                
+                // Final fallback to direct contract calls
+                const referralData = await vault.getUserReferralData(account);
+                setReferralRewards(formatEther(referralData[1]));
+                setTotalReferralRewards(formatEther(referralData[0]));
+                const contractReferralCount = referralData[2]?.toString() || "0";
+                setReferralCount(contractReferralCount);
+                setUniqueReferralCount(0); // Can't get unique count from contract alone
+                console.log("Fallback - Direct contract referral data loaded");
+              }
             }
           }
         }
