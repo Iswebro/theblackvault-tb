@@ -35,8 +35,8 @@ export const validateAmount = (amount, maxAmount = null, minAmount = 0) => {
     return { valid: false, error: "Invalid amount format" };
   }
   
-  if (numAmount <= minAmount) {
-    return { valid: false, error: `Amount must be greater than ${minAmount}` };
+  if (numAmount < minAmount) {
+    return { valid: false, error: `Amount must be ${minAmount} or greater` };
   }
   
   if (maxAmount !== null && numAmount > Number.parseFloat(maxAmount)) {
