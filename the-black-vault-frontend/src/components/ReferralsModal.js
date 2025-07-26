@@ -328,28 +328,32 @@ export default function ReferralsModal({
               }
             }
             
-          } else if (!isDefaultReferrer && apiData.result && apiData.result.contractData) {
+          } else if (!isDefaultReferrer && apiData.result) {
             // Regular user case - use the user-referrals data
-            const { contractData, events, stats } = apiData.result;
+            const { contractData, events, stats, referrals: cachedReferrals } = apiData.result;
             
             console.log("🔍 DEBUG: Modal using cached user referral data:", {
               dataSource: "background-job-user",
-              totalReferrals: contractData.referredCount,
-              uniqueReferrals: stats.uniqueReferrals,
-              eventsCount: events.totalEvents
+              totalReferrals: contractData?.referredCount,
+              uniqueReferrals: stats?.uniqueReferrals,
+              eventsCount: events?.totalEvents,
+              referralsLength: cachedReferrals?.length
             });
             
-            setTotalReferralCount(contractData.referredCount || "0");
-            setUniqueReferrals(stats.uniqueReferrals || 0);
+            // Set stats with proper fallbacks
+            setTotalReferralCount(contractData?.referredCount || "0");
+            setUniqueReferrals(stats?.uniqueReferrals || 0);
             
             // For regular users, show their referee details
-            if (apiData.result.referrals && apiData.result.referrals.length > 0) {
-              setReferrals(apiData.result.referrals);
+            if (cachedReferrals && cachedReferrals.length > 0) {
+              setReferrals(cachedReferrals);
+              console.log(`🔍 DEBUG: Modal set ${cachedReferrals.length} referrals from cache`);
             } else {
               setReferrals([]);
+              console.log("🔍 DEBUG: Modal no cached referrals found, setting empty array");
             }
             
-            console.log("🔍 DEBUG: Modal cached stats set successfully");
+            console.log(`🔍 DEBUG: Modal stats set - Total: ${contractData?.referredCount}, Unique: ${stats?.uniqueReferrals}`);
             referralDataFetched = true;
           }
         } else if (response.status === 404) {
