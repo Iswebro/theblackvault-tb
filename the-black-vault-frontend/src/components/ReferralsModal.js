@@ -353,12 +353,9 @@ export default function ReferralsModal({
             referralDataFetched = true;
           }
         } else if (response.status === 404) {
-          // User not found in cache - they might not have any referrals
-          console.log("🔍 DEBUG: Modal user not found in cache (likely no referrals), setting empty data");
-          setTotalReferralCount("0");
-          setUniqueReferrals(0);
-          setReferrals([]);
-          referralDataFetched = true;
+          // User not found in cache - check fallback API before assuming no referrals
+          console.log("🔍 DEBUG: Modal user not found in Redis cache, will try fallback API");
+          // Don't set referralDataFetched = true here, let it fall through to fallback
         } else {
           console.warn("⚠️ Modal: API error, using fallback. Status:", response.status);
         }
