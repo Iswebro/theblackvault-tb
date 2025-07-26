@@ -259,10 +259,10 @@ export default function ReferralsModal({
       // Try to use cached background job data first (fast and reliable)
       let referralDataFetched = false;
       try {
-        // Use different endpoint based on whether this is the default referrer
+        // Use Redis-cached endpoints for faster loading
         const apiUrl = isDefaultReferrer 
           ? `/api/referral-stats?type=default`
-          : `/api/user-referrals?account=${account}`;
+          : `/api/referral-stats?user=${account}`;
         
         console.log("🔍 DEBUG: Modal fetching from:", apiUrl, "isDefaultReferrer:", isDefaultReferrer);
         
