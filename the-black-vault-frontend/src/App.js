@@ -916,8 +916,8 @@ export default function App() {
 
   const validateAmount = (amount, maxAmount = null, minAmount = 0) => {
     const numAmount = Number.parseFloat(amount);
-    if (!amount || isNaN(numAmount) || numAmount <= minAmount) {
-      return { valid: false, error: `Enter a valid amount greater than ${minAmount}` };
+    if (!amount || isNaN(numAmount) || numAmount < minAmount) {
+      return { valid: false, error: `Enter a valid amount of ${minAmount} or greater` };
     }
     if (maxAmount !== null && numAmount > Number.parseFloat(maxAmount)) {
       return { valid: false, error: `Cannot exceed maximum amount of ${maxAmount}` };
