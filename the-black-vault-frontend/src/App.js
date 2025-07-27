@@ -882,6 +882,9 @@ export default function App() {
        setSigner(s)
        setAccount(a)
        addToast("Wallet connected successfully!", "success")
+       
+       // Auto-scroll to top after successful wallet connection
+       window.scrollTo({ top: 0, behavior: 'smooth' })
      } catch (error) {
        console.error("Connection failed:", error)
        let msg = error?.message || "Failed to connect wallet"
@@ -1270,6 +1273,9 @@ export default function App() {
      setVaultActiveAmount("0")
      setReferralBonusesRemaining("3")
      addToast("Wallet disconnected", "info")
+     
+     // Auto-scroll to top after wallet disconnection
+     window.scrollTo({ top: 0, behavior: 'smooth' })
    }
    // ─────────────────────────────────────────────────────────────────────────────
 

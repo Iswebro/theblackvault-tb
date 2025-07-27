@@ -35,9 +35,9 @@ const SmartDeFiInsights = ({ account, vaultBalance, contractAddress }) => {
   };
 
   const tabs = [
-    { id: 'security', label: '🛡️ Security', icon: '🛡️' },
-    { id: 'strategy', label: '📊 Strategy', icon: '📊' },
-    { id: 'education', label: '🎓 Learn', icon: '🎓' }
+    { id: 'security', label: 'Security', icon: '🛡️' },
+    { id: 'strategy', label: 'Strategy', icon: '📊' },
+    { id: 'education', label: 'Learn', icon: '🎓' }
   ];
 
   return (
@@ -95,10 +95,23 @@ const SmartDeFiInsights = ({ account, vaultBalance, contractAddress }) => {
                 </div>
                 
                 {securityProfile && (
-                  <div className="no-risks">
-                    <span className="shield-icon">🛡️</span>
-                    <span>No major security risks detected</span>
-                  </div>
+                  <>
+                    <div className="no-risks">
+                      <span className="shield-icon">🛡️</span>
+                      <span>No major security risks detected</span>
+                    </div>
+                    
+                    <div className="audit-link">
+                      <a 
+                        href="https://de.fi/scanner/contract/0x22708d8a54c044cba5b237620af42030cbf76e14?chainId=bnb" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="audit-button"
+                      >
+                        🔍 View De.Fi Security Audit
+                      </a>
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -287,6 +300,33 @@ const SmartDeFiInsights = ({ account, vaultBalance, contractAddress }) => {
           border-radius: 6px;
           font-size: 12px;
           color: #10b981;
+        }
+        
+        .audit-link {
+          margin-top: 12px;
+        }
+        
+        .audit-button {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          text-decoration: none;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 500;
+          transition: all 0.2s ease;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .audit-button:hover {
+          background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+          text-decoration: none;
+          color: white;
         }
         
         .sustainable-focus h4 {
