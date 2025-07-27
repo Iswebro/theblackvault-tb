@@ -16,6 +16,7 @@ import TroubleshootingModal from "./components/TroubleshootingModal";
 import AccrualInfoModal from "./components/AccrualInfoModal";
 import ProjectIntroduction from "./components/ProjectIntroduction";
 import SmartDeFiInsights from "./components/SmartDeFiInsights";
+import Footer from "./components/Footer";
 import { config } from "./lib/config.js";
 import securityUtils from "./utils/security.js";
 
@@ -1366,6 +1367,8 @@ export default function App() {
           </div>
         </div>
 
+        <Footer />
+
         <TroubleshootingModal isOpen={showTroubleshootingModal} onClose={() => setShowTroubleshootingModal(false)} />
       </div>
     );
@@ -1797,6 +1800,8 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      <Footer />
 
       <ReferralsModal
         isOpen={showReferralsModal}
