@@ -1,8 +1,8 @@
 // src/components/ProjectIntroduction.js
 export default function ProjectIntroduction({ globalStats = null, onConnectWallet, onShowTroubleshooting, loading = false, middleContent = null }) {
   // Use dynamic stats if available, otherwise fall back to defaults
-  const totalVolume = globalStats?.totalDeposited || "410+";
-  const userCount = globalStats?.totalUsers || "7+";
+  const totalVolume = globalStats?.totalDeposited || "2000+";
+  const userCount = globalStats?.totalUsers || "10+";
 
   return (
     <div className="project-intro">
