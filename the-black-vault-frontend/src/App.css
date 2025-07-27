@@ -233,6 +233,33 @@ body {
   text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
 }
 
+/* Info button for accrual timing - small and discreet */
+.info-button-accrual {
+  background: none;
+  border: none;
+  color: #666666; /* More muted grey than discreet-button */
+  font-size: 0.75rem; /* Smaller font */
+  font-weight: 400; /* Less bold */
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0.25rem 0.5rem; /* Much smaller padding */
+  border-radius: 50%; /* Circular button */
+  margin-left: 0.5rem; /* Small space from the timer */
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7; /* Slightly transparent to be discreet */
+}
+
+.info-button-accrual:hover {
+  color: #a0a0a0; /* Slightly brighter on hover */
+  background: rgba(255, 255, 255, 0.03); /* Very subtle background */
+  opacity: 1; /* Full opacity on hover */
+  transform: scale(1.1); /* Slight grow effect */
+}
+
 /* Main Interface */
 .main-interface {
   min-height: 100vh;

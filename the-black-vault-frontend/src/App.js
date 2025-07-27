@@ -13,6 +13,7 @@ import HowItWorks from "./components/HowItWorks";
 import Leaderboard from "./components/Leaderboard";
 import ReferralsModal from "./components/ReferralsModal";
 import TroubleshootingModal from "./components/TroubleshootingModal";
+import AccrualInfoModal from "./components/AccrualInfoModal";
 import ProjectIntroduction from "./components/ProjectIntroduction";
 import SmartDeFiInsights from "./components/SmartDeFiInsights";
 import { config } from "./lib/config.js";
@@ -63,6 +64,7 @@ export default function App() {
   const [referralBonusesRemaining, setReferralBonusesRemaining] = useState(3);
   const [showReferralsModal, setShowReferralsModal] = useState(false);
   const [showTroubleshootingModal, setShowTroubleshootingModal] = useState(false);
+  const [showAccrualInfoModal, setShowAccrualInfoModal] = useState(false);
   const [dailyRate, setDailyRate] = useState("0");
   const [cycleStartTime, setCycleStartTime] = useState(0);
   const [cycleDuration, setCycleDuration] = useState(0);
@@ -1417,6 +1419,13 @@ export default function App() {
               <div className="balance-item">
                 <span className="balance-label">Next Accrual In</span>
                 <span className="balance-value">{timeUntilNextCycle > 0 ? formatCountdown(timeUntilNextCycle) : "00:00:00"}</span>
+                <button 
+                  className="info-button-accrual" 
+                  onClick={() => setShowAccrualInfoModal(true)}
+                  title="Why haven't I received rewards yet?"
+                >
+                  ?
+                </button>
               </div>
             </div>
           </div>
@@ -1796,6 +1805,11 @@ export default function App() {
         account={account}
         formatAddress={formatAddress}
         isDefaultReferrer={account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase()}
+      />
+
+      <AccrualInfoModal
+        isOpen={showAccrualInfoModal}
+        onClose={() => setShowAccrualInfoModal(false)}
       />
 
       {/* Activation Help Modal removed: no longer needed in V2 */}
