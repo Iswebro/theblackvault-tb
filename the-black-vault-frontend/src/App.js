@@ -183,6 +183,7 @@ export default function App() {
 
     const handleAccountsChanged = async (accounts) => {
       console.log("Accounts changed event received:", accounts);
+      console.log("Manual disconnect state:", isManuallyDisconnected.current);
 
       // no accounts → disconnect
       if (accounts.length === 0) {
@@ -190,6 +191,12 @@ export default function App() {
         if (!isManuallyDisconnected.current) {
           disconnect();
         }
+        return;
+      }
+
+      // Don't auto-reconnect if user manually disconnected
+      if (isManuallyDisconnected.current) {
+        console.log("User manually disconnected - not auto-reconnecting");
         return;
       }
 
