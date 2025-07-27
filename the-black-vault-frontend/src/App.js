@@ -759,13 +759,9 @@ export default function App() {
   } // End of loadContractData function
  
   // ─── Re-load whenever provider or account changes ───
-  // Always force refresh on wallet connect or provider/account change
-  useEffect(() => {
-    if (provider && account && contract && usdtContract) {
-      loadContractData(contract, usdtContract, true);
-    }
-  }, [provider, account, contract, usdtContract]);
- 
+  // Note: Data loading is already handled by initializeContracts() when wallet connects
+  // This useEffect is only needed for manual refresh scenarios
+  
   // ─── Countdown timer / auto-refresh ───
   useEffect(() => {
     let timer;
