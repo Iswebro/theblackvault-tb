@@ -37,7 +37,7 @@ export default function App() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [showActivationModal, setShowActivationModal] = useState(false);
-  const [roi, setRoi] = useState({ invested: "0", earned: "0", roiBP: "0" });
+  const [roi, setRoi] = useState({ invested: "0", earned: "0", roiBP: "0", percentage: "0.00" });
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [account, setAccount] = useState("");
@@ -694,12 +694,28 @@ export default function App() {
         const vaultEarned = parseFloat(formatEther(pendingRewards)) + parseFloat(formatEther(totalRewardsWithdrawn));
         const referralEarned = parseFloat(totalReferralRewards);
         const totalEarned = vaultEarned + referralEarned;
+        
+        // Enhanced ROI calculation with better validation
+        let roiPercentage = "0.00";
+        if (invested > 0 && !isNaN(invested) && !isNaN(totalEarned) && isFinite(invested) && isFinite(totalEarned)) {
+          const rawRoi = (totalEarned / invested) * 100;
+          // Cap ROI display at reasonable values to prevent scientific notation
+          if (rawRoi > 999999) {
+            roiPercentage = "999999.00";
+          } else if (rawRoi < -999999) {
+            roiPercentage = "-999999.00";
+          } else {
+            roiPercentage = rawRoi.toFixed(2);
+          }
+        }
+        
         const roiBP = invested > 0 ? ((totalEarned / invested) * 10000).toFixed(0) : "0";
         
         setRoi({
           invested: invested.toString(),
           earned: totalEarned.toString(),
           roiBP: roiBP,
+          percentage: roiPercentage, // Add pre-calculated percentage
         });
         
         console.log("📊 ROI Calculation:");
@@ -707,13 +723,14 @@ export default function App() {
         console.log("- Vault Earnings:", vaultEarned, "(pending + withdrawn)");
         console.log("- Referral Earnings:", referralEarned);
         console.log("- Total Earnings:", totalEarned);
-        console.log("- ROI %:", invested > 0 ? ((totalEarned / invested) * 100).toFixed(2) + "%" : "0.00%");
+        console.log("- ROI %:", roiPercentage + "%");
       } catch (error) {
         console.error("Error calculating ROI:", error);
         setRoi({
           invested: "0",
           earned: "0",
           roiBP: "0",
+          percentage: "0.00",
         });
       }
 
@@ -1375,7 +1392,7 @@ export default function App() {
             <h3 className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Vault Balance</span>
               <span style={{ fontWeight: 400, fontSize: 14, color: '#888', marginLeft: 'auto' }}>
-                All-time ROI: {roi && roi.invested !== "0" ? ((parseFloat(roi.earned) / parseFloat(roi.invested) * 100).toFixed(2)) : "0.00"}%
+                All-time ROI: {roi && roi.percentage ? roi.percentage : "0.00"}%
               </span>
             </h3>
             <div className="balance-grid">
