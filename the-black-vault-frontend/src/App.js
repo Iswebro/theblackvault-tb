@@ -861,6 +861,13 @@ export default function App() {
     return num.toFixed(3).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
   }
 
+  // Format to exactly 2 decimals for specific fields
+  const formatAmount2Decimals = (amount) => {
+    const num = Number.parseFloat(amount)
+    if (num === 0 || isNaN(num) || num < 0.01) return "0.00"
+    return num.toFixed(2)
+  }
+
   // For Max button: always paste with 2 decimals (rounded down)
   const formatAmountForInput = (amount) => {
     const num = Number.parseFloat(amount)
@@ -1415,7 +1422,7 @@ export default function App() {
               <div className="balance-item">
                 <span className="balance-label">Projected Daily Rewards</span>
                 <span className="balance-value">
-                  {formatAmount(((parseFloat(vaultActiveAmount) * parseFloat(dailyRate)) / 1000).toString())} USDT
+                  {formatAmount2Decimals(((parseFloat(vaultActiveAmount) * parseFloat(dailyRate)) / 1000).toString())} USDT
                 </span>
               </div>
 
@@ -1536,10 +1543,10 @@ export default function App() {
                 style={{ cursor: 'pointer' }}
                 title="Click to auto-fill withdraw amount"
                 onClick={() => {
-                  if (Number.parseFloat(rewards) > 0) setWithdrawAmount(formatAmount(rewards));
+                  if (Number.parseFloat(rewards) > 0) setWithdrawAmount(formatAmount2Decimals(rewards));
                 }}
               >
-                {formatAmount(rewards)} USDT
+                {formatAmount2Decimals(rewards)} USDT
               </span>
               <span className="reward-label">Available to withdraw</span>
             </div>
