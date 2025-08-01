@@ -861,11 +861,12 @@ export default function App() {
     return num.toFixed(3).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
   }
 
-  // Format to exactly 2 decimals for specific fields
+  // Format to exactly 2 decimals for specific fields - ALWAYS ROUND DOWN
   const formatAmount2Decimals = (amount) => {
     const num = Number.parseFloat(amount)
     if (num === 0 || isNaN(num) || num < 0.01) return "0.00"
-    return num.toFixed(2)
+    // Always round DOWN to avoid withdrawal failures
+    return (Math.floor(num * 100) / 100).toFixed(2)
   }
 
   // For Max button: always paste with 2 decimals (rounded down)
