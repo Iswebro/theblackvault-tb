@@ -38,7 +38,10 @@ export default function App() {
   const [historyPage, setHistoryPage] = useState(1);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [historyPaginationInfo, setHistoryPaginationInfo] = useState(null);
+  const [selectedHistoryWeek, setSelectedHistoryWeek] = useState(null);
+  const [showHistoryWeekSelector, setShowHistoryWeekSelector] = useState(false);
+  const [currentHistoryWeekIndex, setCurrentHistoryWeekIndex] = useState(null);
+  const [historyWeekInfo, setHistoryWeekInfo] = useState(null);
   const [showActivationModal, setShowActivationModal] = useState(false);
   const [roi, setRoi] = useState({ invested: "0", earned: "0", roiBP: "0", percentage: "0.00" });
   const [provider, setProvider] = useState(null);
@@ -145,25 +148,22 @@ export default function App() {
   };
 
   // Derived variables (after all state hooks)
-  const pageSize = 20; // API returns 20 transactions per page
-  const totalPages = historyPaginationInfo ? historyPaginationInfo.totalPages : Math.ceil(history.length / 5);
-  const paginatedHistory = history; // API already returns paginated results
+  const paginatedHistory = history; // Display all transactions from current week
   const closeHistoryToast = () => {
     setShowAllHistory(false);
-    setHistoryPage(1);
+    setSelectedHistoryWeek(null);
   };
-  const handlePrevPage = () => {
-    const newPage = historyPage > 1 ? historyPage - 1 : historyPage;
-    if (newPage !== historyPage) {
-      setHistoryPage(newPage);
-      loadTransactionHistory(newPage, false);
-    }
-  };
-  const handleNextPage = () => {
-    const newPage = historyPaginationInfo && historyPage < historyPaginationInfo.totalPages ? historyPage + 1 : historyPage;
-    if (newPage !== historyPage) {
-      setHistoryPage(newPage);
-      loadTransactionHistory(newPage, false);
+  
+  const getHistoryWeekDisplayText = () => {
+    if (!historyWeekInfo) return "Loading...";
+    
+    const displayWeekNumber = historyWeekInfo.weekIndex + 1;
+    const isCurrentWeek = historyWeekInfo.isCurrentWeek;
+    
+    if (isCurrentWeek) {
+      return `Week ${displayWeekNumber} (Current)`;
+    } else {
+      return `Week ${displayWeekNumber} (Previous Week)`;
     }
   };
 
@@ -384,7 +384,7 @@ export default function App() {
   }
 
   // Load transaction history on-demand using Ankr-powered API
-  const loadTransactionHistory = async (page = 1, append = false) => {
+  const loadTransactionHistory = async (week = null) => {
     if (!account || historyLoading) {
       console.log("Skipping loadTransactionHistory: missing account or already loading");
       return;
@@ -392,16 +392,15 @@ export default function App() {
 
     setHistoryLoading(true);
     try {
-      console.log(`🔍 Loading transaction history for account: ${account}, page: ${page}`);
+      const weekParam = week !== null ? `&week=${week}` : '';
+      console.log(`🔍 Loading transaction history for account: ${account}, week: ${week || 'current'}`);
       
-      const res = await fetch(`/api/transaction-history?wallet=${account}&page=${page}&limit=20`);
+      const res = await fetch(`/api/transaction-history?wallet=${account}${weekParam}`);
       if (!res.ok) {
         console.error("Transaction history API error:", res.status, res.statusText);
         addToast("Failed to load transaction history.", "error");
-        if (!append) {
-          setHistory([]);
-          setHistoryPaginationInfo(null);
-        }
+        setHistory([]);
+        setHistoryWeekInfo(null);
         return;
       }
       
@@ -410,10 +409,8 @@ export default function App() {
       
       if (!data.result) {
         console.log("🔍 No transaction results found");
-        if (!append) {
-          setHistory([]);
-          setHistoryPaginationInfo(null);
-        }
+        setHistory([]);
+        setHistoryWeekInfo(null);
         return;
       }
       
@@ -423,15 +420,22 @@ export default function App() {
         time: new Date(tx.time)
       }));
       
-      console.log(`✅ Loaded ${processedTransactions.length} transactions for page ${page}`);
+      console.log(`✅ Loaded ${processedTransactions.length} transactions for week ${data.weekIndex}`);
       
-      if (append) {
-        setHistory(prev => [...prev, ...processedTransactions]);
-      } else {
-        setHistory(processedTransactions);
+      setHistory(processedTransactions);
+      setHistoryWeekInfo({
+        weekIndex: data.weekIndex,
+        isCurrentWeek: data.isCurrentWeek,
+        weekStart: data.weekStart,
+        weekEnd: data.weekEnd,
+        totalTransactions: data.totalTransactions
+      });
+      
+      // Store the current week index if this is the initial load (no week specified)
+      if (week === null) {
+        setCurrentHistoryWeekIndex(data.weekIndex);
       }
       
-      setHistoryPaginationInfo(data.pagination);
       setHistoryLoaded(true);
       
       if (data.source === 'cache') {
@@ -443,10 +447,8 @@ export default function App() {
     } catch (error) {
       console.error("Error loading transaction history:", error);
       addToast("Error loading transaction history.", "error");
-      if (!append) {
-        setHistory([]);
-        setHistoryPaginationInfo(null);
-      }
+      setHistory([]);
+      setHistoryWeekInfo(null);
     } finally {
       setHistoryLoading(false);
     }
@@ -1736,9 +1738,9 @@ export default function App() {
                     style={{ marginTop: "12px", width: "100%" }}
                     onClick={() => {
                       setShowAllHistory(true);
-                      setHistoryPage(1);
+                      setSelectedHistoryWeek(null);
                       if (!historyLoaded) {
-                        loadTransactionHistory(1, false);
+                        loadTransactionHistory(null);
                       }
                     }}
                   >
@@ -1749,17 +1751,64 @@ export default function App() {
             )}
           </div>
 
-          {/* Toast pop-up for all transactions (paginated) */}
+          {/* Toast pop-up for all transactions (weekly selection) */}
           {showAllHistory && (
             <div className="toast-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div className="toast-popup" style={{ background: "#181818", borderRadius: 12, padding: 24, minWidth: 350, maxWidth: 420, maxHeight: "80vh", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.4)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <h3 style={{ margin: 0 }}>All Transactions</h3>
+                  <h3 style={{ margin: 0 }}>Transaction History</h3>
                   <button onClick={closeHistoryToast} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer" }}>&times;</button>
                 </div>
-                {history.length === 0 ? (
+
+                <div className="transaction-history-info" style={{ marginBottom: 16 }}>
+                  <p className="week-display" style={{ color: "#fff", fontWeight: 500, margin: "0 0 8px 0" }}>
+                    {getHistoryWeekDisplayText()}
+                  </p>
+                  {historyWeekInfo && (
+                    <p style={{ color: "#888", fontSize: "0.9em", margin: 0 }}>
+                      {historyWeekInfo.totalTransactions} transaction{historyWeekInfo.totalTransactions !== 1 ? 's' : ''} this week
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  className="week-selector-toggle"
+                  style={{ marginBottom: 12, fontSize: 13, background: "#f5f5f5", color: "#222", border: "1px solid #333", borderRadius: 6, padding: "4px 10px", cursor: "pointer", width: "100%" }}
+                  onClick={() => setShowHistoryWeekSelector((v) => !v)}
+                >
+                  {showHistoryWeekSelector ? "Hide Previous Weeks" : "View Previous Weeks"}
+                </button>
+
+                {showHistoryWeekSelector && (
+                  <div className="week-selector" style={{ marginBottom: 16, background: "#222", borderRadius: 8, padding: "12px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
+                    <label htmlFor="history-week-select" style={{ marginRight: 8, color: "#fff", fontWeight: 500, fontSize: 15 }}>Select Week:</label>
+                    <select
+                      id="history-week-select"
+                      value={selectedHistoryWeek ?? currentHistoryWeekIndex ?? 0}
+                      onChange={e => {
+                        const selectedWeekValue = Number(e.target.value);
+                        const weekToSet = selectedWeekValue === currentHistoryWeekIndex ? null : selectedWeekValue;
+                        setSelectedHistoryWeek(weekToSet);
+                        loadTransactionHistory(weekToSet);
+                      }}
+                      style={{ padding: "6px 12px", borderRadius: 6, background: "#fff", color: "#222", fontWeight: 500, fontSize: 15, border: "1px solid #333", width: "100%" }}
+                    >
+                      {[...Array((currentHistoryWeekIndex ?? 0) + 1).keys()].map(i => (
+                        <option key={i} value={i}>
+                          Week {i + 1} {i === currentHistoryWeekIndex ? "(Current)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {historyLoading ? (
+                  <div className="loading-state" style={{ textAlign: "center", padding: "20px 0", color: "#888" }}>
+                    Loading transactions...
+                  </div>
+                ) : history.length === 0 ? (
                   <div className="empty-state">
-                    <p className="empty-message">No transactions yet</p>
+                    <p className="empty-message">No transactions for this week</p>
                   </div>
                 ) : (
                   <div className="history-list">
@@ -1787,33 +1836,6 @@ export default function App() {
                         </div>
                       </div>
                     ))}
-                  </div>
-                )}
-                {/* Pagination controls */}
-                {totalPages > 1 && (
-                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginTop: 12, gap: 12 }}>
-                    <button
-                      onClick={handlePrevPage}
-                      disabled={historyPage === 1}
-                      style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: historyPage === 1 ? "#444" : "#222", color: "#fff", cursor: historyPage === 1 ? "not-allowed" : "pointer" }}
-                    >
-                      Prev
-                    </button>
-                    <span style={{ color: "#fff" }}>
-                      Page {historyPage} of {totalPages}
-                      {historyPaginationInfo && (
-                        <span style={{ fontSize: "0.8em", color: "#888", marginLeft: 8 }}>
-                          ({historyPaginationInfo.totalTransactions} total)
-                        </span>
-                      )}
-                    </span>
-                    <button
-                      onClick={handleNextPage}
-                      disabled={historyPage === totalPages}
-                      style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: historyPage === totalPages ? "#444" : "#222", color: "#fff", cursor: historyPage === totalPages ? "not-allowed" : "pointer" }}
-                    >
-                      Next
-                    </button>
                   </div>
                 )}
               </div>
