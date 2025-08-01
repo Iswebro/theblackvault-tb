@@ -38,6 +38,7 @@ export default function App() {
   const [historyPage, setHistoryPage] = useState(1);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyPaginationInfo, setHistoryPaginationInfo] = useState(null);
   const [showActivationModal, setShowActivationModal] = useState(false);
   const [roi, setRoi] = useState({ invested: "0", earned: "0", roiBP: "0", percentage: "0.00" });
   const [provider, setProvider] = useState(null);
@@ -144,18 +145,26 @@ export default function App() {
   };
 
   // Derived variables (after all state hooks)
-  const pageSize = 5; // Changed to 5 transactions per page in modal
-  const totalPages = Math.ceil(history.length / pageSize);
-  const paginatedHistory = history.slice((historyPage - 1) * pageSize, historyPage * pageSize);
+  const pageSize = 20; // API returns 20 transactions per page
+  const totalPages = historyPaginationInfo ? historyPaginationInfo.totalPages : Math.ceil(history.length / 5);
+  const paginatedHistory = history; // API already returns paginated results
   const closeHistoryToast = () => {
     setShowAllHistory(false);
     setHistoryPage(1);
   };
   const handlePrevPage = () => {
-    setHistoryPage((p) => (p > 1 ? p - 1 : p));
+    const newPage = historyPage > 1 ? historyPage - 1 : historyPage;
+    if (newPage !== historyPage) {
+      setHistoryPage(newPage);
+      loadTransactionHistory(newPage, false);
+    }
   };
   const handleNextPage = () => {
-    setHistoryPage((p) => (p < totalPages ? p + 1 : p));
+    const newPage = historyPaginationInfo && historyPage < historyPaginationInfo.totalPages ? historyPage + 1 : historyPage;
+    if (newPage !== historyPage) {
+      setHistoryPage(newPage);
+      loadTransactionHistory(newPage, false);
+    }
   };
 
   const { toasts, addToast, removeToast } = useToast();
@@ -375,7 +384,7 @@ export default function App() {
   }
 
   // Load transaction history on-demand using Ankr-powered API
-  const loadTransactionHistory = async () => {
+  const loadTransactionHistory = async (page = 1, append = false) => {
     if (!account || historyLoading) {
       console.log("Skipping loadTransactionHistory: missing account or already loading");
       return;
@@ -383,13 +392,16 @@ export default function App() {
 
     setHistoryLoading(true);
     try {
-      console.log("🔍 Loading transaction history for account:", account);
+      console.log(`🔍 Loading transaction history for account: ${account}, page: ${page}`);
       
-      const res = await fetch(`/api/transaction-history?wallet=${account}`);
+      const res = await fetch(`/api/transaction-history?wallet=${account}&page=${page}&limit=20`);
       if (!res.ok) {
         console.error("Transaction history API error:", res.status, res.statusText);
         addToast("Failed to load transaction history.", "error");
-        setHistory([]);
+        if (!append) {
+          setHistory([]);
+          setHistoryPaginationInfo(null);
+        }
         return;
       }
       
@@ -398,7 +410,10 @@ export default function App() {
       
       if (!data.result) {
         console.log("🔍 No transaction results found");
-        setHistory([]);
+        if (!append) {
+          setHistory([]);
+          setHistoryPaginationInfo(null);
+        }
         return;
       }
       
@@ -408,8 +423,15 @@ export default function App() {
         time: new Date(tx.time)
       }));
       
-      console.log("✅ Loaded", processedTransactions.length, "transactions");
-      setHistory(processedTransactions);
+      console.log(`✅ Loaded ${processedTransactions.length} transactions for page ${page}`);
+      
+      if (append) {
+        setHistory(prev => [...prev, ...processedTransactions]);
+      } else {
+        setHistory(processedTransactions);
+      }
+      
+      setHistoryPaginationInfo(data.pagination);
       setHistoryLoaded(true);
       
       if (data.source === 'cache') {
@@ -421,7 +443,10 @@ export default function App() {
     } catch (error) {
       console.error("Error loading transaction history:", error);
       addToast("Error loading transaction history.", "error");
-      setHistory([]);
+      if (!append) {
+        setHistory([]);
+        setHistoryPaginationInfo(null);
+      }
     } finally {
       setHistoryLoading(false);
     }
@@ -1709,7 +1734,13 @@ export default function App() {
                   <button
                     className="see-all-button premium-button"
                     style={{ marginTop: "12px", width: "100%" }}
-                    onClick={() => setShowAllHistory(true)}
+                    onClick={() => {
+                      setShowAllHistory(true);
+                      setHistoryPage(1);
+                      if (!historyLoaded) {
+                        loadTransactionHistory(1, false);
+                      }
+                    }}
                   >
                     See All
                   </button>
@@ -1770,6 +1801,11 @@ export default function App() {
                     </button>
                     <span style={{ color: "#fff" }}>
                       Page {historyPage} of {totalPages}
+                      {historyPaginationInfo && (
+                        <span style={{ fontSize: "0.8em", color: "#888", marginLeft: 8 }}>
+                          ({historyPaginationInfo.totalTransactions} total)
+                        </span>
+                      )}
                     </span>
                     <button
                       onClick={handleNextPage}
