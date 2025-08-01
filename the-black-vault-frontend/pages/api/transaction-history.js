@@ -6,8 +6,11 @@ import { Redis } from '@upstash/redis'
 
 const redis = Redis.fromEnv()
 
-const BSC_RPC_URL = process.env.BSC_RPC_URL;
+// Use Ankr API directly since environment variable loading is inconsistent
+const BSC_RPC_URL = process.env.BSC_RPC_URL || "https://rpc.ankr.com/bsc/608da03fc0a1cb8d5a5a6df34cb8bc598dfa27f71213d822afb470aaf0018ee4";
 const CONTRACT_ADDRESS = "0x22708D8a54c044CbA5B237620Af42030cbf76E14";
+
+console.log('🔧 Transaction API initialized with Ankr RPC:', BSC_RPC_URL.substring(0, 50) + '...');
 
 // Week calculation functions (same as leaderboard)
 function getCurrentWeekIndex() {
@@ -25,6 +28,8 @@ function getWeekTimestamps(weekIndex) {
 
 async function estimateBlockFromTimestamp(timestamp) {
   try {
+    console.log('🔍 Estimating block for timestamp:', timestamp, new Date(timestamp * 1000).toISOString());
+    
     const response = await fetch(BSC_RPC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -36,8 +41,18 @@ async function estimateBlockFromTimestamp(timestamp) {
       })
     });
 
+    if (!response.ok) {
+      throw new Error(`RPC request failed: ${response.status} ${response.statusText}`);
+    }
+
     const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(`RPC error: ${data.error.message}`);
+    }
+    
     const currentBlock = parseInt(data.result, 16);
+    console.log('📊 Current block number:', currentBlock);
     
     const blockResponse = await fetch(BSC_RPC_URL, {
       method: 'POST',
@@ -52,12 +67,16 @@ async function estimateBlockFromTimestamp(timestamp) {
 
     const blockData = await blockResponse.json();
     const currentTimestamp = parseInt(blockData.result.timestamp, 16);
+    console.log('⏰ Current block timestamp:', new Date(currentTimestamp * 1000).toISOString());
     
     // Estimate blocks (BSC ~3 second block time)
     const blockDiff = Math.floor((currentTimestamp - timestamp) / 3);
-    return Math.max(0, currentBlock - blockDiff);
+    const estimatedBlock = Math.max(0, currentBlock - blockDiff);
+    
+    console.log('🎯 Estimated block for timestamp:', estimatedBlock);
+    return estimatedBlock;
   } catch (error) {
-    console.error('Error estimating block:', error);
+    console.error('❌ Error estimating block:', error.message);
     return 0;
   }
 }
@@ -67,7 +86,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { wallet, week } = req.query;
+  const { wallet, week, fresh } = req.query;
 
   if (!wallet) {
     return res.status(400).json({ error: 'Wallet address is required' });
@@ -89,14 +108,18 @@ export default async function handler(req, res) {
 
     const cacheKey = `transactions:${wallet.toLowerCase()}:week:${requestedWeek}`;
     
-    // Try to get from cache first
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      console.log(`📋 Serving cached transactions for ${wallet} week ${requestedWeek}`);
-      return res.status(200).json({
-        ...cached,
-        source: 'cache'
-      });
+    // Try to get from cache first (unless fresh=true parameter is provided)
+    if (fresh !== 'true') {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        console.log(`📋 Serving cached transactions for ${wallet} week ${requestedWeek}`);
+        return res.status(200).json({
+          ...cached,
+          source: 'cache'
+        });
+      }
+    } else {
+      console.log(`🔄 Fresh lookup requested for ${wallet} week ${requestedWeek}`);
     }
 
     console.log(`🔍 Loading transactions for ${wallet} week ${requestedWeek}`);
@@ -110,34 +133,37 @@ export default async function handler(req, res) {
 
     const allTransactions = [];
     
-    // Events to track
+    // Events to track (correct signatures from contract ABI)
     const events = [
       { 
         name: 'Deposited',
-        signature: '0x2da466a7b24304f47e87fa2e1e5a81b9831ce54fec19055ce277ca2f39ba42c4',
+        signature: '0xc490a74c1058132dffb93944d555ddd1817ae53b7367ea1126ff123b1b1344a58',
         decode: (log) => {
           const user = '0x' + log.topics[1].slice(26);
-          const amount = parseInt(log.data.slice(0, 66), 16);
           const referrer = '0x' + log.topics[2].slice(26);
+          // amount and cycle are in data (first 32 bytes = amount, second 32 bytes = cycle)
+          const amount = parseInt(log.data.slice(0, 66), 16);
           return { user, amount, referrer, type: 'Deposit' };
         }
       },
       {
-        name: 'Withdrawn',
-        signature: '0x884edad9ce6fa2440d8a54cc123490eb96d2768479d49ff9c7366125a9424364',
+        name: 'RewardsWithdrawn',
+        signature: '0xfa73d3ab3a92ed3f2b6947757d8e4b2f3c293654b11b9c79111f8971f861b22b2',
         decode: (log) => {
           const user = '0x' + log.topics[1].slice(26);
+          // amount and cycle are in data (first 32 bytes = amount, second 32 bytes = cycle)
           const amount = parseInt(log.data.slice(0, 66), 16);
-          return { user, amount, type: 'Withdrawal' };
+          return { user, amount, type: 'Rewards Withdrawal' };
         }
       },
       {
-        name: 'ReferralRewardPaid',
-        signature: '0x091e83c71e1e3ed5885d67b5c5a3e2a0f4ee4b34b7b0e9e9c4e7c6e4c3a6e7f8',
+        name: 'ReferralRewardsWithdrawn',
+        signature: '0x996ae2281234577779bb0d7cd6daa18e54006fe2f6dc172f12197d8266b08dabcd',
         decode: (log) => {
-          const referrer = '0x' + log.topics[1].slice(26);
+          const user = '0x' + log.topics[1].slice(26);
+          // amount is in data
           const amount = parseInt(log.data.slice(0, 66), 16);
-          return { user: referrer, amount, type: 'Referral Reward' };
+          return { user, amount, type: 'Referral Withdrawal' };
         }
       }
     ];
@@ -145,6 +171,7 @@ export default async function handler(req, res) {
     // Process each event type
     for (const event of events) {
       try {
+        console.log(`🔍 Fetching ${event.name} events...`);
         const response = await fetch(BSC_RPC_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -164,10 +191,17 @@ export default async function handler(req, res) {
         const data = await response.json();
         
         if (data.result) {
+          console.log(`📊 Found ${data.result.length} ${event.name} events`);
           for (const log of data.result) {
             try {
               const decoded = event.decode(log);
-              
+              console.log(`🔍 Decoded ${event.name}:`, {
+                user: decoded.user,
+                amount: decoded.amount,
+                requestedWallet: wallet.toLowerCase(),
+                matches: decoded.user.toLowerCase() === wallet.toLowerCase()
+              });
+
               // Only include transactions for the requested wallet
               if (decoded.user.toLowerCase() === wallet.toLowerCase()) {
                 // Get block timestamp
