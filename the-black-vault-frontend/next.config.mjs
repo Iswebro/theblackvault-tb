@@ -9,6 +9,15 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  compiler: {
+    // Ensure ES2020 support for BigInt literals
+    target: 'es2020',
+  },
+  swcMinify: true,
+  experimental: {
+    // Enable ES2020 features
+    esmExternals: true,
+  },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {

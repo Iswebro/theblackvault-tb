@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "es6",
+    "target": "es2020",
     "module": "esnext",
     "jsx": "preserve",
     "moduleResolution": "node",
@@ -13,17 +13,30 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "exactOptionalPropertyTypes": false,
+    "noImplicitReturns": false,
+    "noFallthroughCasesInSwitch": false,
     "lib": [
       "dom",
       "dom.iterable",
-      "esnext"
+      "esnext",
+      "es2020"
     ],
     "incremental": true
   },
   "include": [
-    "src"
+    "src",
+    "pages",
+    "next-env.d.ts"
   ],
   "exclude": [
-    "node_modules"
-  ]
+    "node_modules",
+    ".next",
+    "out"
+  ],
+  "ts-node": {
+    "esm": true
+  }
 }
