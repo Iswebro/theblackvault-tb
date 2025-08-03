@@ -1,26 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    // Completely ignore TypeScript errors during build
-    ignoreBuildErrors: true,
-    tsconfigPath: './tsconfig.json',
+    ignoreDuringBuilds: false,
   },
   images: {
     unoptimized: true,
   },
-  compiler: {
-    // Ensure ES2020 support for BigInt literals
-    target: 'es2020',
-  },
   swcMinify: true,
   experimental: {
-    // Enable ES2020 features
-    esmExternals: true,
-    // Skip type checking during build
-    typedRoutes: false,
+    typedRoutes: true,
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
