@@ -208,7 +208,15 @@ export default function App() {
 
   // Sync RainbowKit wallet state with app state
   useEffect(() => {
+    console.log(`🔍 Wallet state change: isConnected=${isConnected}, walletAddress=${walletAddress}, current account=${account}`);
+    
     if (isConnected && walletAddress) {
+      // Prevent double initialization if already connected to same address
+      if (account === walletAddress && provider && signer) {
+        console.log("✅ Already connected to this wallet, skipping re-initialization");
+        return;
+      }
+      
       // Set account from RainbowKit
       setAccount(walletAddress);
       
@@ -216,27 +224,29 @@ export default function App() {
       const initializeProvider = async () => {
         if (window.ethereum) {
           try {
+            console.log("🔧 Initializing provider for wallet:", walletAddress);
             const browserProvider = new ethers.BrowserProvider(window.ethereum);
             const ethersSigner = await browserProvider.getSigner();
             
             setProvider(browserProvider);
             setSigner(ethersSigner);
             
-            console.log("RainbowKit wallet connected:", walletAddress);
+            console.log("✅ RainbowKit wallet connected:", walletAddress);
             addToast("Wallet connected successfully!", "success");
             
             // Auto-scroll to top after successful wallet connection
             window.scrollTo({ top: 0, behavior: 'smooth' });
           } catch (error) {
-            console.error("Failed to initialize provider:", error);
+            console.error("❌ Failed to initialize provider:", error);
             addToast("Failed to initialize wallet connection", "error");
           }
         }
       };
       
       initializeProvider();
-    } else if (!isConnected) {
+    } else if (!isConnected && account) {
       // Reset state when wallet disconnects
+      console.log("🔄 Wallet disconnected, clearing state");
       setAccount("");
       setProvider(null);
       setSigner(null);
@@ -624,19 +634,29 @@ export default function App() {
       }
 
       // ─────────── CONTRACTS ───────────
+      console.log("🔧 Initializing contracts...");
+      console.log("CONTRACT_ADDRESS:", CONTRACT_ADDRESS);
+      console.log("USDT_ADDRESS:", USDT_ADDRESS);
+      console.log("OLD_CONTRACT_ADDRESS:", OLD_CONTRACT_ADDRESS);
+      
       // Always initialize contracts, but they'll only work properly on BSC mainnet
       const vault = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
       setContract(vault)
-      console.log("BlackVault Contract initialized:", vault)
+      console.log("✅ BlackVault V2 Contract initialized:", CONTRACT_ADDRESS)
 
       const usdt = new Contract(USDT_ADDRESS, ERC20Abi, signer)
       setUsdtContract(usdt)
-      console.log("USDT Contract initialized:", usdt)
+      console.log("✅ USDT Contract initialized:", USDT_ADDRESS)
 
-      if (OLD_CONTRACT_ADDRESS) {
-        const oldVault = new Contract(OLD_CONTRACT_ADDRESS, BlackVaultV1Abi, signer);
-        setOldVaultContract(oldVault);
-        console.log("BlackVault V1 Contract initialized:", oldVault);
+      if (OLD_CONTRACT_ADDRESS && OLD_CONTRACT_ADDRESS !== "undefined") {
+        try {
+          const oldVault = new Contract(OLD_CONTRACT_ADDRESS, BlackVaultV1Abi, signer);
+          setOldVaultContract(oldVault);
+          console.log("✅ BlackVault V1 Contract initialized:", OLD_CONTRACT_ADDRESS);
+        } catch (error) {
+          console.error("❌ Failed to initialize V1 contract:", error);
+          console.log("V1 contract address value:", OLD_CONTRACT_ADDRESS);
+        }
       } else {
         console.warn("OLD_CONTRACT_ADDRESS is undefined. Skipping old vault contract initialization.");
       }
@@ -740,6 +760,18 @@ export default function App() {
         })
       } catch (error) {
         console.error("❌ Error calling getUserVault:", error)
+      }
+
+      // ─────────── CONTRACT VALIDATION ───────────
+      console.log("🔍 Testing contract functions...");
+      
+      // Test USDT contract
+      try {
+        const usdtSymbol = await usdt.symbol();
+        const usdtDecimals = await usdt.decimals();
+        console.log("✅ USDT Contract working - Symbol:", usdtSymbol, "Decimals:", usdtDecimals);
+      } catch (usdtError) {
+        console.error("❌ USDT Contract test failed:", usdtError);
       }
 
       await loadContractData(vault, usdt)
@@ -931,41 +963,67 @@ export default function App() {
       return
     }
 
-    // CRITICAL: Only load data if on BSC mainnet
+    // Check BSC mainnet but allow balance loading for debugging
+    console.log(`🔍 loadContractData - Chain validation: chainId=${chainId}, bsc.id=${bsc.id}, isOnBSC=${chainId === bsc.id}`);
+    
     if (!chainId || chainId !== bsc.id) {
-      console.log(`🚫 Skipping loadContractData: not on BSC mainnet. Current chain: ${chainId}, required: ${bsc.id}`);
-      // Clear balances to prevent showing wrong network data
-      setBalance("0");
-      setUsdtBalance("0");
-      setUsdtAllowance("0");
-      setRewards("0");
-      setVaultActiveAmount("0");
-      return;
+      console.warn(`⚠️ Not on BSC mainnet. Current chain: ${chainId}, required: ${bsc.id}`);
+      console.warn(`⚠️ Will attempt to load balances anyway for debugging`);
+      
+      // Don't return early - allow balance loading even on wrong network for now
+      // return;
     }
 
     try {
       console.log(`🔄 Loading contract data${forceRefresh ? ' (forced refresh)' : ''}...`);
       
       // ─────────── WALLET BALANCES ───────────
+      console.log("🔍 Fetching wallet balances...");
       let ethBal, usdtBal, allowance;
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
+          console.log(`🔄 Balance fetch attempt ${attempt}/3`);
           [ethBal, usdtBal, allowance] = await Promise.all([
             provider.getBalance(account),
             usdt.balanceOf(account),
             usdt.allowance(account, CONTRACT_ADDRESS),
           ])
-          setBalance      (formatEther(ethBal))
-          setUsdtBalance  (formatEther(usdtBal))
-          setUsdtAllowance(formatEther(allowance))
-          console.log("Wallet ETH balance:",   formatEther(ethBal))
-          console.log("Wallet USDT balance:",  formatEther(usdtBal))
-          console.log("USDT allowance:",       formatEther(allowance))
+          
+          const ethBalance = formatEther(ethBal);
+          const usdtBalance = formatEther(usdtBal);
+          const usdtAllowanceAmount = formatEther(allowance);
+          
+          setBalance(ethBalance);
+          setUsdtBalance(usdtBalance);
+          setUsdtAllowance(usdtAllowanceAmount);
+          
+          console.log("✅ Wallet balances fetched successfully:");
+          console.log("- BNB balance:", ethBalance);
+          console.log("- USDT balance:", usdtBalance);
+          console.log("- USDT allowance:", usdtAllowanceAmount);
+          console.log("- Account:", account);
+          console.log("- USDT Contract:", USDT_ADDRESS);
+          console.log("- Chain ID:", chainId);
+          
           break; // Success, exit retry loop
         } catch (balanceError) {
-          console.warn(`Error fetching wallet balances (attempt ${attempt}/3):`, balanceError);
+          console.warn(`❌ Error fetching wallet balances (attempt ${attempt}/3):`, balanceError);
+          console.log("Balance error details:", {
+            account,
+            usdtAddress: USDT_ADDRESS,
+            chainId,
+            errorMessage: balanceError.message
+          });
+          
           if (attempt === 3) {
-            console.error("Failed to fetch wallet balances after 3 attempts");
+            console.error("❌ Failed to fetch wallet balances after 3 attempts");
+            // Set fallback values
+            setBalance("0");
+            setUsdtBalance("0");
+            setUsdtAllowance("0");
+          } else {
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
         }
       }
