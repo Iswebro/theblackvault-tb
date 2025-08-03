@@ -1752,7 +1752,15 @@ export default function App() {
             </h3>
             <div className="reward-display">
               <span className="reward-amount purple">{formatAmount(referralRewards)} USDT</span>
-              <span className="reward-label">Available to withdraw</span>
+              <span className="reward-label">From referrals</span>
+            </div>
+            <div className="referral-stats">
+              <span className="referral-label">Your Referrals:</span>
+              <span className="referral-value">
+                {account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase() 
+                  ? defaultReferrerStats.uniqueReferrals 
+                  : uniqueReferralCount}
+              </span>
             </div>
             
             {account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase() && (
