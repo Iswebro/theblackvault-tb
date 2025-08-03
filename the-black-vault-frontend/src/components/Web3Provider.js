@@ -69,7 +69,6 @@ export function Web3Provider({ children }) {
         <RainbowKitProvider
           theme={blackVaultTheme}
           modalSize="compact"
-          coolMode
           showRecentTransactions={true}
         >
           {children}
