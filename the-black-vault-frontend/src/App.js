@@ -1493,9 +1493,7 @@ export default function App() {
 
             <ProjectIntroduction 
               globalStats={globalStats} 
-              onConnectWallet={connectWallet}
               onShowTroubleshooting={() => setShowTroubleshootingModal(true)}
-              loading={loading}
               middleContent={
                 <div style={{ maxWidth: '600px', margin: '20px auto' }}>
                   <SmartDeFiInsights 

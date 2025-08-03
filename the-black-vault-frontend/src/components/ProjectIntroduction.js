@@ -1,5 +1,7 @@
 // src/components/ProjectIntroduction.js
-export default function ProjectIntroduction({ globalStats = null, onConnectWallet, onShowTroubleshooting, loading = false, middleContent = null }) {
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+
+export default function ProjectIntroduction({ globalStats = null, onShowTroubleshooting, middleContent = null }) {
   // Use dynamic stats if available, otherwise fall back to defaults
   const totalVolume = globalStats?.totalDeposited || "2000+";
   const userCount = globalStats?.totalUsers || "10+";
@@ -8,16 +10,9 @@ export default function ProjectIntroduction({ globalStats = null, onConnectWalle
     <div className="project-intro">
       {/* Quick Access Buttons for Regular Users */}
       <div className="quick-access-buttons">
-        <button className="connect-button-top premium-button" onClick={onConnectWallet} disabled={loading}>
-          {loading ? (
-            <>
-              <div className="loading-spinner"></div>
-              Connecting...
-            </>
-          ) : (
-            "Connect Wallet"
-          )}
-        </button>
+        <div className="connect-button-top">
+          <ConnectButton />
+        </div>
         <button className="discreet-button" onClick={onShowTroubleshooting}>
           Troubleshooting & Network Info
         </button>
