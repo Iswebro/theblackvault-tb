@@ -275,161 +275,23 @@ export default function App() {
     fetchGlobalStats();
   }, []);
 
-  // Listen for account changes
+  // Simple chain change handler (RainbowKit handles wallet connections)
   useEffect(() => {
     if (!window.ethereum) return;
 
     const handleChainChanged = () => {
-      console.log("Chain changed, reloading page.");
+      console.log("Chain changed, reloading page to reset state.");
       window.location.reload();
     };
 
-    const handleAccountsChanged = async (accounts) => {
-      console.log("Accounts changed event received:", accounts);
-      console.log("Manual disconnect state:", isManuallyDisconnected.current);
-      
-      // Detect Trust Wallet Android
-      const isTrustWallet = window.ethereum && window.ethereum.isTrust
-      const isAndroid = /Android/i.test(navigator.userAgent)
-      
-      // no accounts → disconnect
-      if (accounts.length === 0) {
-        console.log("No accounts found, disconnecting.");
-        
-        // For Trust Wallet Android, add delay before disconnecting
-        // to prevent rapid disconnect/reconnect cycles
-        if (isTrustWallet && isAndroid) {
-          console.log("🔧 Trust Wallet Android: Adding disconnect delay...")
-          await new Promise(resolve => setTimeout(resolve, 1000))
-          
-          // Double-check accounts after delay
-          try {
-            const recheckAccounts = await window.ethereum.request({ method: "eth_accounts" })
-            if (recheckAccounts.length > 0) {
-              console.log("🔧 Trust Wallet Android: Accounts restored after delay, skipping disconnect")
-              return
-            }
-          } catch (error) {
-            console.log("Recheck failed:", error)
-          }
-        }
-        
-        if (!isManuallyDisconnected.current) {
-          disconnect();
-        }
-        return;
-      }
-
-      // Don't auto-reconnect if user manually disconnected
-      if (isManuallyDisconnected.current) {
-        console.log("User manually disconnected - not auto-reconnecting");
-        return;
-      }
-
-      // For Trust Wallet Android, add delay before reconnecting
-      // to prevent rapid connect/disconnect cycles
-      if (isTrustWallet && isAndroid) {
-        console.log("🔧 Trust Wallet Android: Adding reconnect delay...")
-        await new Promise(resolve => setTimeout(resolve, 1500))
-      }
-
-      // if account differs from current, reconnect
-      if (accounts[0] !== account) {
-        try {
-          // Since we're using RainbowKit, the connection state is managed automatically
-          // We just need to trigger a state update through the wallet address change
-          if (accounts[0]) {
-            console.log("Account changed to:", accounts[0]);
-            addToast("Wallet account changed!", "success");
-          }
-        } catch (err) {
-          console.error("Account change handling failed:", err);
-          
-          // For Trust Wallet Android, don't show error toast for automatic reconnection failures
-          if (!(isTrustWallet && isAndroid)) {
-            addToast(err.message || "Failed to handle account change", "error");
-          } else {
-            console.log("🔧 Trust Wallet Android: Suppressing account change error toast")
-          }
-        }
-      }
-    };
-
-    window.ethereum.on("accountsChanged", handleAccountsChanged);
     window.ethereum.on("chainChanged", handleChainChanged);
 
-    // Special handling for Trust Wallet Android session persistence
-    const isTrustWallet = window.ethereum && window.ethereum.isTrust
-    const isAndroid = /Android/i.test(navigator.userAgent)
-    
-    let handleFocus = null
-    
-    if (isTrustWallet && isAndroid) {
-      console.log("🔧 Setting up Trust Wallet Android session persistence...")
-      
-      // Store connection state in sessionStorage for Trust Wallet Android
-      const persistConnection = () => {
-        if (account) {
-          sessionStorage.setItem('trustWalletConnected', 'true')
-          sessionStorage.setItem('trustWalletAccount', account)
-        }
-      }
-      
-      const checkPersistedConnection = async () => {
-        const wasConnected = sessionStorage.getItem('trustWalletConnected')
-        const persistedAccount = sessionStorage.getItem('trustWalletAccount')
-        
-        if (wasConnected && persistedAccount && !account) {
-          console.log("🔧 Trust Wallet Android: Attempting to restore connection...")
-          try {
-            const accounts = await window.ethereum.request({ method: "eth_accounts" })
-            if (accounts.length > 0 && accounts[0] === persistedAccount) {
-              handleAccountsChanged(accounts)
-            }
-          } catch (error) {
-            console.log("Failed to restore Trust Wallet connection:", error)
-            sessionStorage.removeItem('trustWalletConnected')
-            sessionStorage.removeItem('trustWalletAccount')
-          }
-        }
-      }
-      
-      // Set up persistence
-      persistConnection()
-      
-      // Check for persisted connection on app focus (when user returns to app)
-      handleFocus = () => {
-        if (document.visibilityState === 'visible') {
-          setTimeout(checkPersistedConnection, 500)
-        }
-      }
-      
-      document.addEventListener('visibilitychange', handleFocus)
-      window.addEventListener('focus', handleFocus)
-      
-      // Initial check
-      setTimeout(checkPersistedConnection, 1000)
-    }
-
-    // trigger once on mount to pick up any already-connected wallet
-    window.ethereum
-      .request({ method: "eth_accounts" })
-      .then(handleAccountsChanged)
-      .catch((err) => console.error("Error getting initial accounts:", err));
-  if (!window.ethereum) return;
     return () => {
       if (window.ethereum.removeListener) {
-        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
         window.ethereum.removeListener("chainChanged", handleChainChanged);
       }
-      
-      // Clean up Trust Wallet Android specific listeners
-      if (isTrustWallet && isAndroid && handleFocus) {
-        document.removeEventListener('visibilitychange', handleFocus)
-        window.removeEventListener('focus', handleFocus)
-      }
     };
-  }, [signer, account, provider])
+  }, []); // No dependencies needed - just chain change detection
 
   // Aggressive BSC network switching - triggers immediately when wallet connects
   useEffect(() => {

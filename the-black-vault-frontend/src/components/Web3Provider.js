@@ -1,7 +1,18 @@
 'use client';
 
 import '@rainbow-me/rainbowkit/styles.css';
-import { getDefaultConfig, RainbowKitProvider, darkTheme, lightTheme } from '@rainbow-me/rainbowkit';
+import { 
+  getDefaultConfig, 
+  RainbowKitProvider, 
+  darkTheme, 
+  connectorsForWallets 
+} from '@rainbow-me/rainbowkit';
+import {
+  metaMaskWallet,
+  walletConnectWallet,
+  trustWallet,
+  coinbaseWallet,
+} from '@rainbow-me/rainbowkit/wallets';
 import { WagmiProvider } from 'wagmi';
 import { bsc } from 'wagmi/chains';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
@@ -9,12 +20,32 @@ import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 // Black Vault WalletConnect Project ID
 const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'ec1a030594f38292648794d4587912f4';
 
+// Custom connector configuration to prevent double connections
+const connectors = connectorsForWallets(
+  [
+    {
+      groupName: 'BSC Wallets',
+      wallets: [
+        metaMaskWallet,
+        trustWallet,
+        walletConnectWallet,
+        coinbaseWallet,
+      ],
+    },
+  ],
+  {
+    appName: 'Black Vault',
+    projectId: WALLETCONNECT_PROJECT_ID,
+  }
+);
+
 const config = getDefaultConfig({
   appName: 'Black Vault',
   projectId: WALLETCONNECT_PROJECT_ID,
-  chains: [bsc], // Only BSC mainnet
-  initialChain: bsc, // Ensure BSC is the default chain
+  chains: [bsc], // ONLY BSC mainnet - no other networks
+  initialChain: bsc, // Force BSC as default and only chain
   ssr: true,
+  connectors,
 });
 
 const queryClient = new QueryClient();
@@ -71,6 +102,8 @@ export function Web3Provider({ children }) {
           theme={blackVaultTheme}
           modalSize="compact"
           showRecentTransactions={true}
+          chains={[bsc]} // Explicitly restrict to BSC only
+          initialChain={bsc} // Force BSC as initial chain
         >
           {children}
         </RainbowKitProvider>
