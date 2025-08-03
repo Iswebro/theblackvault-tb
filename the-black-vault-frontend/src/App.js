@@ -6,9 +6,10 @@ import { SpeedInsights } from "@vercel/speed-insights/react";
 import { getUserInfo as fetchVaultInfo } from "./useBlackVault";
 import { useToast, ToastContainer, ToastProvider } from "./components/Toast";
 import { getReferralFromURL } from "./connectWallet";
-import { useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { useAccount, useChainId, useSwitchChain, useWalletClient, usePublicClient } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { bsc } from 'wagmi/chains';
+import { BrowserProvider } from 'ethers';
 import BlackVaultArtifact from "./contract/BlackVaultABI.json";
 import ERC20Artifact from "./contract/ERC20Abi.json";
 import BlackVaultV1Abi from "./contract/BlackVaultV1ABI.json";
@@ -23,6 +24,7 @@ import Footer from "./components/Footer";
 import TrustWalletHelper from "./components/TrustWalletHelper";
 import { config } from "./lib/config.js";
 import securityUtils from "./utils/security.js";
+import { walletClientToSigner, publicClientToProvider } from "./utils/ethersAdapter.js";
 
 // Use .abi if present (Hardhat/Truffle artifact), else use as array
 const BlackVaultAbi = BlackVaultArtifact.abi || BlackVaultArtifact;
@@ -39,6 +41,8 @@ export default function App() {
   const { address: walletAddress, isConnected, isConnecting, isDisconnected } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
+  const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
   
   // Derived state
   const isOnBSC = chainId === bsc.id;
@@ -118,8 +122,14 @@ export default function App() {
   // Fetch global stats without requiring wallet connection
   const fetchGlobalStats = async () => {
     try {
-      // Create a read-only provider
-      const readOnlyProvider = new ethers.JsonRpcProvider(config.rpcUrl || 'https://bsc-dataseed.binance.org/');
+      // Use public client if available, otherwise create read-only provider
+      let readOnlyProvider;
+      if (publicClient) {
+        readOnlyProvider = publicClientToProvider(publicClient);
+      } else {
+        readOnlyProvider = new ethers.JsonRpcProvider(config.rpcUrl || 'https://bsc-dataseed.binance.org/');
+      }
+      
       const readOnlyContract = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, readOnlyProvider);
       
       // Fetch contract stats
@@ -214,8 +224,9 @@ export default function App() {
   // Sync RainbowKit wallet state with app state
   useEffect(() => {
     console.log(`🔍 Wallet state change: isConnected=${isConnected}, walletAddress=${walletAddress}, current account=${account}`);
+    console.log(`🔍 WalletClient available: ${!!walletClient}, PublicClient available: ${!!publicClient}`);
     
-    if (isConnected && walletAddress) {
+    if (isConnected && walletAddress && walletClient && publicClient) {
       // Prevent double initialization if already connected to same address
       if (account === walletAddress && provider && signer) {
         console.log("✅ Already connected to this wallet, skipping re-initialization");
@@ -225,34 +236,50 @@ export default function App() {
       // Set account from RainbowKit
       setAccount(walletAddress);
       
-      // Initialize ethers provider and signer when wallet connects
+      // Initialize ethers provider and signer using Wagmi clients (works with all wallet types)
       const initializeProvider = async () => {
-        if (window.ethereum) {
+        try {
+          console.log("🔧 Initializing provider for wallet:", walletAddress);
+          console.log("🔧 Wallet type:", walletClient.mode, walletClient.transport?.type);
+          console.log("🔧 Current chainId from RainbowKit:", chainId);
+          
+          // Use Wagmi's walletClient and publicClient for universal wallet support
+          const ethersProvider = publicClientToProvider(publicClient);
+          const ethersSigner = await walletClientToSigner(walletClient);
+          
+          console.log("🔧 Provider created successfully via Wagmi");
+          console.log("🔧 Signer obtained:", await ethersSigner.getAddress());
+          
+          setProvider(ethersProvider);
+          setSigner(ethersSigner);
+          
+          console.log("✅ Wallet connected and provider initialized via Wagmi:", walletAddress);
+          addToast("Wallet connected successfully!", "success");
+          
+          // Auto-scroll to top after successful wallet connection
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (error) {
+          console.error("❌ Failed to initialize provider via Wagmi:", error);
+          
+          // Fallback to window.ethereum for backwards compatibility
+          console.log("🔄 Falling back to window.ethereum provider...");
           try {
-            console.log("🔧 Initializing provider for wallet:", walletAddress);
-            console.log("🔧 window.ethereum available:", !!window.ethereum);
-            console.log("🔧 Current chainId from RainbowKit:", chainId);
-            
-            const browserProvider = new ethers.BrowserProvider(window.ethereum);
-            const ethersSigner = await browserProvider.getSigner();
-            
-            console.log("🔧 BrowserProvider created successfully");
-            console.log("🔧 Signer obtained:", await ethersSigner.getAddress());
-            
-            setProvider(browserProvider);
-            setSigner(ethersSigner);
-            
-            console.log("✅ RainbowKit wallet connected and provider initialized:", walletAddress);
-            addToast("Wallet connected successfully!", "success");
-            
-            // Auto-scroll to top after successful wallet connection
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          } catch (error) {
-            console.error("❌ Failed to initialize provider:", error);
+            if (window.ethereum) {
+              const browserProvider = new ethers.BrowserProvider(window.ethereum);
+              const ethersSigner = await browserProvider.getSigner();
+              
+              setProvider(browserProvider);
+              setSigner(ethersSigner);
+              
+              console.log("✅ Fallback provider initialized successfully");
+              addToast("Wallet connected successfully!", "success");
+            } else {
+              throw new Error("No ethereum provider available");
+            }
+          } catch (fallbackError) {
+            console.error("❌ Fallback provider initialization failed:", fallbackError);
             addToast("Failed to initialize wallet connection", "error");
           }
-        } else {
-          console.error("❌ window.ethereum not available");
         }
       };
       
@@ -268,7 +295,7 @@ export default function App() {
       setRewards("0");
       setReferralRewards("0");
     }
-  }, [isConnected, walletAddress, addToast]);
+  }, [isConnected, walletAddress, walletClient, publicClient, addToast]);
 
   // Initialize contracts when wallet connects
   useEffect(() => {
@@ -294,23 +321,8 @@ export default function App() {
     fetchGlobalStats();
   }, []);
 
-  // Simple chain change handler (RainbowKit handles wallet connections)
-  useEffect(() => {
-    if (!window.ethereum) return;
-
-    const handleChainChanged = () => {
-      console.log("Chain changed, reloading page to reset state.");
-      window.location.reload();
-    };
-
-    window.ethereum.on("chainChanged", handleChainChanged);
-
-    return () => {
-      if (window.ethereum.removeListener) {
-        window.ethereum.removeListener("chainChanged", handleChainChanged);
-      }
-    };
-  }, []); // No dependencies needed - just chain change detection
+  // Note: RainbowKit handles all wallet events, no manual listeners needed
+  // This prevents double connections and event conflicts
 
   // Aggressive BSC network switching - triggers immediately when wallet connects
   useEffect(() => {
@@ -1037,9 +1049,12 @@ export default function App() {
         setVaultActiveAmount(netEarningAmount.toString());
         setRewards(formatEther(pendingRewards));
 
-        console.log("Total Deposited (Gross):", formatEther(totalDeposited));
-        console.log("Net Earning Amount:", netEarningAmount);
-        console.log("Pending Rewards:", formatEther(pendingRewards));
+        console.log("✅ Vault data loaded successfully:");
+        console.log("- Total Deposited (Gross):", formatEther(totalDeposited));
+        console.log("- Net Earning Amount:", netEarningAmount);
+        console.log("- Pending Rewards:", formatEther(pendingRewards));
+        console.log("- Wallet Type:", walletClient?.mode || 'unknown');
+        console.log("- Chain ID:", chainId);
       } catch (vaultDataError) {
         console.error("Error fetching vault data:", vaultDataError);
         setVaultActiveAmount("0");
@@ -1114,22 +1129,45 @@ export default function App() {
       }
 
       // Calculate time until next accrual if user has active balance
+      console.log("🕐 Timer calculation:", {
+        vaultActiveAmount: Number(vaultActiveAmount),
+        cycleStart,
+        cycleDur,
+        hasActiveBalance: Number(vaultActiveAmount) > 0,
+        hasCycleData: cycleStart > 0 && cycleDur > 0
+      });
+      
       if ((Number(vaultActiveAmount) > 0) && cycleStart > 0 && cycleDur > 0) {
         // Get current block timestamp with retry logic for RPC issues
         let now = 0;
         try {
           const block = await provider.getBlock("latest");
           now = block.timestamp;
+          console.log("🕐 Using blockchain timestamp:", now);
         } catch (e) {
           console.warn("Failed to get latest block timestamp, using local time:", e);
           now = Math.floor(Date.now() / 1000);
+          console.log("🕐 Using local timestamp:", now);
         }
         // How many cycles since launch?
         const cyclesSinceLaunch = Math.floor((now - cycleStart) / cycleDur);
         const nextCycleTime = cycleStart + (cyclesSinceLaunch + 1) * cycleDur;
         const secondsLeft = nextCycleTime - now;
-        setTimeUntilNextCycle(secondsLeft > 0 ? secondsLeft : 0);
+        const finalSeconds = secondsLeft > 0 ? secondsLeft : 0;
+        
+        console.log("🕐 Timer calculation details:", {
+          now,
+          cycleStart,
+          cycleDur,
+          cyclesSinceLaunch,
+          nextCycleTime,
+          secondsLeft,
+          finalSeconds
+        });
+        
+        setTimeUntilNextCycle(finalSeconds);
       } else {
+        console.log("🕐 No timer - either no active balance or missing cycle data");
         setTimeUntilNextCycle(0);
       }
 
