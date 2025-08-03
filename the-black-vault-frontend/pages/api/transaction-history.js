@@ -98,8 +98,12 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log(`🔍 DEBUG: Starting transaction history for wallet: ${wallet}`);
+    
     const currentWeekIndex = getCurrentWeekIndex();
     const requestedWeek = week ? parseInt(week) : currentWeekIndex;
+    
+    console.log(`🔍 DEBUG: Current week: ${currentWeekIndex}, Requested week: ${requestedWeek}`);
     
     // Validate week range (can't request future weeks, limit to reasonable past)
     if (requestedWeek > currentWeekIndex || requestedWeek < 0) {
@@ -108,167 +112,110 @@ export default async function handler(req, res) {
 
     const cacheKey = `transactions:${wallet.toLowerCase()}:week:${requestedWeek}`;
     
-    // Try to get from cache first (unless fresh=true parameter is provided)
-    if (fresh !== 'true') {
-      const cached = await redis.get(cacheKey);
-      if (cached) {
-        console.log(`📋 Serving cached transactions for ${wallet} week ${requestedWeek}`);
-        return res.status(200).json({
-          ...cached,
-          source: 'cache'
-        });
-      }
-    } else {
-      console.log(`🔄 Fresh lookup requested for ${wallet} week ${requestedWeek}`);
-    }
+    // Skip cache for debugging - always fetch fresh
+    console.log(`� DEBUG: Forcing fresh lookup for ${wallet} week ${requestedWeek}`);
 
-    console.log(`🔍 Loading transactions for ${wallet} week ${requestedWeek}`);
-    
     const { weekStart, weekEnd } = getWeekTimestamps(requestedWeek);
     const fromBlock = await estimateBlockFromTimestamp(weekStart);
     const toBlock = await estimateBlockFromTimestamp(weekEnd);
     
-    console.log(`Week ${requestedWeek}: ${new Date(weekStart * 1000).toISOString()} to ${new Date(weekEnd * 1000).toISOString()}`);
-    console.log(`Scanning blocks ${fromBlock} to ${toBlock}`);
+    console.log(`🔍 DEBUG: Week ${requestedWeek}: ${new Date(weekStart * 1000).toISOString()} to ${new Date(weekEnd * 1000).toISOString()}`);
+    console.log(`🔍 DEBUG: Scanning blocks ${fromBlock} to ${toBlock}`);
+
+    // First, let's try a simpler approach - get ALL events for this contract in the time range
+    console.log(`🔍 DEBUG: Fetching ALL events for contract ${CONTRACT_ADDRESS}...`);
+    
+    const allEventsResponse = await fetch(BSC_RPC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'eth_getLogs',
+        params: [{
+          fromBlock: `0x${Math.max(0, fromBlock - 1000).toString(16)}`, // Wider range for debugging
+          toBlock: `0x${(toBlock + 1000).toString(16)}`,
+          address: CONTRACT_ADDRESS
+        }],
+        id: 1
+      })
+    });
+
+    const allEventsData = await allEventsResponse.json();
+    console.log(`🔍 DEBUG: Found ${allEventsData.result?.length || 0} total events for contract`);
+    
+    if (allEventsData.result && allEventsData.result.length > 0) {
+      console.log(`🔍 DEBUG: Sample events:`, allEventsData.result.slice(0, 3).map(log => ({
+        topics: log.topics,
+        data: log.data,
+        blockNumber: parseInt(log.blockNumber, 16)
+      })));
+    }
 
     const allTransactions = [];
     
-    // Events to track with manual decoding (more reliable than ethers Interface in API routes)
-    const events = [
-      { 
-        name: 'Deposited',
-        signature: '0xc490a74c1058132dffb93944d555ddd1817ae53b7367ea1126ff123b1b1344a58',
-        decode: (log) => {
-          try {
-            // Manual decoding for Deposited(address user, uint256 amount, address referrer, uint256 cycle)
-            const user = '0x' + log.topics[1].slice(26);
-            const referrer = '0x' + log.topics[2].slice(26);
-            // amount is first 32 bytes of data
-            const amount = BigInt('0x' + log.data.slice(2, 66));
-            return { 
-              user, 
-              amount, 
-              referrer,
-              type: 'Deposit' 
-            };
-          } catch (e) {
-            console.error('Failed to decode Deposited event:', e);
-            return null;
-          }
-        }
-      },
-      {
-        name: 'RewardsWithdrawn',
-        signature: '0xfa73d3ab3a92ed3f2b6947757d8e4b2f3c293654b11b9c79111f8971f861b22b2',
-        decode: (log) => {
-          try {
-            // Manual decoding for RewardsWithdrawn(address user, uint256 amount, uint256 cycle)
-            const user = '0x' + log.topics[1].slice(26);
-            // amount is first 32 bytes of data
-            const amount = BigInt('0x' + log.data.slice(2, 66));
-            return { 
-              user, 
-              amount, 
-              type: 'Rewards Withdrawal' 
-            };
-          } catch (e) {
-            console.error('Failed to decode RewardsWithdrawn event:', e);
-            return null;
-          }
-        }
-      },
-      {
-        name: 'ReferralRewardsWithdrawn',
-        signature: '0x996ae2281234577779bb0d7cd6daa18e54006fe2f6dc172f12197d826b08dabcd',
-        decode: (log) => {
-          try {
-            // Manual decoding for ReferralRewardsWithdrawn(address user, uint256 amount)
-            const user = '0x' + log.topics[1].slice(26);
-            // amount is first 32 bytes of data
-            const amount = BigInt('0x' + log.data.slice(2, 66));
-            return { 
-              user, 
-              amount, 
-              type: 'Referral Withdrawal' 
-            };
-          } catch (e) {
-            console.error('Failed to decode ReferralRewardsWithdrawn event:', e);
-            return null;
-          }
-        }
-      }
-    ];
+    // Let's manually check for our known event signatures
+    const eventSignatures = {
+      'Deposited': '0xc490a74c1058132dffb93944d555ddd1817ae53b7367ea1126ff123b1b1344a58',
+      'RewardsWithdrawn': '0xfa73d3ab3a92ed3f2b6947757d8e4b2f3c293654b11b9c79111f8971f861b22b2',
+      'ReferralRewardsWithdrawn': '0x996ae2281234577779bb0d7cd6daa18e54006fe2f6dc172f12197d826b08dabcd'
+    };
 
-    // Process each event type
-    for (const event of events) {
-      try {
-        console.log(`🔍 Fetching ${event.name} events...`);
-        const response = await fetch(BSC_RPC_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'eth_getLogs',
-            params: [{
-              fromBlock: `0x${fromBlock.toString(16)}`,
-              toBlock: `0x${toBlock.toString(16)}`,
-              address: CONTRACT_ADDRESS,
-              topics: [event.signature]
-            }],
-            id: 1
-          })
-        });
-
-        const data = await response.json();
+    if (allEventsData.result) {
+      for (const log of allEventsData.result) {
+        const eventSig = log.topics[0];
+        console.log(`🔍 DEBUG: Checking event signature: ${eventSig}`);
         
-        if (data.result) {
-          console.log(`📊 Found ${data.result.length} ${event.name} events`);
-          for (const log of data.result) {
-            try {
-              const decoded = event.decode(log);
-              if (!decoded) continue; // Skip failed decodes
+        // Check if this is one of our events
+        const eventName = Object.keys(eventSignatures).find(name => eventSignatures[name] === eventSig);
+        if (eventName) {
+          console.log(`🔍 DEBUG: Found ${eventName} event!`);
+          
+          try {
+            // Extract user address from topics[1]
+            const user = '0x' + log.topics[1].slice(26);
+            console.log(`� DEBUG: Event user: ${user}, Target wallet: ${wallet.toLowerCase()}`);
+            
+            // Check if this event is for our target wallet
+            if (user.toLowerCase() === wallet.toLowerCase()) {
+              console.log(`🔍 DEBUG: ✅ Found matching transaction for wallet!`);
               
-              console.log(`🔍 Decoded ${event.name}:`, {
-                user: decoded.user,
-                amount: decoded.amount,
-                requestedWallet: wallet.toLowerCase(),
-                matches: decoded.user.toLowerCase() === wallet.toLowerCase()
+              // Simple amount extraction from data
+              const amountHex = log.data.slice(2, 66);
+              const amount = parseInt(amountHex, 16);
+              
+              // Get block timestamp
+              const blockResponse = await fetch(BSC_RPC_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'eth_getBlockByNumber',
+                  params: [log.blockNumber, false],
+                  id: 1
+                })
               });
 
-              // Only include transactions for the requested wallet
-              if (decoded.user.toLowerCase() === wallet.toLowerCase()) {
-                // Get block timestamp
-                const blockResponse = await fetch(BSC_RPC_URL, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    method: 'eth_getBlockByNumber',
-                    params: [log.blockNumber, false],
-                    id: 1
-                  })
-                });
+              const blockData = await blockResponse.json();
+              const timestamp = parseInt(blockData.result.timestamp, 16);
 
-                const blockData = await blockResponse.json();
-                const timestamp = parseInt(blockData.result.timestamp, 16);
-
-                allTransactions.push({
-                  txHash: log.transactionHash,
-                  type: decoded.type,
-                  amount: (Number(decoded.amount) / 1000000).toFixed(6), // Convert from USDT wei (6 decimals) to display
-                  time: new Date(timestamp * 1000).toISOString(),
-                  blockNumber: parseInt(log.blockNumber, 16)
-                });
-              }
-            } catch (decodeError) {
-              console.error(`Error decoding log:`, decodeError);
+              allTransactions.push({
+                txHash: log.transactionHash,
+                type: eventName === 'Deposited' ? 'Deposit' : 
+                      eventName === 'RewardsWithdrawn' ? 'Rewards Withdrawal' : 'Referral Withdrawal',
+                amount: (amount / 1000000).toFixed(6), // Convert from USDT units (6 decimals)
+                time: new Date(timestamp * 1000).toISOString(),
+                blockNumber: parseInt(log.blockNumber, 16)
+              });
             }
+          } catch (eventError) {
+            console.error(`🔍 DEBUG: Error processing ${eventName} event:`, eventError);
           }
         }
-      } catch (eventError) {
-        console.error(`Error fetching ${event.name} events:`, eventError);
       }
     }
+
+    console.log(`🔍 DEBUG: Final transactions found: ${allTransactions.length}`);
+    console.log(`🔍 DEBUG: Transactions:`, allTransactions);
 
     // Sort by timestamp descending
     allTransactions.sort((a, b) => new Date(b.time) - new Date(a.time));
@@ -283,15 +230,11 @@ export default async function handler(req, res) {
       generatedAt: new Date().toISOString()
     };
 
-    // Cache for 5 minutes (current week) or 1 hour (past weeks)
-    const cacheTime = requestedWeek === currentWeekIndex ? 300 : 3600;
-    await redis.setex(cacheKey, cacheTime, result);
-
-    console.log(`✅ Found ${allTransactions.length} transactions for week ${requestedWeek}`);
+    console.log(`✅ DEBUG: Returning ${allTransactions.length} transactions for week ${requestedWeek}`);
     
     return res.status(200).json({
       ...result,
-      source: 'live'
+      source: 'debug'
     });
 
   } catch (error) {
