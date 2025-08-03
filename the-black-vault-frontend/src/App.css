@@ -412,6 +412,82 @@ body {
   display: none !important;
 }
 
+/* Network Warning Banner */
+.network-warning-banner {
+  width: 100%;
+  background: linear-gradient(135deg, #FF4444, #FF6666);
+  border: 1px solid #FF2222;
+  padding: 1rem 2rem;
+  margin: 0;
+  animation: warningPulse 2s ease-in-out infinite alternate;
+  position: relative;
+  z-index: 10;
+}
+
+.network-warning-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  max-width: 800px;
+  margin: 0 auto;
+  color: white;
+}
+
+.warning-icon {
+  font-size: 1.5rem;
+  animation: bounce 1s ease-in-out infinite alternate;
+}
+
+.warning-text {
+  flex: 1;
+  text-align: center;
+}
+
+.warning-text strong {
+  display: block;
+  font-size: 1.1rem;
+  margin-bottom: 0.25rem;
+}
+
+.warning-text p {
+  font-size: 0.9rem;
+  margin: 0;
+  opacity: 0.9;
+}
+
+.switch-network-button {
+  background: white;
+  color: #FF4444;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.switch-network-button:hover {
+  background: #f0f0f0;
+  transform: translateY(-1px);
+}
+
+.switch-network-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@keyframes warningPulse {
+  0% { box-shadow: 0 0 20px rgba(255, 68, 68, 0.5); }
+  100% { box-shadow: 0 0 30px rgba(255, 68, 68, 0.8); }
+}
+
+@keyframes bounce {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-3px); }
+}
+
 /* Enhanced Vault Interface */
 .vault-interface {
   flex: 1;
@@ -2192,6 +2268,52 @@ div[data-rk] button[type="button"]:focus-visible {
   border-color: #c0c0c0 !important;
 }
 
+/* Custom BSC Network Switch Button in RainbowKit Modal */
+.bsc-switch-button {
+  width: 100% !important;
+  background: linear-gradient(45deg, #FF6B35, #FF8E53) !important;
+  color: white !important;
+  border: 1px solid #d97706 !important;
+  border-radius: 8px !important;
+  padding: 0.75rem 1rem !important;
+  font-weight: 600 !important;
+  font-size: 0.9rem !important;
+  margin: 0.5rem 0 !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+}
+
+.bsc-switch-button:hover {
+  background: linear-gradient(45deg, #FF8E53, #FFB380) !important;
+  border-color: #ea580c !important;
+  transform: translateY(-1px) !important;
+}
+
+.bsc-switch-button:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+.bsc-switch-button .network-icon {
+  font-size: 1.1rem;
+}
+
+/* Inject BSC switch button into RainbowKit modal */
+[data-rk] [role="dialog"] {
+  position: relative;
+}
+
+/* Custom injection point for BSC button */
+.rainbowkit-modal-bsc-injection {
+  padding: 0 1rem;
+  margin-bottom: 0.5rem;
+}
+
 /* ==================== MOBILE RESPONSIVENESS ==================== */
 
 /* Mobile - phones */
@@ -2311,6 +2433,30 @@ div[data-rk] button[type="button"]:focus-visible {
     width: 10px !important;
     height: 10px !important;
   }
+
+  /* Network warning banner mobile adjustments */
+  .network-warning-banner {
+    padding: 0.75rem 1rem;
+  }
+
+  .network-warning-content {
+    flex-direction: column;
+    gap: 0.75rem;
+    text-align: center;
+  }
+
+  .warning-text strong {
+    font-size: 1rem;
+  }
+
+  .warning-text p {
+    font-size: 0.85rem;
+  }
+
+  .switch-network-button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+  }
 }
 
 /* Small mobile - very small phones */
@@ -2348,6 +2494,24 @@ div[data-rk] button[type="button"]:focus-visible {
   .header-account [data-rk] button img[alt*="Chain"] {
     width: 8px !important;
     height: 8px !important;
+  }
+
+  /* Network warning banner for very small screens */
+  .network-warning-banner {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .warning-text strong {
+    font-size: 0.9rem;
+  }
+
+  .warning-text p {
+    font-size: 0.8rem;
+  }
+
+  .switch-network-button {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.8rem;
   }
 
   /* Vault cards spacing */

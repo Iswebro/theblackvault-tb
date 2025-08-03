@@ -13,6 +13,7 @@ const config = getDefaultConfig({
   appName: 'Black Vault',
   projectId: WALLETCONNECT_PROJECT_ID,
   chains: [bsc], // Only BSC mainnet
+  initialChain: bsc, // Ensure BSC is the default chain
   ssr: true,
 });
 

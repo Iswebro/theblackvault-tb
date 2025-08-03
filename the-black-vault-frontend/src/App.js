@@ -250,10 +250,10 @@ export default function App() {
   // Initialize contracts when wallet connects
   useEffect(() => {
     if (signer && account && provider) {
-      console.log("Initializing contracts for account:", account)
+      console.log("Initializing contracts for account:", account, "on chain:", chainId)
       initializeContracts()
     }
-  }, [signer, account, provider])
+  }, [signer, account, provider, chainId]) // Added chainId to reinitialize on network change
 
   // Fetch global stats on component mount (before wallet connection)
   useEffect(() => {
@@ -416,6 +416,169 @@ export default function App() {
     };
   }, [signer, account, provider])
 
+  // Aggressive BSC network switching - triggers immediately when wallet connects
+  useEffect(() => {
+    const aggressiveBSCSwitch = async () => {
+      // Only proceed if wallet is connected and switchChain is available
+      if (!isConnected || !walletAddress || !switchChain) return;
+      
+      // Get current chain ID - if undefined, wait a bit more
+      if (!chainId) {
+        console.log('Chain ID not yet available, retrying...');
+        setTimeout(aggressiveBSCSwitch, 500);
+        return;
+      }
+
+      // If already on BSC mainnet, no action needed
+      if (chainId === bsc.id) {
+        console.log(`✅ Already on BSC mainnet (Chain ID: ${chainId})`);
+        return;
+      }
+
+      // Log current network and initiate switch
+      console.log(`🔄 Wrong network detected! Current: ${chainId}, Required: ${bsc.id} (BSC Mainnet)`);
+      console.log('🚀 Immediately switching to BSC mainnet...');
+      
+      try {
+        await switchChain({ chainId: bsc.id });
+        console.log('✅ Successfully switched to BSC mainnet!');
+        
+        // Show success notification
+        if (typeof addToast === 'function') {
+          addToast('Successfully connected to BSC mainnet for USDT BEP-20!', 'success');
+        }
+        
+      } catch (error) {
+        console.error('❌ Failed to switch to BSC mainnet:', error);
+        
+        // Immediate retry (don't wait)
+        console.log('🔄 Immediate retry of network switch...');
+        try {
+          await switchChain({ chainId: bsc.id });
+          console.log('✅ Successfully switched to BSC mainnet on immediate retry!');
+          if (typeof addToast === 'function') {
+            addToast('Connected to BSC mainnet for USDT BEP-20!', 'success');
+          }
+        } catch (immediateRetryError) {
+          console.error('❌ Immediate retry failed:', immediateRetryError);
+          
+          // Final retry after 1 second
+          setTimeout(async () => {
+            try {
+              await switchChain({ chainId: bsc.id });
+              console.log('✅ Successfully switched to BSC mainnet on final retry!');
+            } catch (finalRetryError) {
+              console.error('❌ All retries failed:', finalRetryError);
+              // Show strong warning to user
+              if (typeof addToast === 'function') {
+                addToast('⚠️ CRITICAL: Must connect to BSC (Binance Smart Chain) for USDT BEP-20 operations', 'error');
+              }
+            }
+          }, 1000);
+        }
+      }
+    };
+
+    // Trigger immediately when wallet connects or chain changes
+    if (isConnected && walletAddress) {
+      aggressiveBSCSwitch();
+    }
+  }, [isConnected, walletAddress, chainId, switchChain]);
+
+  // Additional safety check - prevent app usage if not on BSC
+  useEffect(() => {
+    if (isConnected && walletAddress && chainId && chainId !== bsc.id) {
+      console.warn(`⚠️ App functionality disabled - not on BSC mainnet. Current chain: ${chainId}`);
+    }
+  }, [isConnected, walletAddress, chainId]);
+
+  // Inject BSC switch button into RainbowKit modal
+  useEffect(() => {
+    const injectBSCSwitch = () => {
+      // Look for RainbowKit modal
+      const modal = document.querySelector('[data-rk] [role="dialog"]');
+      if (!modal) return;
+
+      // Check if we already injected the button
+      if (modal.querySelector('.rainbowkit-modal-bsc-injection')) return;
+
+      // Only inject if not on BSC
+      if (chainId === bsc.id) return;
+
+      // Create injection container
+      const injectionDiv = document.createElement('div');
+      injectionDiv.className = 'rainbowkit-modal-bsc-injection';
+
+      // Create BSC switch button
+      const bscButton = document.createElement('button');
+      bscButton.className = 'bsc-switch-button';
+      bscButton.innerHTML = `
+        <span class="network-icon">🔗</span>
+        <span>Switch to BSC Network</span>
+      `;
+      
+      bscButton.onclick = () => {
+        if (switchChain) {
+          switchChain({ chainId: bsc.id })
+            .then(() => {
+              console.log('Successfully switched to BSC from modal');
+              // Remove button after successful switch
+              setTimeout(() => {
+                const button = document.querySelector('.rainbowkit-modal-bsc-injection');
+                if (button) button.remove();
+              }, 500);
+            })
+            .catch((error) => {
+              console.error('Failed to switch to BSC from modal:', error);
+            });
+        }
+      };
+
+      injectionDiv.appendChild(bscButton);
+
+      // Find the best injection point (after wallet balance/address area)
+      const modalContent = modal.querySelector('div:first-child');
+      if (modalContent) {
+        const insertPoint = modalContent.children[1] || modalContent.children[0];
+        if (insertPoint) {
+          insertPoint.after(injectionDiv);
+        } else {
+          modalContent.appendChild(injectionDiv);
+        }
+      }
+    };
+
+    // Set up observer to watch for modal opening
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.addedNodes.length > 0) {
+          // Check if a modal was added
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === 1 && (
+              node.querySelector?.('[data-rk] [role="dialog"]') || 
+              node.matches?.('[data-rk] [role="dialog"]')
+            )) {
+              setTimeout(injectBSCSwitch, 100);
+            }
+          });
+        }
+      });
+    });
+
+    // Start observing
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    // Also inject immediately if modal is already open
+    setTimeout(injectBSCSwitch, 500);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [chainId, switchChain]);
+
   const initializeContracts = async () => {
     if (!signer || !account) {
       console.log("Cannot initialize contracts: missing signer or account")
@@ -423,7 +586,45 @@ export default function App() {
     }
 
     try {
+      console.log("Expected contract address:", "0x22708D8a54c044CbA5B237620Af42030cbf76E14")
+      
+      // Verify we're using the correct contract address
+      if (CONTRACT_ADDRESS !== "0x22708D8a54c044CbA5B237620Af42030cbf76E14") {
+        console.error("❌ CRITICAL: Wrong contract address detected!");
+        console.error("Expected: 0x22708D8a54c044CbA5B237620Af42030cbf76E14");
+        console.error("Actual:", CONTRACT_ADDRESS);
+        addToast("Critical error: Wrong contract address", "error");
+        return;
+      }
+
+      // Verify we're using the correct USDT address for BSC mainnet
+      if (USDT_ADDRESS !== "0x55d398326f99059fF775485246999027B3197955") {
+        console.error("❌ CRITICAL: Wrong USDT address detected!");
+        console.error("Expected BSC USDT: 0x55d398326f99059fF775485246999027B3197955");
+        console.error("Actual:", USDT_ADDRESS);
+        addToast("Critical error: Wrong USDT address", "error");
+        return;
+      }
+
+      // Check if we're on BSC mainnet - if not, try to switch immediately
+      if (!chainId || chainId !== bsc.id) {
+        console.log(`🔄 Not on BSC mainnet (current: ${chainId}, required: ${bsc.id}). Attempting immediate switch...`);
+        
+        if (switchChain && isConnected && walletAddress) {
+          try {
+            await switchChain({ chainId: bsc.id });
+            console.log('✅ Successfully switched to BSC mainnet!');
+            // Continue with initialization after successful switch
+          } catch (error) {
+            console.error('❌ Failed to switch to BSC:', error);
+            addToast('Please manually switch to BSC (Binance Smart Chain) network', 'error');
+            // Don't return - still initialize contracts so they exist, but they won't work until network switch
+          }
+        }
+      }
+
       // ─────────── CONTRACTS ───────────
+      // Always initialize contracts, but they'll only work properly on BSC mainnet
       const vault = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
       setContract(vault)
       console.log("BlackVault Contract initialized:", vault)
@@ -728,6 +929,18 @@ export default function App() {
     if (!vault || !provider || !account || !usdt) {
       console.log("Skipping loadContractData: missing dependencies", { vault, provider, account, usdt })
       return
+    }
+
+    // CRITICAL: Only load data if on BSC mainnet
+    if (!chainId || chainId !== bsc.id) {
+      console.log(`🚫 Skipping loadContractData: not on BSC mainnet. Current chain: ${chainId}, required: ${bsc.id}`);
+      // Clear balances to prevent showing wrong network data
+      setBalance("0");
+      setUsdtBalance("0");
+      setUsdtAllowance("0");
+      setRewards("0");
+      setVaultActiveAmount("0");
+      return;
     }
 
     try {
@@ -1197,6 +1410,23 @@ export default function App() {
   const approveUsdt = async () => {
     if (!usdtContract || txLoading) return;
     
+    // CRITICAL: Only allow approvals on BSC mainnet
+    if (!chainId || chainId !== bsc.id) {
+      console.error(`🚫 USDT approval blocked: not on BSC mainnet. Current chain: ${chainId}, required: ${bsc.id}`);
+      addToast("Please switch to BSC (Binance Smart Chain) network for USDT BEP-20 operations", "error");
+      
+      // Try to switch to BSC
+      if (switchChain) {
+        try {
+          await switchChain({ chainId: bsc.id });
+          addToast("Switched to BSC mainnet! Please try your approval again.", "success");
+        } catch (error) {
+          console.error('Failed to switch to BSC:', error);
+        }
+      }
+      return;
+    }
+    
     // Enhanced validation using security utilities
     const amountValidation = securityUtils.validateAmount(depositAmount, null, 50); // Min 50 USDT
     if (!amountValidation.valid) {
@@ -1233,6 +1463,23 @@ export default function App() {
   };   const deposit = async () => {
      if (!contract || txLoading) {
        if (!contract) addToast("Contract not initialized", "error");
+       return;
+     }
+
+     // CRITICAL: Only allow deposits on BSC mainnet
+     if (!chainId || chainId !== bsc.id) {
+       console.error(`🚫 Deposit blocked: not on BSC mainnet. Current chain: ${chainId}, required: ${bsc.id}`);
+       addToast("Please switch to BSC (Binance Smart Chain) network for USDT BEP-20 deposits", "error");
+       
+       // Try to switch to BSC
+       if (switchChain) {
+         try {
+           await switchChain({ chainId: bsc.id });
+           addToast("Switched to BSC mainnet! Please try your deposit again.", "success");
+         } catch (error) {
+           console.error('Failed to switch to BSC:', error);
+         }
+       }
        return;
      }
 
@@ -1306,6 +1553,23 @@ export default function App() {
        return
      }
      
+     // CRITICAL: Only allow withdrawals on BSC mainnet (USDT BEP-20)
+     if (!chainId || chainId !== bsc.id) {
+       console.error(`🚫 Withdrawal blocked: not on BSC mainnet. Current chain: ${chainId}, required: ${bsc.id}`);
+       addToast("Please switch to BSC (Binance Smart Chain) network for USDT BEP-20 withdrawals", "error");
+       
+       // Try to switch to BSC
+       if (switchChain) {
+         try {
+           await switchChain({ chainId: bsc.id });
+           addToast("Switched to BSC mainnet! Please try your withdrawal again.", "success");
+         } catch (error) {
+           console.error('Failed to switch to BSC:', error);
+         }
+       }
+       return;
+     }
+     
      // Enhanced validation using security utilities
      const amountValidation = securityUtils.validateAmount(withdrawAmount, rewards, 0);
      if (!amountValidation.valid) {
@@ -1363,6 +1627,24 @@ export default function App() {
  
    const withdrawOldVaultRewards = async () => {
      if (!oldVaultContract || txLoading) return
+     
+     // CRITICAL: Only allow V1 withdrawals on BSC mainnet (USDT BEP-20)
+     if (!chainId || chainId !== bsc.id) {
+       console.error(`🚫 V1 withdrawal blocked: not on BSC mainnet. Current chain: ${chainId}, required: ${bsc.id}`);
+       addToast("Please switch to BSC (Binance Smart Chain) network for V1 USDT BEP-20 withdrawals", "error");
+       
+       // Try to switch to BSC
+       if (switchChain) {
+         try {
+           await switchChain({ chainId: bsc.id });
+           addToast("Switched to BSC mainnet! Please try your V1 withdrawal again.", "success");
+         } catch (error) {
+           console.error('Failed to switch to BSC:', error);
+         }
+       }
+       return;
+     }
+     
      setTxLoading(true)
      try {
        addToast("Withdrawing V1 vault rewards…", "info")
@@ -1383,6 +1665,23 @@ export default function App() {
        if (!contract) addToast("Contract not initialized", "error")
        else addToast("No referral rewards", "warning")
        return
+     }
+     
+     // CRITICAL: Only allow referral withdrawals on BSC mainnet (USDT BEP-20)
+     if (!chainId || chainId !== bsc.id) {
+       console.error(`🚫 Referral withdrawal blocked: not on BSC mainnet. Current chain: ${chainId}, required: ${bsc.id}`);
+       addToast("Please switch to BSC (Binance Smart Chain) network for USDT BEP-20 referral withdrawals", "error");
+       
+       // Try to switch to BSC
+       if (switchChain) {
+         try {
+           await switchChain({ chainId: bsc.id });
+           addToast("Switched to BSC mainnet! Please try your referral withdrawal again.", "success");
+         } catch (error) {
+           console.error('Failed to switch to BSC:', error);
+         }
+       }
+       return;
      }
      
      setTxLoading(true)
@@ -1445,6 +1744,24 @@ export default function App() {
  
    const withdrawOldReferralRewards = async () => {
      if (!oldVaultContract || txLoading) return
+     
+     // CRITICAL: Only allow V1 referral withdrawals on BSC mainnet (USDT BEP-20)
+     if (!chainId || chainId !== bsc.id) {
+       console.error(`🚫 V1 referral withdrawal blocked: not on BSC mainnet. Current chain: ${chainId}, required: ${bsc.id}`);
+       addToast("Please switch to BSC (Binance Smart Chain) network for V1 USDT BEP-20 referral withdrawals", "error");
+       
+       // Try to switch to BSC
+       if (switchChain) {
+         try {
+           await switchChain({ chainId: bsc.id });
+           addToast("Switched to BSC mainnet! Please try your V1 referral withdrawal again.", "success");
+         } catch (error) {
+           console.error('Failed to switch to BSC:', error);
+         }
+       }
+       return;
+     }
+     
      setTxLoading(true)
      try {
        addToast("Withdrawing V1 referral rewards…", "info")
@@ -1571,7 +1888,31 @@ export default function App() {
           </div>
         </div>
 
-        <div className="vault-interface">
+        {/* Critical Network Warning Banner - Blocks functionality */}
+        {isConnected && walletAddress && !isOnBSC && (
+          <div className="network-warning-banner">
+            <div className="network-warning-content">
+              <span className="warning-icon">⚠️</span>
+              <div className="warning-text">
+                <strong>CRITICAL: Wrong Network!</strong>
+                <p>You must be on BSC Mainnet to use USDT (BEP-20). Currently on Chain ID: {chainId}</p>
+                <p style={{ fontSize: '0.8rem', opacity: 0.9, marginTop: '0.25rem' }}>
+                  Automatic switching in progress... If it fails, click the button below.
+                </p>
+              </div>
+              <button
+                className="switch-network-button"
+                onClick={switchToBSC}
+                disabled={!switchChain}
+              >
+                Force Switch to BSC
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Only show vault interface if on correct network */}
+          <div className="vault-interface">
           <div className="vault-card premium-card">
             <h3 className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Vault Balance</span>
@@ -1999,7 +2340,7 @@ export default function App() {
         </div>
       </div>
 
-      <Footer />
+        <Footer />
 
       <ReferralsModal
         isOpen={showReferralsModal}
