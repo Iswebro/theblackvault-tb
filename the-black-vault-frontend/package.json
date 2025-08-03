@@ -22,7 +22,9 @@
     "dev": "next dev",
     "build": "next build",
     "build:vercel": "next build",
+    "build:testing": "NODE_ENV=testing next build",
     "start": "next start",
+    "start:testing": "NODE_ENV=testing next start",
     "lint": "next lint"
   },
   "devDependencies": {

@@ -204,6 +204,11 @@ export default function App() {
   useEffect(() => {
     const refFromURL = getReferralFromURL()
     setReferralAddress(refFromURL)
+    
+    // Show testing environment banner
+    if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'testing') {
+      console.log('🧪 TESTING ENVIRONMENT DETECTED');
+    }
   }, [])
 
   // Sync RainbowKit wallet state with app state
@@ -1940,6 +1945,9 @@ export default function App() {
           <div className="header-logo">
             <img src="/logo2.svg" alt="Black Vault" className="mini-logo-img" />
             <span className="header-title">BLACK VAULT</span>
+            {process.env.NEXT_PUBLIC_ENVIRONMENT === 'testing' && (
+              <span className="testing-badge">🧪 TESTING</span>
+            )}
           </div>
           <div className="header-account">
             <ConnectButton />
