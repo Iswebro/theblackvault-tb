@@ -11,7 +11,7 @@ window.Buffer = Buffer
 window.process = process
 window.global = window
 
-// Render the app
+// Render the app (Note: In Next.js this won't be used, pages/_app.js is the entry point)
 const root = ReactDOM.createRoot(document.getElementById("root"))
 root.render(
   <React.StrictMode>

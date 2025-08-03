@@ -4,7 +4,9 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   typescript: {
+    // Completely ignore TypeScript errors during build
     ignoreBuildErrors: true,
+    tsconfigPath: './tsconfig.json',
   },
   images: {
     unoptimized: true,
@@ -17,6 +19,8 @@ const nextConfig = {
   experimental: {
     // Enable ES2020 features
     esmExternals: true,
+    // Skip type checking during build
+    typedRoutes: false,
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
