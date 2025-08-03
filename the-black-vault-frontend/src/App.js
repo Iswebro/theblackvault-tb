@@ -510,11 +510,15 @@ export default function App() {
         return;
       }
       
-      // Convert string dates back to Date objects
+      // Convert string dates back to Date objects and validate
       const processedTransactions = data.result.map(tx => ({
         ...tx,
-        time: new Date(tx.time)
-      }));
+        time: new Date(tx.time),
+        amount: tx.amount || "0" // Ensure amount is always present
+      })).filter(tx => {
+        // Filter out invalid transactions
+        return tx.time instanceof Date && !isNaN(tx.time) && tx.txHash && tx.type && tx.amount;
+      });
       
       console.log(`✅ Loaded ${processedTransactions.length} transactions for week ${data.weekIndex}`);
       
@@ -1748,15 +1752,7 @@ export default function App() {
             </h3>
             <div className="reward-display">
               <span className="reward-amount purple">{formatAmount(referralRewards)} USDT</span>
-              <span className="reward-label">From referrals</span>
-            </div>
-            <div className="referral-stats">
-              <span className="referral-label">Your Referrals:</span>
-              <span className="referral-value">
-                {account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase() 
-                  ? defaultReferrerStats.uniqueReferrals 
-                  : uniqueReferralCount}
-              </span>
+              <span className="reward-label">Available to withdraw</span>
             </div>
             
             {account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase() && (

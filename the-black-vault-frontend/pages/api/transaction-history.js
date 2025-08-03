@@ -3,6 +3,7 @@
 // Usage: /api/transaction-history?wallet=0x...&week=1
 
 import { Redis } from '@upstash/redis'
+const ethers = require('ethers');
 
 const redis = Redis.fromEnv()
 
@@ -11,6 +12,11 @@ const BSC_RPC_URL = process.env.BSC_RPC_URL || "https://rpc.ankr.com/bsc/608da03
 const CONTRACT_ADDRESS = "0x22708D8a54c044CbA5B237620Af42030cbf76E14";
 
 console.log('🔧 Transaction API initialized with Ankr RPC:', BSC_RPC_URL.substring(0, 50) + '...');
+
+// Load contract ABI for proper event decoding
+const BlackVaultArtifact = require('../../src/contract/BlackVaultABI.json');
+const abi = BlackVaultArtifact.abi || BlackVaultArtifact;
+const iface = new ethers.Interface(abi);
 
 // Week calculation functions (same as leaderboard)
 function getCurrentWeekIndex() {
@@ -133,37 +139,58 @@ export default async function handler(req, res) {
 
     const allTransactions = [];
     
-    // Events to track (correct signatures from contract ABI)
+    // Events to track using proper ethers Interface decoding
     const events = [
       { 
         name: 'Deposited',
         signature: '0xc490a74c1058132dffb93944d555ddd1817ae53b7367ea1126ff123b1b1344a58',
         decode: (log) => {
-          const user = '0x' + log.topics[1].slice(26);
-          const referrer = '0x' + log.topics[2].slice(26);
-          // amount and cycle are in data (first 32 bytes = amount, second 32 bytes = cycle)
-          const amount = parseInt(log.data.slice(0, 66), 16);
-          return { user, amount, referrer, type: 'Deposit' };
+          try {
+            const decoded = iface.parseLog(log);
+            return { 
+              user: decoded.args[0], 
+              amount: decoded.args[1], 
+              referrer: decoded.args[2],
+              type: 'Deposit' 
+            };
+          } catch (e) {
+            console.error('Failed to decode Deposited event:', e);
+            return null;
+          }
         }
       },
       {
         name: 'RewardsWithdrawn',
         signature: '0xfa73d3ab3a92ed3f2b6947757d8e4b2f3c293654b11b9c79111f8971f861b22b2',
         decode: (log) => {
-          const user = '0x' + log.topics[1].slice(26);
-          // amount and cycle are in data (first 32 bytes = amount, second 32 bytes = cycle)
-          const amount = parseInt(log.data.slice(0, 66), 16);
-          return { user, amount, type: 'Rewards Withdrawal' };
+          try {
+            const decoded = iface.parseLog(log);
+            return { 
+              user: decoded.args[0], 
+              amount: decoded.args[1], 
+              type: 'Rewards Withdrawal' 
+            };
+          } catch (e) {
+            console.error('Failed to decode RewardsWithdrawn event:', e);
+            return null;
+          }
         }
       },
       {
         name: 'ReferralRewardsWithdrawn',
-        signature: '0x996ae2281234577779bb0d7cd6daa18e54006fe2f6dc172f12197d8266b08dabcd',
+        signature: '0x996ae2281234577779bb0d7cd6daa18e54006fe2f6dc172f12197d826b08dabcd',
         decode: (log) => {
-          const user = '0x' + log.topics[1].slice(26);
-          // amount is in data
-          const amount = parseInt(log.data.slice(0, 66), 16);
-          return { user, amount, type: 'Referral Withdrawal' };
+          try {
+            const decoded = iface.parseLog(log);
+            return { 
+              user: decoded.args[0], 
+              amount: decoded.args[1], 
+              type: 'Referral Withdrawal' 
+            };
+          } catch (e) {
+            console.error('Failed to decode ReferralRewardsWithdrawn event:', e);
+            return null;
+          }
         }
       }
     ];
@@ -195,6 +222,8 @@ export default async function handler(req, res) {
           for (const log of data.result) {
             try {
               const decoded = event.decode(log);
+              if (!decoded) continue; // Skip failed decodes
+              
               console.log(`🔍 Decoded ${event.name}:`, {
                 user: decoded.user,
                 amount: decoded.amount,
@@ -222,7 +251,7 @@ export default async function handler(req, res) {
                 allTransactions.push({
                   txHash: log.transactionHash,
                   type: decoded.type,
-                  amount: (decoded.amount / 1e6).toFixed(6), // Convert from wei to USDT
+                  amount: ethers.formatUnits(decoded.amount, 6), // USDT has 6 decimals
                   time: new Date(timestamp * 1000).toISOString(),
                   blockNumber: parseInt(log.blockNumber, 16)
                 });
