@@ -37,6 +37,7 @@ export async function connectInjected() {
   // Check if we're in Trust Wallet's in-app browser
   const isTrustWallet = window.ethereum && window.ethereum.isTrust
   const isMetaMask = window.ethereum && window.ethereum.isMetaMask
+  const isAndroid = /Android/i.test(navigator.userAgent)
 
   if (!window.ethereum) {
     throw new Error("No wallet found. Please install MetaMask or use Trust Wallet's in-app browser.")
@@ -45,10 +46,105 @@ export async function connectInjected() {
   console.log("Wallet detected:", {
     isTrustWallet,
     isMetaMask,
+    isAndroid,
     ethereum: !!window.ethereum,
+    userAgent: navigator.userAgent
   })
 
+  // Trust Wallet Android specific optimizations
+  if (isTrustWallet && isAndroid) {
+    console.log("🔧 Applying Trust Wallet Android optimizations...")
+    
+    // Set longer timeout for Trust Wallet Android
+    const originalTimeout = window.ethereum.timeout || 60000
+    if (window.ethereum.timeout) {
+      window.ethereum.timeout = 120000 // 2 minutes for Android Trust Wallet
+    }
+    
+    // Add delay to prevent rapid connect/disconnect cycles
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+
   try {
+    // For Trust Wallet Android, use a more gentle approach
+    if (isTrustWallet && isAndroid) {
+      console.log("🔧 Using Trust Wallet Android optimized flow...")
+      
+      // First, check if we're already connected
+      let accounts = []
+      try {
+        accounts = await window.ethereum.request({ 
+          method: "eth_accounts" 
+        })
+        console.log("Existing accounts found:", accounts.length)
+      } catch (error) {
+        console.log("No existing accounts:", error)
+      }
+      
+      // If no accounts, request connection with longer timeout
+      if (accounts.length === 0) {
+        console.log("Requesting new connection...")
+        accounts = await Promise.race([
+          window.ethereum.request({
+            method: "eth_requestAccounts",
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Connection timeout after 30 seconds")), 30000)
+          )
+        ])
+      }
+      
+      if (!accounts || accounts.length === 0) {
+        throw new Error("No accounts returned from Trust Wallet")
+      }
+      
+      const account = accounts[0]
+      console.log("Trust Wallet account connected:", account)
+      
+      // Create provider with Trust Wallet specific settings
+      const provider = new BrowserProvider(window.ethereum)
+      
+      // For Trust Wallet Android, skip network validation initially
+      // and handle it more gracefully
+      let signer
+      try {
+        signer = await provider.getSigner()
+      } catch (signerError) {
+        console.log("Signer creation delayed, retrying...")
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        signer = await provider.getSigner()
+      }
+      
+      // Gentle network check for Trust Wallet
+      try {
+        const network = await provider.getNetwork()
+        console.log("Connected to network:", network.chainId, network.name)
+        
+        if (Number(network.chainId) !== 56) {
+          console.log("Not on BSC, will attempt gentle switch...")
+          // Don't throw immediately, try to switch
+          try {
+            await window.ethereum.request({
+              method: "wallet_switchEthereumChain",
+              params: [{ chainId: "0x38" }],
+            })
+            console.log("Successfully switched to BSC")
+          } catch (switchError) {
+            console.log("Network switch failed, but continuing with connection...")
+            // Don't throw error for Trust Wallet Android, let user switch manually
+          }
+        }
+      } catch (networkError) {
+        console.log("Network check failed, continuing anyway:", networkError)
+      }
+      
+      console.log(`✅ Trust Wallet Android connected successfully`)
+      console.log(`📍 Account: ${account}`)
+      
+      return { provider, signer, account }
+    }
+    
+    // Standard flow for other wallets
     // First, try to get current chain ID
     let currentChainId
     try {

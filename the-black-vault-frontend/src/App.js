@@ -17,6 +17,7 @@ import AccrualInfoModal from "./components/AccrualInfoModal";
 import ProjectIntroduction from "./components/ProjectIntroduction";
 import SmartDeFiInsights from "./components/SmartDeFiInsights";
 import Footer from "./components/Footer";
+import TrustWalletHelper from "./components/TrustWalletHelper";
 import { config } from "./lib/config.js";
 import securityUtils from "./utils/security.js";
 
@@ -202,10 +203,33 @@ export default function App() {
     const handleAccountsChanged = async (accounts) => {
       console.log("Accounts changed event received:", accounts);
       console.log("Manual disconnect state:", isManuallyDisconnected.current);
-
+      
+      // Detect Trust Wallet Android
+      const isTrustWallet = window.ethereum && window.ethereum.isTrust
+      const isAndroid = /Android/i.test(navigator.userAgent)
+      
       // no accounts → disconnect
       if (accounts.length === 0) {
         console.log("No accounts found, disconnecting.");
+        
+        // For Trust Wallet Android, add delay before disconnecting
+        // to prevent rapid disconnect/reconnect cycles
+        if (isTrustWallet && isAndroid) {
+          console.log("🔧 Trust Wallet Android: Adding disconnect delay...")
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          
+          // Double-check accounts after delay
+          try {
+            const recheckAccounts = await window.ethereum.request({ method: "eth_accounts" })
+            if (recheckAccounts.length > 0) {
+              console.log("🔧 Trust Wallet Android: Accounts restored after delay, skipping disconnect")
+              return
+            }
+          } catch (error) {
+            console.log("Recheck failed:", error)
+          }
+        }
+        
         if (!isManuallyDisconnected.current) {
           disconnect();
         }
@@ -216,6 +240,13 @@ export default function App() {
       if (isManuallyDisconnected.current) {
         console.log("User manually disconnected - not auto-reconnecting");
         return;
+      }
+
+      // For Trust Wallet Android, add delay before reconnecting
+      // to prevent rapid connect/disconnect cycles
+      if (isTrustWallet && isAndroid) {
+        console.log("🔧 Trust Wallet Android: Adding reconnect delay...")
+        await new Promise(resolve => setTimeout(resolve, 1500))
       }
 
       // if account differs from current, reconnect
@@ -229,13 +260,72 @@ export default function App() {
           addToast("Wallet connected successfully!", "success");
         } catch (err) {
           console.error("Auto-connect failed:", err);
-          addToast(err.message || "Failed to connect wallet", "error");
+          
+          // For Trust Wallet Android, don't show error toast for automatic reconnection failures
+          if (!(isTrustWallet && isAndroid)) {
+            addToast(err.message || "Failed to connect wallet", "error");
+          } else {
+            console.log("🔧 Trust Wallet Android: Suppressing auto-reconnect error toast")
+          }
         }
       }
     };
 
     window.ethereum.on("accountsChanged", handleAccountsChanged);
     window.ethereum.on("chainChanged", handleChainChanged);
+
+    // Special handling for Trust Wallet Android session persistence
+    const isTrustWallet = window.ethereum && window.ethereum.isTrust
+    const isAndroid = /Android/i.test(navigator.userAgent)
+    
+    let handleFocus = null
+    
+    if (isTrustWallet && isAndroid) {
+      console.log("🔧 Setting up Trust Wallet Android session persistence...")
+      
+      // Store connection state in sessionStorage for Trust Wallet Android
+      const persistConnection = () => {
+        if (account) {
+          sessionStorage.setItem('trustWalletConnected', 'true')
+          sessionStorage.setItem('trustWalletAccount', account)
+        }
+      }
+      
+      const checkPersistedConnection = async () => {
+        const wasConnected = sessionStorage.getItem('trustWalletConnected')
+        const persistedAccount = sessionStorage.getItem('trustWalletAccount')
+        
+        if (wasConnected && persistedAccount && !account) {
+          console.log("🔧 Trust Wallet Android: Attempting to restore connection...")
+          try {
+            const accounts = await window.ethereum.request({ method: "eth_accounts" })
+            if (accounts.length > 0 && accounts[0] === persistedAccount) {
+              handleAccountsChanged(accounts)
+            }
+          } catch (error) {
+            console.log("Failed to restore Trust Wallet connection:", error)
+            sessionStorage.removeItem('trustWalletConnected')
+            sessionStorage.removeItem('trustWalletAccount')
+          }
+        }
+      }
+      
+      // Set up persistence
+      persistConnection()
+      
+      // Check for persisted connection on app focus (when user returns to app)
+      handleFocus = () => {
+        if (document.visibilityState === 'visible') {
+          setTimeout(checkPersistedConnection, 500)
+        }
+      }
+      
+      document.addEventListener('visibilitychange', handleFocus)
+      window.addEventListener('focus', handleFocus)
+      
+      // Initial check
+      setTimeout(checkPersistedConnection, 1000)
+    }
 
     // trigger once on mount to pick up any already-connected wallet
     window.ethereum
@@ -247,6 +337,12 @@ export default function App() {
       if (window.ethereum.removeListener) {
         window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
         window.ethereum.removeListener("chainChanged", handleChainChanged);
+      }
+      
+      // Clean up Trust Wallet Android specific listeners
+      if (isTrustWallet && isAndroid && handleFocus) {
+        document.removeEventListener('visibilitychange', handleFocus)
+        window.removeEventListener('focus', handleFocus)
       }
     };
   }, [signer, account, provider])
@@ -938,12 +1034,23 @@ export default function App() {
        // ─── Insert wallet/contract action handlers here ────────────────────────────
   const connectWallet = async () => {
      if (loading) return
+     
+     // Detect Trust Wallet Android
+     const isTrustWallet = window.ethereum && window.ethereum.isTrust
+     const isAndroid = /Android/i.test(navigator.userAgent)
  
      setLoading(true)
      try {
        isManuallyDisconnected.current = false
-       // small delay to let metamask UI settle
-       await new Promise(r => setTimeout(r, 100))
+       
+       // For Trust Wallet Android, add longer delay to prevent connection issues
+       const delay = (isTrustWallet && isAndroid) ? 300 : 100
+       await new Promise(r => setTimeout(r, delay))
+       
+       if (isTrustWallet && isAndroid) {
+         console.log("🔧 Connecting Trust Wallet on Android with optimizations...")
+       }
+       
        console.log("Attempting to connect wallet…")
        const { provider: p, signer: s, account: a } = await connectInjected()
        setProvider(p)
@@ -956,13 +1063,29 @@ export default function App() {
      } catch (error) {
        console.error("Connection failed:", error)
        let msg = error?.message || "Failed to connect wallet"
-       if (msg.includes("chainId")) {
-         msg = "BSC Mainnet not configured. Please add BSC or use MetaMask."
-       } else if (msg.includes("No wallet found")) {
-         msg = "Please install MetaMask or use Trust Wallet's in-app browser."
-       } else if (msg.includes("rejected")) {
-         msg = "Connection cancelled. Please approve the request."
+       
+       // Trust Wallet Android specific error handling
+       if (isTrustWallet && isAndroid) {
+         if (msg.includes("timeout")) {
+           msg = "Connection timeout. Please try again and approve quickly."
+         } else if (msg.includes("rejected")) {
+           msg = "Connection cancelled. Please approve the request in Trust Wallet."
+         } else if (msg.includes("chainId") || msg.includes("network")) {
+           msg = "Please manually switch to BSC Mainnet in Trust Wallet settings."
+         } else {
+           msg = "Trust Wallet connection failed. Please try closing and reopening the app."
+         }
+       } else {
+         // Standard error handling for other wallets
+         if (msg.includes("chainId")) {
+           msg = "BSC Mainnet not configured. Please add BSC or use MetaMask."
+         } else if (msg.includes("No wallet found")) {
+           msg = "Please install MetaMask or use Trust Wallet's in-app browser."
+         } else if (msg.includes("rejected")) {
+           msg = "Connection cancelled. Please approve the request."
+         }
        }
+       
        addToast(msg, "error")
      } finally {
        setLoading(false)
@@ -1383,6 +1506,11 @@ export default function App() {
                   />
                 </div>
               }
+            />
+
+            <TrustWalletHelper 
+              isConnected={!!account}
+              onRetryConnection={connectWallet}
             />
 
             <button className="connect-button premium-button" onClick={connectWallet} disabled={loading}>
