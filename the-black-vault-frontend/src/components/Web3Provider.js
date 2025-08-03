@@ -3,7 +3,7 @@
 import '@rainbow-me/rainbowkit/styles.css';
 import { getDefaultConfig, RainbowKitProvider, darkTheme, lightTheme } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
-import { bsc, bscTestnet } from 'wagmi/chains';
+import { bsc } from 'wagmi/chains';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 
 // Black Vault WalletConnect Project ID
@@ -12,7 +12,7 @@ const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_I
 const config = getDefaultConfig({
   appName: 'Black Vault',
   projectId: WALLETCONNECT_PROJECT_ID,
-  chains: [bsc, bscTestnet],
+  chains: [bsc], // Only BSC mainnet
   ssr: true,
 });
 
@@ -21,17 +21,17 @@ const queryClient = new QueryClient();
 // Black Vault custom theme - sleek and professional
 const blackVaultTheme = {
   ...darkTheme({
-    accentColor: '#FF6B35',
-    accentColorForeground: 'white',
+    accentColor: '#c0c0c0',
+    accentColorForeground: '#1a1a1a',
     borderRadius: 'medium',
     fontStack: 'system',
     overlayBlur: 'small',
   }),
   colors: {
     ...darkTheme().colors,
-    accentColor: '#FF6B35',
-    accentColorForeground: 'white',
-    actionButtonBorder: 'rgba(255, 107, 53, 0.2)',
+    accentColor: '#c0c0c0',
+    accentColorForeground: '#1a1a1a',
+    actionButtonBorder: 'rgba(192, 192, 192, 0.2)',
     actionButtonBorderMobile: 'rgba(64, 64, 64, 0.3)',
     actionButtonSecondaryBackground: 'rgba(26, 26, 26, 0.8)',
     closeButton: 'rgba(255, 255, 255, 0.7)',
@@ -50,14 +50,14 @@ const blackVaultTheme = {
     menuItemBackground: 'rgba(26, 26, 26, 0.5)',
     modalBackdrop: 'rgba(0, 0, 0, 0.7)',
     modalBackground: '#1A1B1F',
-    modalBorder: 'rgba(255, 107, 53, 0.2)',
+    modalBorder: 'rgba(192, 192, 192, 0.2)',
     modalText: '#FFF',
     modalTextDim: 'rgba(255, 255, 255, 0.7)',
     modalTextSecondary: 'rgba(255, 255, 255, 0.6)',
-    profileAction: 'rgba(255, 107, 53, 0.1)',
-    profileActionHover: 'rgba(255, 107, 53, 0.15)',
+    profileAction: 'rgba(192, 192, 192, 0.1)',
+    profileActionHover: 'rgba(192, 192, 192, 0.15)',
     profileForeground: '#1A1B1F',
-    selectedOptionBorder: '#FF6B35',
+    selectedOptionBorder: '#c0c0c0',
     standby: '#FFB800',
   },
 };

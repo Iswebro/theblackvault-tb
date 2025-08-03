@@ -40,7 +40,7 @@ export function WalletButton() {
                       type="button" 
                       className="connect-wallet-btn"
                       style={{
-                        background: 'linear-gradient(135deg, #FF6B35 0%, #FF8E53 100%)',
+                        background: 'linear-gradient(135deg, #c0c0c0 0%, #d4d4d4 100%)',
                         border: '2px solid rgba(255, 107, 53, 0.3)',
                         borderRadius: '12px',
                         padding: '12px 24px',

@@ -233,14 +233,15 @@ body {
 }
 
 .premium-button.warning {
-  background: #f59e0b; /* Amber/orange background */
+  background: linear-gradient(45deg, #FF6B35, #FF8E53);
   border-color: #d97706; /* Darker amber border */
+  color: white;
   box-shadow: 0 0 40px rgba(245, 158, 11, 0.3), 0 10px 40px rgba(217, 119, 6, 0.4), inset 0 1px 0
     rgba(255, 255, 255, 0.1);
 }
 
 .premium-button.warning:hover {
-  background: #f97316; /* Slightly more orange on hover */
+  background: linear-gradient(45deg, #FF8E53, #FFB380);
   border-color: #ea580c; /* Even darker border on hover */
 }
 
@@ -347,27 +348,68 @@ body {
 }
 
 .header-account {
-  text-align: right;
-  background: #2a2a2a; /* Slightly lighter charcoal background */
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
-  border: 1px solid #606060; /* Medium grey border */
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
-.account-label {
-  display: block;
-  font-size: 0.8rem;
-  color: #a0a0a0; /* Light grey for label */
-  margin-bottom: 0.25rem;
-  font-weight: 600;
+/* Style RainbowKit ConnectButton in header - Ultra Compact Version */
+.header-account [data-rk] {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
 }
 
-.account-address {
-  font-family: "Courier New", monospace;
-  font-size: 0.95rem;
-  color: #e0e0e0; /* Light platinum for address */
-  font-weight: 700;
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+.header-account [data-rk] button {
+  background: #2a2a2a !important;
+  border: 1px solid #606060 !important;
+  border-radius: 5px !important;
+  padding: 0.25rem 0.5rem !important;
+  color: #e0e0e0 !important;
+  font-weight: 400 !important;
+  font-size: 0.7rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-width: 100px !important;
+  box-shadow: none !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1.1 !important;
+}
+
+.header-account [data-rk] button:hover {
+  background: #3a3a3a !important;
+  border-color: #c0c0c0 !important;
+  transform: none !important;
+}
+
+/* Make RainbowKit button content even more compact */
+.header-account [data-rk] button > div {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.25rem !important;
+}
+
+/* Hide or minimize the chain indicator to save space */
+.header-account [data-rk] button img[alt*="Chain"] {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+/* Hide chain switching button when only one chain */
+.header-account [data-rk] button:has(img[alt*="Chain"]) + button {
+  display: none !important;
+}
+
+/* Hide any chain switching dropdowns or modals */
+.header-account [data-rk] [role="listbox"],
+.header-account [data-rk] [data-testid*="chain"],
+.header-account [data-rk] [data-testid*="network"] {
+  display: none !important;
+}
+
+/* Force single button display - hide any secondary buttons */
+.header-account [data-rk] > div > button:nth-child(2) {
+  display: none !important;
 }
 
 /* Enhanced Vault Interface */
@@ -776,30 +818,6 @@ body {
   text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
 }
 
-/* Enhanced Disconnect Section */
-.disconnect-section {
-  text-align: center;
-  padding: 2rem 0;
-}
-
-.disconnect-button {
-  background: none;
-  border: none;
-  color: #ef4444; /* Keeping red for disconnect for clear warning */
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-weight: 600;
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-}
-
-.disconnect-button:hover {
-  color: #f87171;
-  background: rgba(239, 68, 68, 0.1);
-  text-shadow: 0 0 10px rgba(248, 113, 113, 0.3);
-}
-
 /* Enhanced Loading Spinner */
 .loading-spinner {
   width: 18px;
@@ -908,7 +926,7 @@ body {
   border-left: 5px solid #f44336; /* Red */
 }
 .toast.warning {
-  border-left: 5px solid #ff9800; /* Orange */
+  border-left: 5px solid #c0c0c0; /* Premium platinum */
 }
 .toast.info {
   border-left: 5px solid #c0c0c0; /* Platinum */
@@ -2140,13 +2158,205 @@ div[data-rk] button[type="button"]:focus-visible {
 /* Recent button and action buttons in RainbowKit modal */
 [data-rk] button[color="accentColor"],
 [data-rk] button[data-testid*="recent"] {
-  background: #FF6B35 !important;
-  color: white !important;
-  border: 1px solid #FF6B35 !important;
+  background: #c0c0c0 !important; /* Platinum color */
+  color: #1a1a1a !important;
+  border: 1px solid #c0c0c0 !important;
 }
 
 [data-rk] button[color="accentColor"]:hover,
 [data-rk] button[data-testid*="recent"]:hover {
-  background: #FF7A45 !important;
-  border-color: #FF7A45 !important;
+  background: #d4d4d4 !important; /* Lighter platinum on hover */
+  border-color: #d4d4d4 !important;
+}
+
+/* Fix close button visibility in RainbowKit modal */
+[data-rk] button[aria-label*="Close"],
+[data-rk] button[aria-label*="close"],
+[data-rk] [role="dialog"] button[aria-label]:first-child,
+[data-rk] [role="dialog"] .close-button,
+[data-rk] [role="dialog"] button:first-child {
+  background: #2a2a2a !important;
+  color: #ffffff !important;
+  border: 1px solid #606060 !important;
+  border-radius: 6px !important;
+  padding: 4px 8px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+}
+
+[data-rk] button[aria-label*="Close"]:hover,
+[data-rk] button[aria-label*="close"]:hover,
+[data-rk] [role="dialog"] button[aria-label]:first-child:hover {
+  background: #3a3a3a !important;
+  color: #ffffff !important;
+  border-color: #c0c0c0 !important;
+}
+
+/* ==================== MOBILE RESPONSIVENESS ==================== */
+
+/* Mobile - phones */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* App title - make smaller on mobile */
+  .app-title {
+    font-size: 2.5rem !important;
+  }
+
+  /* App subtitle */
+  .app-subtitle {
+    font-size: 1rem !important;
+  }
+
+  /* Discreet button */
+  .discreet-button {
+    font-size: 0.9rem !important;
+  }
+
+  /* Header title */
+  .header-title {
+    font-size: 1.1rem !important;
+  }
+
+  /* Card titles */
+  .card-title {
+    font-size: 1.1rem !important;
+  }
+
+  /* Balance values - reduce size */
+  .balance-value {
+    font-size: 1.2rem !important;
+  }
+
+  /* Balance labels */
+  .balance-label,
+  .reward-label {
+    font-size: 0.8rem !important;
+  }
+
+  /* Input fields */
+  .vault-input {
+    font-size: 0.9rem !important;
+    padding: 0.7rem !important;
+  }
+
+  /* Buttons */
+  .vault-button {
+    font-size: 0.9rem !important;
+    padding: 0.8rem 1rem !important;
+  }
+
+  /* Referral info */
+  .referral-label,
+  .referral-address {
+    font-size: 0.8rem !important;
+  }
+
+  /* History items */
+  .history-type {
+    font-size: 0.85rem !important;
+  }
+
+  .history-time {
+    font-size: 0.75rem !important;
+  }
+
+  .amount-value {
+    font-size: 0.9rem !important;
+  }
+
+  /* Connect screen adjustments */
+  .connect-screen {
+    padding: 1rem;
+  }
+
+  .connect-content {
+    max-width: 100%;
+  }
+
+  /* Logo adjustments */
+  .premium-logo-wrapper {
+    width: 140px !important;
+    height: 140px !important;
+  }
+
+  .premium-logo-img {
+    width: 120px !important;
+    height: 120px !important;
+  }
+
+  /* RainbowKit modal adjustments */
+  [data-rk] [role="dialog"] {
+    font-size: 0.9rem !important;
+  }
+
+  [data-rk] button {
+    font-size: 0.9rem !important;
+    padding: 0.6rem 1rem !important;
+  }
+
+  /* Header account section - Ultra compact */
+  .header-account [data-rk] button {
+    font-size: 0.65rem !important;
+    padding: 0.2rem 0.4rem !important;
+    max-width: 85px !important;
+    border-radius: 3px !important;
+  }
+
+  /* Chain icon even smaller on mobile */
+  .header-account [data-rk] button img[alt*="Chain"] {
+    width: 10px !important;
+    height: 10px !important;
+  }
+}
+
+/* Small mobile - very small phones */
+@media (max-width: 480px) {
+  /* Even smaller fonts for tiny screens */
+  .app-title {
+    font-size: 2rem !important;
+  }
+
+  .card-title {
+    font-size: 1rem !important;
+  }
+
+  .balance-value {
+    font-size: 1.1rem !important;
+  }
+
+  .vault-button {
+    font-size: 0.85rem !important;
+    padding: 0.7rem 0.8rem !important;
+  }
+
+  .header-title {
+    font-size: 1rem !important;
+  }
+
+  /* Ultra compact header button for very small screens */
+  .header-account [data-rk] button {
+    font-size: 0.6rem !important;
+    padding: 0.15rem 0.3rem !important;
+    max-width: 70px !important;
+    border-radius: 2px !important;
+  }
+
+  .header-account [data-rk] button img[alt*="Chain"] {
+    width: 8px !important;
+    height: 8px !important;
+  }
+
+  /* Vault cards spacing */
+  .vault-interface {
+    gap: 1.5rem !important;
+  }
+
+  /* Input adjustments */
+  .vault-input {
+    font-size: 0.85rem !important;
+  }
 }

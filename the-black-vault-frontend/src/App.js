@@ -7,6 +7,7 @@ import { getUserInfo as fetchVaultInfo } from "./useBlackVault";
 import { useToast, ToastContainer, ToastProvider } from "./components/Toast";
 import { getReferralFromURL } from "./connectWallet";
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { bsc } from 'wagmi/chains';
 import BlackVaultArtifact from "./contract/BlackVaultABI.json";
 import ERC20Artifact from "./contract/ERC20Abi.json";
@@ -20,7 +21,6 @@ import ProjectIntroduction from "./components/ProjectIntroduction";
 import SmartDeFiInsights from "./components/SmartDeFiInsights";
 import Footer from "./components/Footer";
 import TrustWalletHelper from "./components/TrustWalletHelper";
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { config } from "./lib/config.js";
 import securityUtils from "./utils/security.js";
 
@@ -1567,8 +1567,7 @@ export default function App() {
             <span className="header-title">BLACK VAULT</span>
           </div>
           <div className="header-account">
-            <span className="account-label">Connected</span>
-            <span className="account-address">{formatAddress(account)}</span>
+            <ConnectButton />
           </div>
         </div>
 
@@ -1997,12 +1996,6 @@ export default function App() {
           />
 
           <HowItWorks />
-
-          <div className="disconnect-section">
-            <button onClick={disconnect} className="disconnect-button">
-              Disconnect Wallet
-            </button>
-          </div>
         </div>
       </div>
 
