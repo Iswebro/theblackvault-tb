@@ -155,9 +155,9 @@ export default async function handler(req, res) {
     
     // Let's manually check for our known event signatures
     const eventSignatures = {
-      'Deposited': '0xc490a74c1058132dffb93944d555ddd1817ae53b7367ea1126ff123b1b1344a58',
+      'Deposited': '0xc490a74c1058132dffb93944d555ddd1817ae53b7367ea1126ff123b1b134a58',
       'RewardsWithdrawn': '0xfa73d3ab3a92ed3f2b6947757d8e4b2f3c293654b11b9c79111f8971f861b22b2',
-      'ReferralRewardsWithdrawn': '0x996ae2281234577779bb0d7cd6daa18e54006fe2f6dc172f12197d826b08dabcd'
+      'ReferralRewardsWithdrawn': '0x996ae228123457779bb0d7cd6daa18e54006fe2f6dc172f12197d826b08dabcd'
     };
 
     if (allEventsData.result) {
@@ -181,7 +181,7 @@ export default async function handler(req, res) {
               
               // Simple amount extraction from data
               const amountHex = log.data.slice(2, 66);
-              const amount = parseInt(amountHex, 16);
+              const amount = BigInt('0x' + amountHex);
               
               // Get block timestamp
               const blockResponse = await fetch(BSC_RPC_URL, {
@@ -202,7 +202,7 @@ export default async function handler(req, res) {
                 txHash: log.transactionHash,
                 type: eventName === 'Deposited' ? 'Deposit' : 
                       eventName === 'RewardsWithdrawn' ? 'Rewards Withdrawal' : 'Referral Withdrawal',
-                amount: (amount / 1000000).toFixed(6), // Convert from USDT units (6 decimals)
+                amount: (Number(amount) / 1000000000000000000).toFixed(6), // Convert from wei units (18 decimals)
                 time: new Date(timestamp * 1000).toISOString(),
                 blockNumber: parseInt(log.blockNumber, 16)
               });
