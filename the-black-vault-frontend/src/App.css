@@ -89,6 +89,28 @@ body {
   }
 }
 
+/* Enhanced animations for smoother UI */
+@keyframes slideInUp {
+  from { 
+    transform: translateY(20px); 
+    opacity: 0; 
+  }
+  to { 
+    transform: translateY(0); 
+    opacity: 1; 
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
 /* Premium Typography */
 .app-title {
   font-size: 3.5rem;
@@ -158,6 +180,16 @@ body {
   border-color: #606060; /* Lighter grey border on hover */
   transform: translateY(-3px);
   box-shadow: 0 0 50px rgba(0, 0, 0, 0.3), 0 15px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.premium-button:focus-visible {
+  outline: 2px solid #808080;
+  outline-offset: 2px;
+}
+
+.premium-button:active {
+  transform: translateY(-1px);
+  transition: transform 0.1s ease;
 }
 
 .premium-button:disabled {
@@ -349,12 +381,13 @@ body {
 /* Premium Cards with Enhanced Effects */
 .vault-card {
   background: #1a1a1a; /* Deep charcoal background */
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(25px) saturate(150%);
   border: 2px solid #404040; /* Dark grey border */
   border-radius: 20px;
   padding: 2rem;
   transition: all 0.4s ease;
   box-shadow: 0 0 30px rgba(0, 0, 0, 0.2), 0 10px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: slideInUp 0.6s ease-out;
 }
 
 .vault-card:hover {
@@ -434,7 +467,8 @@ body {
   outline: none;
   border-color: #808080; /* Lighter grey border on focus */
   background: #1a1a1a; /* Deep charcoal on focus */
-  box-shadow: 0 0 0 4px rgba(60, 60, 60, 0.1), 0 0 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 4px rgba(128, 128, 128, 0.1), 0 0 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
 }
 
 .premium-input::placeholder {
@@ -2017,4 +2051,65 @@ body {
   .footer-subtitle {
     font-size: 0.8rem;
   }
+}
+
+/* RainbowKit Button Styling Preservation */
+/* Ensure RainbowKit ConnectButton maintains proper Black Vault styling */
+[data-rk] button {
+  font-family: inherit !important;
+}
+
+/* Black Vault themed connect button */
+div[data-rk] button[type="button"] {
+  background: #1a1a1a !important;
+  backdrop-filter: blur(20px) !important;
+  border: 2px solid #404040 !important;
+  color: #e0e0e0 !important;
+  border-radius: 16px !important;
+  font-weight: 700 !important;
+  font-size: 1.1rem !important;
+  padding: 1.2rem 2.5rem !important;
+  transition: all 0.4s ease !important;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.2), 0 10px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1px !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+/* Shimmer effect for connect button */
+div[data-rk] button[type="button"]::before {
+  content: "" !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: -100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent) !important;
+  transition: left 0.6s !important;
+}
+
+/* Black Vault button hover effects */
+div[data-rk] button[type="button"]:hover {
+  background: #2a2a2a !important;
+  border-color: #606060 !important;
+  transform: translateY(-3px) !important;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.3), 0 15px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Trigger shimmer on hover */
+div[data-rk] button[type="button"]:hover::before {
+  left: 100% !important;
+}
+
+/* Black Vault button active state */
+div[data-rk] button[type="button"]:active {
+  transform: translateY(-1px) !important;
+  transition: transform 0.1s ease !important;
+}
+
+/* Accessibility focus state */
+div[data-rk] button[type="button"]:focus-visible {
+  outline: 2px solid #808080 !important;
+  outline-offset: 2px !important;
 }

@@ -5,7 +5,9 @@ import { ethers, Contract, formatEther, parseEther } from "ethers";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { getUserInfo as fetchVaultInfo } from "./useBlackVault";
 import { useToast, ToastContainer, ToastProvider } from "./components/Toast";
-import { connectInjected, getReferralFromURL } from "./connectWallet";
+import { getReferralFromURL } from "./connectWallet";
+import { useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { bsc } from 'wagmi/chains';
 import BlackVaultArtifact from "./contract/BlackVaultABI.json";
 import ERC20Artifact from "./contract/ERC20Abi.json";
 import BlackVaultV1Abi from "./contract/BlackVaultV1ABI.json";
@@ -18,6 +20,7 @@ import ProjectIntroduction from "./components/ProjectIntroduction";
 import SmartDeFiInsights from "./components/SmartDeFiInsights";
 import Footer from "./components/Footer";
 import TrustWalletHelper from "./components/TrustWalletHelper";
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { config } from "./lib/config.js";
 import securityUtils from "./utils/security.js";
 
@@ -32,6 +35,31 @@ const USDT_ADDRESS = config.usdtAddress;
 const DEFAULT_REFERRER = config.defaultReferrer;
 
 export default function App() {
+  // RainbowKit wallet integration
+  const { address: walletAddress, isConnected, isConnecting, isDisconnected } = useAccount();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
+  
+  // Derived state
+  const isOnBSC = chainId === bsc.id;
+  const walletError = null; // RainbowKit handles errors internally
+  
+  // Legacy functions for compatibility (will be removed gradually)
+  const connectWallet = () => {
+    // RainbowKit handles connection through ConnectButton
+    console.log('Connect wallet called - handled by RainbowKit');
+  };
+  
+  const disconnectWallet = () => {
+    // RainbowKit handles disconnection through ConnectButton
+    console.log('Disconnect wallet called - handled by RainbowKit');  
+  };
+  
+  const switchToBSC = () => {
+    if (switchChain) {
+      switchChain({ chainId: bsc.id });
+    }
+  };
 
   // All state hooks first
   const [history, setHistory] = useState([]);
@@ -178,6 +206,47 @@ export default function App() {
     setReferralAddress(refFromURL)
   }, [])
 
+  // Sync RainbowKit wallet state with app state
+  useEffect(() => {
+    if (isConnected && walletAddress) {
+      // Set account from RainbowKit
+      setAccount(walletAddress);
+      
+      // Initialize ethers provider and signer when wallet connects
+      const initializeProvider = async () => {
+        if (window.ethereum) {
+          try {
+            const browserProvider = new ethers.BrowserProvider(window.ethereum);
+            const ethersSigner = await browserProvider.getSigner();
+            
+            setProvider(browserProvider);
+            setSigner(ethersSigner);
+            
+            console.log("RainbowKit wallet connected:", walletAddress);
+            addToast("Wallet connected successfully!", "success");
+            
+            // Auto-scroll to top after successful wallet connection
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          } catch (error) {
+            console.error("Failed to initialize provider:", error);
+            addToast("Failed to initialize wallet connection", "error");
+          }
+        }
+      };
+      
+      initializeProvider();
+    } else if (!isConnected) {
+      // Reset state when wallet disconnects
+      setAccount("");
+      setProvider(null);
+      setSigner(null);
+      setBalance("0");
+      setUsdtBalance("0");
+      setRewards("0");
+      setReferralRewards("0");
+    }
+  }, [isConnected, walletAddress, addToast]);
+
   // Initialize contracts when wallet connects
   useEffect(() => {
     if (signer && account && provider) {
@@ -252,20 +321,20 @@ export default function App() {
       // if account differs from current, reconnect
       if (accounts[0] !== account) {
         try {
-          // grab provider + signer + account in one go
-          const { provider: p, signer: s, account: a } = await connectInjected();
-          setProvider(p);
-          setSigner(s);
-          setAccount(a);
-          addToast("Wallet connected successfully!", "success");
+          // Since we're using RainbowKit, the connection state is managed automatically
+          // We just need to trigger a state update through the wallet address change
+          if (accounts[0]) {
+            console.log("Account changed to:", accounts[0]);
+            addToast("Wallet account changed!", "success");
+          }
         } catch (err) {
-          console.error("Auto-connect failed:", err);
+          console.error("Account change handling failed:", err);
           
           // For Trust Wallet Android, don't show error toast for automatic reconnection failures
           if (!(isTrustWallet && isAndroid)) {
-            addToast(err.message || "Failed to connect wallet", "error");
+            addToast(err.message || "Failed to handle account change", "error");
           } else {
-            console.log("🔧 Trust Wallet Android: Suppressing auto-reconnect error toast")
+            console.log("🔧 Trust Wallet Android: Suppressing account change error toast")
           }
         }
       }
@@ -1035,66 +1104,42 @@ export default function App() {
   const needsApproval =
     Number.parseFloat(depositAmount) > 0 && Number.parseFloat(usdtAllowance) < Number.parseFloat(depositAmount)
  
-       // ─── Insert wallet/contract action handlers here ────────────────────────────
-  const connectWallet = async () => {
-     if (loading) return
-     
-     // Detect Trust Wallet Android
-     const isTrustWallet = window.ethereum && window.ethereum.isTrust
-     const isAndroid = /Android/i.test(navigator.userAgent)
- 
-     setLoading(true)
-     try {
-       isManuallyDisconnected.current = false
-       
-       // For Trust Wallet Android, add longer delay to prevent connection issues
-       const delay = (isTrustWallet && isAndroid) ? 300 : 100
-       await new Promise(r => setTimeout(r, delay))
-       
-       if (isTrustWallet && isAndroid) {
-         console.log("🔧 Connecting Trust Wallet on Android with optimizations...")
-       }
-       
-       console.log("Attempting to connect wallet…")
-       const { provider: p, signer: s, account: a } = await connectInjected()
-       setProvider(p)
-       setSigner(s)
-       setAccount(a)
-       addToast("Wallet connected successfully!", "success")
-       
-       // Auto-scroll to top after successful wallet connection
-       window.scrollTo({ top: 0, behavior: 'smooth' })
-     } catch (error) {
-       console.error("Connection failed:", error)
-       let msg = error?.message || "Failed to connect wallet"
-       
-       // Trust Wallet Android specific error handling
-       if (isTrustWallet && isAndroid) {
-         if (msg.includes("timeout")) {
-           msg = "Connection timeout. Please try again and approve quickly."
-         } else if (msg.includes("rejected")) {
-           msg = "Connection cancelled. Please approve the request in Trust Wallet."
-         } else if (msg.includes("chainId") || msg.includes("network")) {
-           msg = "Please manually switch to BSC Mainnet in Trust Wallet settings."
-         } else {
-           msg = "Trust Wallet connection failed. Please try closing and reopening the app."
-         }
-       } else {
-         // Standard error handling for other wallets
-         if (msg.includes("chainId")) {
-           msg = "BSC Mainnet not configured. Please add BSC or use MetaMask."
-         } else if (msg.includes("No wallet found")) {
-           msg = "Please install MetaMask or use Trust Wallet's in-app browser."
-         } else if (msg.includes("rejected")) {
-           msg = "Connection cancelled. Please approve the request."
-         }
-       }
-       
-       addToast(msg, "error")
-     } finally {
-       setLoading(false)
-     }
-   }
+  // ─── RainbowKit-compatible wallet connection handler ────────────────────────────
+  const handleConnectWallet = async () => {
+    if (loading || isConnecting) return;
+    
+    setLoading(true);
+    try {
+      await connectWallet();
+      
+      // Auto-scroll to top after successful wallet connection
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      console.error("Connection failed:", error);
+      addToast(error?.message || "Failed to connect wallet", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // RainbowKit-compatible disconnect handler
+  const handleDisconnectWallet = () => {
+    try {
+      disconnectWallet();
+      // Reset all data when disconnecting
+      setAccount("");
+      setProvider(null);
+      setSigner(null);
+      setBalance("0");
+      setUsdtBalance("0");
+      setRewards("0");
+      setReferralRewards("0");
+      addToast("Wallet disconnected", "info");
+    } catch (error) {
+      console.error("Disconnect failed:", error);
+      addToast("Failed to disconnect wallet", "error");
+    }
+  };
  
   // Enhanced validation and security utilities
   const validateAddress = (address) => {
@@ -1245,14 +1290,6 @@ export default function App() {
            }
          }
 
-         // Always call poke after deposit with error handling
-         try {
-           await contract.poke();
-           console.log("poke() called after deposit");
-         } catch (e) {
-           console.warn("poke() failed after deposit", e);
-         }
-
          await loadContractData(contract, usdtContract);
        }
      } catch (error) {
@@ -1286,14 +1323,6 @@ export default function App() {
        );
        
        if (result.success) {
-         // Always call poke after withdraw
-         try {
-           await contract.poke();
-           console.log("poke() called after withdraw");
-         } catch (e) {
-           console.warn("poke() failed after withdraw", e);
-         }
-         
          addToast("Rewards withdrawn!", "success")
          setWithdrawAmount("");
          
@@ -1338,13 +1367,6 @@ export default function App() {
      try {
        addToast("Withdrawing V1 vault rewards…", "info")
        await oldVaultContract.withdrawRewards()
-       // Always call poke after old vault withdraw
-       try {
-         await contract.poke();
-         console.log("poke() called after old vault withdraw");
-       } catch (e) {
-         console.warn("poke() failed after old vault withdraw", e);
-       }
        addToast("V1 vault rewards withdrawn!", "success")
        await loadContractData(contract, usdtContract)
      } catch (error) {
@@ -1373,14 +1395,6 @@ export default function App() {
        );
        
        if (result.success) {
-         // Always call poke after referral withdraw
-         try {
-           await contract.poke();
-           console.log("poke() called after referral withdraw");
-         } catch (e) {
-           console.warn("poke() failed after referral withdraw", e);
-         }
-         
          addToast("Referral rewards withdrawn!", "success")
          
          // Clear API cache to ensure fresh data
@@ -1447,31 +1461,12 @@ export default function App() {
    }
  
    const disconnect = () => {
-     isManuallyDisconnected.current = true
-     setProvider(null)
-     setSigner(null)
-     setAccount("")
-     setContract(null)
-     setUsdtContract(null)
-     setOldVaultContract(null)
-     setBalance("0")
-     setUsdtBalance("0")
-     setUsdtAllowance("0")
-     setRewards("0")
-     setReferralRewards("0")
-     setTotalReferralRewards("0")
-     setHistory([])
-     setHistoryLoaded(false)
-     setReferralCount("0")
-     setUniqueReferralCount(0)
-     setMinDeposit("0")
-     setVaultActiveAmount("0")
-     setReferralBonusesRemaining("3")
-     addToast("Wallet disconnected", "info")
+     isManuallyDisconnected.current = true;
+     handleDisconnectWallet();
      
      // Auto-scroll to top after wallet disconnection
-     window.scrollTo({ top: 0, behavior: 'smooth' })
-   }
+     window.scrollTo({ top: 0, behavior: 'smooth' });
+   };
    // ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -1514,19 +1509,33 @@ export default function App() {
 
             <TrustWalletHelper 
               isConnected={!!account}
-              onRetryConnection={connectWallet}
+              onRetryConnection={handleConnectWallet}
             />
 
-            <button className="connect-button premium-button" onClick={connectWallet} disabled={loading}>
-              {loading ? (
-                <>
-                  <div className="loading-spinner"></div>
-                  Connecting...
-                </>
-              ) : (
-                "Connect Wallet"
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              gap: '16px',
+              padding: '20px 0'
+            }}>
+              {/* RainbowKit ConnectButton */}
+              <ConnectButton />
+              
+              {walletError && (
+                <div style={{
+                  color: '#FF4444',
+                  fontSize: '14px',
+                  textAlign: 'center',
+                  background: 'rgba(255, 68, 68, 0.1)',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255, 68, 68, 0.2)'
+                }}>
+                  {walletError.message}
+                </div>
               )}
-            </button>
+            </div>
 
             <button className="discreet-button" onClick={() => setShowTroubleshootingModal(true)}>
               Troubleshooting & Network Info
