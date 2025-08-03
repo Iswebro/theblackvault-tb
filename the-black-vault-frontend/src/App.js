@@ -230,13 +230,19 @@ export default function App() {
         if (window.ethereum) {
           try {
             console.log("🔧 Initializing provider for wallet:", walletAddress);
+            console.log("🔧 window.ethereum available:", !!window.ethereum);
+            console.log("🔧 Current chainId from RainbowKit:", chainId);
+            
             const browserProvider = new ethers.BrowserProvider(window.ethereum);
             const ethersSigner = await browserProvider.getSigner();
+            
+            console.log("🔧 BrowserProvider created successfully");
+            console.log("🔧 Signer obtained:", await ethersSigner.getAddress());
             
             setProvider(browserProvider);
             setSigner(ethersSigner);
             
-            console.log("✅ RainbowKit wallet connected:", walletAddress);
+            console.log("✅ RainbowKit wallet connected and provider initialized:", walletAddress);
             addToast("Wallet connected successfully!", "success");
             
             // Auto-scroll to top after successful wallet connection
@@ -245,6 +251,8 @@ export default function App() {
             console.error("❌ Failed to initialize provider:", error);
             addToast("Failed to initialize wallet connection", "error");
           }
+        } else {
+          console.error("❌ window.ethereum not available");
         }
       };
       
@@ -264,9 +272,20 @@ export default function App() {
 
   // Initialize contracts when wallet connects
   useEffect(() => {
+    console.log("🔍 Contract initialization effect triggered:");
+    console.log("  - signer:", !!signer);
+    console.log("  - account:", account);
+    console.log("  - provider:", !!provider);
+    console.log("  - chainId:", chainId);
+    
     if (signer && account && provider) {
-      console.log("Initializing contracts for account:", account, "on chain:", chainId)
+      console.log("✅ All requirements met, initializing contracts for account:", account, "on chain:", chainId)
       initializeContracts()
+    } else {
+      console.log("❌ Missing requirements for contract initialization:");
+      if (!signer) console.log("  - Missing signer");
+      if (!account) console.log("  - Missing account");
+      if (!provider) console.log("  - Missing provider");
     }
   }, [signer, account, provider, chainId]) // Added chainId to reinitialize on network change
 
