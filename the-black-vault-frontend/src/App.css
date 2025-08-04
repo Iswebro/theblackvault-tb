@@ -2299,12 +2299,38 @@ div[data-rk] button[type="button"]:focus-visible {
     border-radius: 4px !important;
   }
 
-  /* Mobile wallet option containers */
+  /* Force RainbowKit mobile modal to use vertical list layout like desktop */
+  [data-rk] [role="dialog"] div[style*="display: grid"],
+  [data-rk] [role="dialog"] div[style*="grid-template-columns"],
+  [data-rk] [role="dialog"] > div > div > div:has([data-testid*="wallet-option"]) {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    grid-template-columns: unset !important;
+    width: 100% !important;
+  }
+
+  /* Ensure wallet options container is also vertical */
+  [data-rk] [role="dialog"] div:has([data-testid*="wallet-option"]) {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  /* Mobile wallet option containers - full width vertical layout */
   [data-rk] [data-testid*="wallet-option"],
   [data-rk] [data-testid*="rk-wallet-option"] {
-    padding: 10px !important;
-    min-height: 50px !important;
-    gap: 8px !important;
+    padding: 12px !important;
+    min-height: 56px !important;
+    gap: 12px !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    border-radius: 8px !important;
+    margin-bottom: 4px !important;
   }
 
   /* Header account section - Ultra compact */
@@ -2398,13 +2424,38 @@ div[data-rk] button[type="button"]:focus-visible {
     border-radius: 3px !important;
   }
 
-  /* Very small screen wallet containers */
+  /* Force vertical layout on very small screens too */
+  [data-rk] [role="dialog"] div[style*="display: grid"],
+  [data-rk] [role="dialog"] div[style*="grid-template-columns"],
+  [data-rk] [role="dialog"] > div > div > div:has([data-testid*="wallet-option"]) {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    grid-template-columns: unset !important;
+    width: 100% !important;
+  }
+
+  /* Ensure wallet options container is also vertical on small screens */
+  [data-rk] [role="dialog"] div:has([data-testid*="wallet-option"]) {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    width: 100% !important;
+  }
+
+  /* Very small screen wallet containers - maintain vertical list */
   [data-rk] [data-testid*="wallet-option"],
   [data-rk] [data-testid*="rk-wallet-option"] {
-    padding: 8px !important;
-    min-height: 45px !important;
-    gap: 6px !important;
+    padding: 10px !important;
+    min-height: 48px !important;
+    gap: 8px !important;
     font-size: 0.85rem !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    border-radius: 6px !important;
   }
 
   /* Network warning banner for very small screens */
