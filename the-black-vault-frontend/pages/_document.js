@@ -5,11 +5,12 @@ export default function Document() {
     <Html lang="en">
       <Head>
         <meta charSet="utf-8" />
+        {/* Standard favicon for browser bookmarks and tabs */}
         <link rel="icon" href="/favicon.ico" />
         <meta name="theme-color" content="#1a1a1a" />
         <meta name="description" content="THE BLACK VAULT - Premium USDT Staking Platform on Binance Smart Chain" />
         
-        {/* iOS and PWA Icons */}
+        {/* iOS and PWA Icons - use bordered version for better app appearance */}
         <link rel="apple-touch-icon" href="/faviconborder.PNG" />
         <link rel="apple-touch-icon" sizes="180x180" href="/faviconborder.PNG" />
         <link rel="manifest" href="/manifest.json" />
@@ -23,6 +24,7 @@ export default function Document() {
         <meta property="og:url" content="https://www.theblackvault.xyz/" />
         <meta property="og:title" content="BLACK VAULT - Premium USDT Staking Platform on Binance Smart Chain" />
         <meta property="og:description" content="Premium USDT Staking Platform on Binance Smart Chain. Stake USDT (BEP-20) and earn daily rewards in a secure, community-driven vault." />
+        {/* Social sharing image - use bordered version for better visibility */}
         <meta property="og:image" content="/faviconborder.PNG" />
         <meta property="og:image:width" content="512" />
         <meta property="og:image:height" content="512" />
@@ -31,6 +33,7 @@ export default function Document() {
         <meta property="twitter:url" content="https://www.theblackvault.xyz/" />
         <meta property="twitter:title" content="BLACK VAULT - Premium USDT Staking Platform on Binance Smart Chain" />
         <meta property="twitter:description" content="Premium USDT Staking Platform on Binance Smart Chain. Stake USDT (BEP-20) and earn daily rewards in a secure, community-driven vault." />
+        {/* Social sharing image - use bordered version for better visibility */}
         <meta property="twitter:image" content="/faviconborder.PNG" />
       </Head>
       <body>

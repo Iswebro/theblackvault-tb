@@ -2299,38 +2299,162 @@ div[data-rk] button[type="button"]:focus-visible {
     border-radius: 4px !important;
   }
 
-  /* Force RainbowKit mobile modal to use vertical list layout like desktop */
-  [data-rk] [role="dialog"] div[style*="display: grid"],
-  [data-rk] [role="dialog"] div[style*="grid-template-columns"],
-  [data-rk] [role="dialog"] > div > div > div:has([data-testid*="wallet-option"]) {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 8px !important;
-    grid-template-columns: unset !important;
-    width: 100% !important;
+  /* Force RainbowKit mobile modal to look identical to desktop but mobile-optimized */
+  
+  /* Override modal container to match desktop layout */
+  [data-rk] [role="dialog"] {
+    max-width: 95vw !important;
+    width: 400px !important;
+    border-radius: 16px !important;
+    background: #1a1a1a !important;
+    border: 1px solid #404040 !important;
+    padding: 24px !important;
   }
 
-  /* Ensure wallet options container is also vertical */
+  /* Modal content container */
+  [data-rk] [role="dialog"] > div {
+    background: transparent !important;
+  }
+
+  /* Force vertical list layout exactly like desktop */
+  [data-rk] [role="dialog"] div[style*="display: grid"],
+  [data-rk] [role="dialog"] div[style*="grid-template-columns"],
+  [data-rk] [role="dialog"] > div > div > div:has([data-testid*="wallet-option"]),
   [data-rk] [role="dialog"] div:has([data-testid*="wallet-option"]) {
     display: flex !important;
     flex-direction: column !important;
-    gap: 8px !important;
+    gap: 12px !important;
+    grid-template-columns: unset !important;
     width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
-  /* Mobile wallet option containers - full width vertical layout */
+  /* Mobile wallet options - exactly like desktop but mobile-sized */
   [data-rk] [data-testid*="wallet-option"],
   [data-rk] [data-testid*="rk-wallet-option"] {
-    padding: 12px !important;
-    min-height: 56px !important;
-    gap: 12px !important;
+    background: #2a2a2a !important;
+    border: 1px solid #404040 !important;
+    color: #ffffff !important;
+    padding: 16px !important;
+    min-height: 64px !important;
     width: 100% !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
     justify-content: flex-start !important;
+    gap: 12px !important;
+    border-radius: 12px !important;
+    margin: 0 !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+  }
+
+  /* Mobile wallet option hover states - match desktop */
+  [data-rk] [data-testid*="wallet-option"]:hover,
+  [data-rk] [data-testid*="rk-wallet-option"]:hover {
+    background: #3a3a3a !important;
+    border-color: #606060 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  /* Mobile wallet icons - slightly smaller but clear */
+  [data-rk] [data-testid*="wallet-option"] img,
+  [data-rk] [data-testid*="rk-wallet-option"] img,
+  [data-rk] [role="dialog"] img[alt*="wallet"],
+  [data-rk] [role="dialog"] img[src*="wallet"],
+  [data-rk] [role="dialog"] img[alt*="Wallet"],
+  [data-rk] [role="dialog"] img[alt*="Connect"],
+  [data-rk] img[width="28"],
+  [data-rk] img[width="32"],
+  [data-rk] img[width="48"] {
+    width: 32px !important;
+    height: 32px !important;
     border-radius: 8px !important;
-    margin-bottom: 4px !important;
+    object-fit: contain !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Wallet text styling to match desktop */
+  [data-rk] [data-testid*="wallet-option"] div,
+  [data-rk] [data-testid*="rk-wallet-option"] div {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    color: #ffffff !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Recent label styling */
+  [data-rk] [data-testid*="wallet-option"] span,
+  [data-rk] [data-testid*="rk-wallet-option"] span {
+    font-size: 12px !important;
+    color: #888888 !important;
+    font-weight: 400 !important;
+  }
+
+  /* Modal header and title */
+  [data-rk] [role="dialog"] h1,
+  [data-rk] [role="dialog"] h2 {
+    font-size: 20px !important;
+    font-weight: 700 !important;
+    color: #ffffff !important;
+    margin-bottom: 20px !important;
+    text-align: center !important;
+  }
+
+  /* Section headers (Installed, BSC Wallets) */
+  [data-rk] [role="dialog"] p,
+  [data-rk] [role="dialog"] span {
+    font-size: 14px !important;
+    color: #888888 !important;
+    font-weight: 500 !important;
+    margin: 16px 0 8px 0 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+  }
+
+  /* Bottom action buttons to match desktop */
+  [data-rk] [role="dialog"] button[color="accentColor"],
+  [data-rk] [role="dialog"] button:not([aria-label]),
+  [data-rk] [role="dialog"] div:last-child button {
+    background: #c0c0c0 !important;
+    color: #1a1a1a !important;
+    border: 1px solid #c0c0c0 !important;
+    border-radius: 8px !important;
+    padding: 12px 20px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+    margin: 8px 4px !important;
+  }
+
+  [data-rk] [role="dialog"] button[color="accentColor"]:hover,
+  [data-rk] [role="dialog"] button:not([aria-label]):hover {
+    background: #d4d4d4 !important;
+    border-color: #d4d4d4 !important;
+    transform: translateY(-1px) !important;
+  }
+
+  /* Close button styling */
+  [data-rk] button[aria-label*="Close"],
+  [data-rk] button[aria-label*="close"] {
+    background: #2a2a2a !important;
+    color: #ffffff !important;
+    border: 1px solid #606060 !important;
+    border-radius: 8px !important;
+    padding: 8px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    position: absolute !important;
+    top: 16px !important;
+    right: 16px !important;
+  }
+
+  [data-rk] button[aria-label*="Close"]:hover,
+  [data-rk] button[aria-label*="close"]:hover {
+    background: #3a3a3a !important;
+    border-color: #c0c0c0 !important;
   }
 
   /* Header account section - Ultra compact */
@@ -2424,38 +2548,101 @@ div[data-rk] button[type="button"]:focus-visible {
     border-radius: 3px !important;
   }
 
-  /* Force vertical layout on very small screens too */
-  [data-rk] [role="dialog"] div[style*="display: grid"],
-  [data-rk] [role="dialog"] div[style*="grid-template-columns"],
-  [data-rk] [role="dialog"] > div > div > div:has([data-testid*="wallet-option"]) {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 6px !important;
-    grid-template-columns: unset !important;
-    width: 100% !important;
+  /* Force desktop-like layout on very small screens with adjusted sizing */
+  [data-rk] [role="dialog"] {
+    max-width: 95vw !important;
+    width: 350px !important;
+    border-radius: 14px !important;
+    padding: 20px !important;
   }
 
-  /* Ensure wallet options container is also vertical on small screens */
+  [data-rk] [role="dialog"] div[style*="display: grid"],
+  [data-rk] [role="dialog"] div[style*="grid-template-columns"],
+  [data-rk] [role="dialog"] > div > div > div:has([data-testid*="wallet-option"]),
   [data-rk] [role="dialog"] div:has([data-testid*="wallet-option"]) {
     display: flex !important;
     flex-direction: column !important;
-    gap: 6px !important;
+    gap: 10px !important;
+    grid-template-columns: unset !important;
     width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
-  /* Very small screen wallet containers - maintain vertical list */
+  /* Very small screen wallet containers - desktop-like but compact */
   [data-rk] [data-testid*="wallet-option"],
   [data-rk] [data-testid*="rk-wallet-option"] {
-    padding: 10px !important;
-    min-height: 48px !important;
-    gap: 8px !important;
-    font-size: 0.85rem !important;
+    background: #2a2a2a !important;
+    border: 1px solid #404040 !important;
+    color: #ffffff !important;
+    padding: 14px !important;
+    min-height: 56px !important;
     width: 100% !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
     justify-content: flex-start !important;
+    gap: 10px !important;
+    border-radius: 10px !important;
+    margin: 0 !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+  }
+
+  /* Hover states for very small screens */
+  [data-rk] [data-testid*="wallet-option"]:hover,
+  [data-rk] [data-testid*="rk-wallet-option"]:hover {
+    background: #3a3a3a !important;
+    border-color: #606060 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  /* Wallet icons for very small screens */
+  [data-rk] [data-testid*="wallet-option"] img,
+  [data-rk] [data-testid*="rk-wallet-option"] img,
+  [data-rk] [role="dialog"] img[alt*="wallet"],
+  [data-rk] [role="dialog"] img[src*="wallet"],
+  [data-rk] [role="dialog"] img[alt*="Wallet"],
+  [data-rk] [role="dialog"] img[alt*="Connect"],
+  [data-rk] img[width="28"],
+  [data-rk] img[width="32"],
+  [data-rk] img[width="48"] {
+    width: 28px !important;
+    height: 28px !important;
     border-radius: 6px !important;
+    object-fit: contain !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Text sizing for very small screens */
+  [data-rk] [data-testid*="wallet-option"] div,
+  [data-rk] [data-testid*="rk-wallet-option"] div {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: #ffffff !important;
+    line-height: 1.2 !important;
+  }
+
+  [data-rk] [data-testid*="wallet-option"] span,
+  [data-rk] [data-testid*="rk-wallet-option"] span {
+    font-size: 11px !important;
+    color: #888888 !important;
+    font-weight: 400 !important;
+  }
+
+  /* Modal header for very small screens */
+  [data-rk] [role="dialog"] h1,
+  [data-rk] [role="dialog"] h2 {
+    font-size: 18px !important;
+    margin-bottom: 16px !important;
+  }
+
+  /* Section headers for very small screens */
+  [data-rk] [role="dialog"] p,
+  [data-rk] [role="dialog"] span {
+    font-size: 12px !important;
+    margin: 12px 0 6px 0 !important;
   }
 
   /* Network warning banner for very small screens */
