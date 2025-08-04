@@ -20,32 +20,7 @@ import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 // Black Vault WalletConnect Project ID
 const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'ec1a030594f38292648794d4587912f4';
 
-// Custom BSC configuration to ensure proper network detection
-const customBSC = {
-  ...bsc,
-  name: 'Binance Smart Chain',
-  nativeCurrency: {
-    name: 'BNB',
-    symbol: 'BNB',
-    decimals: 18,
-  },
-  rpcUrls: {
-    default: { 
-      http: ['https://rpc.ankr.com/bsc'] 
-    },
-    public: { 
-      http: ['https://bsc-dataseed.binance.org/'] 
-    },
-  },
-  blockExplorers: {
-    default: {
-      name: 'BSCScan',
-      url: 'https://bscscan.com',
-    },
-  },
-};
-
-// Custom connector configuration to prevent double connections
+// Custom connector configuration to prevent double connections and ensure BSC-first
 const connectors = connectorsForWallets(
   [
     {
@@ -62,21 +37,17 @@ const connectors = connectorsForWallets(
     appName: 'Black Vault',
     projectId: WALLETCONNECT_PROJECT_ID,
     // Force all wallets to connect to BSC only
-    chains: [customBSC],
+    chains: [bsc],
   }
 );
 
 const config = getDefaultConfig({
   appName: 'Black Vault',
   projectId: WALLETCONNECT_PROJECT_ID,
-  chains: [customBSC], // ONLY BSC mainnet - no other networks
-  initialChain: customBSC, // Force BSC as default and only chain
+  chains: [bsc], // ONLY BSC mainnet - no other networks
+  initialChain: bsc, // Force BSC as default and only chain
   ssr: true,
   connectors,
-  // Force BSC for all wallets including Trust Wallet
-  multiInjectedProviderDiscovery: false,
-  // Enable auto-switching to BSC
-  autoConnect: true,
 });
 
 const queryClient = new QueryClient();
@@ -133,8 +104,8 @@ export function Web3Provider({ children }) {
           theme={blackVaultTheme}
           modalSize="compact"
           showRecentTransactions={true}
-          chains={[customBSC]} // Explicitly restrict to BSC only
-          initialChain={customBSC} // Force BSC as initial chain
+          chains={[bsc]} // Explicitly restrict to BSC only
+          initialChain={bsc} // Force BSC as initial chain
           appInfo={{
             appName: 'Black Vault',
             disclaimer: 'Connect to BSC (Binance Smart Chain) network only.',
