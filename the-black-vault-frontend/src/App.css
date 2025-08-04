@@ -2284,7 +2284,7 @@ div[data-rk] button[type="button"]:focus-visible {
     padding: 0.6rem 1rem !important;
   }
 
-  /* Mobile wallet icon sizing - smaller for better fit */
+  /* Mobile wallet icon sizing - match desktop exactly */
   [data-rk] [data-testid*="wallet-option"] img,
   [data-rk] [data-testid*="rk-wallet-option"] img,
   [data-rk] [role="dialog"] img[alt*="wallet"],
@@ -2294,21 +2294,28 @@ div[data-rk] button[type="button"]:focus-visible {
   [data-rk] img[width="28"],
   [data-rk] img[width="32"],
   [data-rk] img[width="48"] {
-    width: 20px !important;
-    height: 20px !important;
-    border-radius: 4px !important;
+    width: 24px !important;
+    height: 24px !important;
+    border-radius: 6px !important;
+    object-fit: contain !important;
+    flex-shrink: 0 !important;
   }
 
   /* Force RainbowKit mobile modal to look identical to desktop but mobile-optimized */
   
   /* Override modal container to match desktop layout */
   [data-rk] [role="dialog"] {
-    max-width: 95vw !important;
-    width: 400px !important;
+    max-width: 90vw !important;
+    width: 420px !important;
     border-radius: 16px !important;
     background: #1a1a1a !important;
     border: 1px solid #404040 !important;
     padding: 24px !important;
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    z-index: 9999 !important;
   }
 
   /* Modal content container */
@@ -2337,7 +2344,7 @@ div[data-rk] button[type="button"]:focus-visible {
     border: 1px solid #404040 !important;
     color: #ffffff !important;
     padding: 16px !important;
-    min-height: 64px !important;
+    min-height: 60px !important;
     width: 100% !important;
     display: flex !important;
     flex-direction: row !important;
@@ -2345,9 +2352,10 @@ div[data-rk] button[type="button"]:focus-visible {
     justify-content: flex-start !important;
     gap: 12px !important;
     border-radius: 12px !important;
-    margin: 0 !important;
+    margin: 0 0 8px 0 !important;
     transition: all 0.2s ease !important;
     cursor: pointer !important;
+    box-sizing: border-box !important;
   }
 
   /* Mobile wallet option hover states - match desktop */
@@ -2359,7 +2367,7 @@ div[data-rk] button[type="button"]:focus-visible {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
   }
 
-  /* Mobile wallet icons - slightly smaller but clear */
+  /* Mobile wallet icons - use desktop sizing for consistency */
   [data-rk] [data-testid*="wallet-option"] img,
   [data-rk] [data-testid*="rk-wallet-option"] img,
   [data-rk] [role="dialog"] img[alt*="wallet"],
@@ -2369,9 +2377,9 @@ div[data-rk] button[type="button"]:focus-visible {
   [data-rk] img[width="28"],
   [data-rk] img[width="32"],
   [data-rk] img[width="48"] {
-    width: 32px !important;
-    height: 32px !important;
-    border-radius: 8px !important;
+    width: 24px !important;
+    height: 24px !important;
+    border-radius: 6px !important;
     object-fit: contain !important;
     flex-shrink: 0 !important;
   }
@@ -2533,7 +2541,7 @@ div[data-rk] button[type="button"]:focus-visible {
     height: 8px !important;
   }
 
-  /* Extra small wallet icons for very small screens */
+  /* Wallet icons for very small screens - match desktop */
   [data-rk] [data-testid*="wallet-option"] img,
   [data-rk] [data-testid*="rk-wallet-option"] img,
   [data-rk] [role="dialog"] img[alt*="wallet"],
@@ -2543,9 +2551,11 @@ div[data-rk] button[type="button"]:focus-visible {
   [data-rk] img[width="28"],
   [data-rk] img[width="32"],
   [data-rk] img[width="48"] {
-    width: 18px !important;
-    height: 18px !important;
-    border-radius: 3px !important;
+    width: 24px !important;
+    height: 24px !important;
+    border-radius: 6px !important;
+    object-fit: contain !important;
+    flex-shrink: 0 !important;
   }
 
   /* Force desktop-like layout on very small screens with adjusted sizing */
@@ -2598,7 +2608,7 @@ div[data-rk] button[type="button"]:focus-visible {
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3) !important;
   }
 
-  /* Wallet icons for very small screens */
+  /* Wallet icons for very small screens - match desktop */
   [data-rk] [data-testid*="wallet-option"] img,
   [data-rk] [data-testid*="rk-wallet-option"] img,
   [data-rk] [role="dialog"] img[alt*="wallet"],
@@ -2608,8 +2618,8 @@ div[data-rk] button[type="button"]:focus-visible {
   [data-rk] img[width="28"],
   [data-rk] img[width="32"],
   [data-rk] img[width="48"] {
-    width: 28px !important;
-    height: 28px !important;
+    width: 24px !important;
+    height: 24px !important;
     border-radius: 6px !important;
     object-fit: contain !important;
     flex-shrink: 0 !important;
