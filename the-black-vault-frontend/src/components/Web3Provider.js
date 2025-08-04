@@ -106,10 +106,6 @@ export function Web3Provider({ children }) {
           showRecentTransactions={true}
           chains={[bsc]} // Explicitly restrict to BSC only
           initialChain={bsc} // Force BSC as initial chain
-          appInfo={{
-            appName: 'Black Vault',
-            disclaimer: 'Connect to BSC (Binance Smart Chain) network only.',
-          }}
         >
           {children}
         </RainbowKitProvider>

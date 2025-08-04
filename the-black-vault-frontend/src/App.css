@@ -2158,18 +2158,6 @@ div[data-rk] button[type="button"]:focus-visible {
   position: relative;
 }
 
-/* Add a subtle BSC-only indicator */
-[data-rk] [role="dialog"]::before {
-  content: "🔗 BSC Network Only";
-  display: block;
-  text-align: center;
-  font-size: 0.75rem;
-  color: #a0a0a0;
-  padding: 0.5rem;
-  border-bottom: 1px solid #404040;
-  margin-bottom: 0.5rem;
-}
-
 /* ==================== MOBILE RESPONSIVENESS ==================== */
 
 /* Mobile - phones */
