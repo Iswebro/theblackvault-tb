@@ -2266,7 +2266,17 @@ export default function App() {
                 <button
                   className="week-selector-toggle"
                   style={{ marginBottom: 12, fontSize: 13, background: "#f5f5f5", color: "#222", border: "1px solid #333", borderRadius: 6, padding: "4px 10px", cursor: "pointer", width: "100%" }}
-                  onClick={() => setShowHistoryWeekSelector((v) => !v)}
+                  onClick={() => {
+                    if (showHistoryWeekSelector) {
+                      // When hiding previous weeks, go back to current week
+                      setShowHistoryWeekSelector(false);
+                      setSelectedHistoryWeek(null);
+                      loadTransactionHistory(null); // Load current week
+                    } else {
+                      // When showing previous weeks, just toggle the selector
+                      setShowHistoryWeekSelector(true);
+                    }
+                  }}
                 >
                   {showHistoryWeekSelector ? "Hide Previous Weeks" : "View Previous Weeks"}
                 </button>
