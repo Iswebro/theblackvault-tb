@@ -2350,6 +2350,10 @@ div[data-rk] button[type="button"]:focus-visible {
     box-sizing: border-box !important;
     /* Override any inline styles */
     grid-template-columns: 1fr !important;
+    /* Remove any background that creates gray boxes */
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
   }
 
   /* Force override inline grid styles */
@@ -2357,12 +2361,40 @@ div[data-rk] button[type="button"]:focus-visible {
     display: flex !important;
     flex-direction: column !important;
     grid-template-columns: 1fr !important;
+    background: transparent !important;
   }
   
   [data-rk] [role="dialog"] div[style*="grid-template-columns: repeat(3"] {
     display: flex !important;
     flex-direction: column !important;
     grid-template-columns: 1fr !important;
+    background: transparent !important;
+  }
+
+  /* Target any div that wraps wallet options and remove their styling */
+  [data-rk] [role="dialog"] div:has([data-testid*="wallet-option"]) {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: auto !important;
+    height: auto !important;
+  }
+
+  /* ULTRA AGGRESSIVE: Target any large containers in the modal */
+  [data-rk] [role="dialog"] div[style*="height"],
+  [data-rk] [role="dialog"] div[style*="min-height"] {
+    min-height: auto !important;
+    height: auto !important;
+    max-height: 50px !important;
+  }
+
+  /* Make sure only actual wallet option buttons have proper height */
+  [data-rk] [data-testid*="wallet-option"],
+  [data-rk] [data-testid*="rk-wallet-option"] {
+    min-height: 48px !important;
+    max-height: 48px !important;
+    height: 48px !important;
   }
 
   /* Mobile wallet options - force exact desktop rectangular layout */
@@ -2398,6 +2430,19 @@ div[data-rk] button[type="button"]:focus-visible {
     /* Force normal flow layout */
     float: none !important;
     clear: both !important;
+  }
+
+  /* AGGRESSIVE: Force all child elements of wallet options to be inline */
+  [data-rk] [data-testid*="wallet-option"] *,
+  [data-rk] [data-testid*="rk-wallet-option"] * {
+    display: inline-flex !important;
+    align-items: center !important;
+  }
+
+  /* But keep the main container as flex */
+  [data-rk] [data-testid*="wallet-option"],
+  [data-rk] [data-testid*="rk-wallet-option"] {
+    display: flex !important;
   }
 
   /* Mobile wallet option hover states - match desktop */
