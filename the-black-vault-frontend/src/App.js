@@ -68,7 +68,6 @@ export default function App() {
   // All state hooks first
   const [history, setHistory] = useState([]);
   const [showAllHistory, setShowAllHistory] = useState(false);
-  const [historyPage, setHistoryPage] = useState(1);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [selectedHistoryWeek, setSelectedHistoryWeek] = useState(null);
@@ -681,20 +680,35 @@ export default function App() {
 
   // Load transaction history on-demand using Ankr-powered API
   const loadTransactionHistory = async (week = null) => {
-    if (!account || historyLoading) {
-      console.log("Skipping loadTransactionHistory: missing account or already loading");
+    const targetWallet = walletAddress || account;
+    console.log("🔍 loadTransactionHistory called", { 
+      week, 
+      walletAddress, 
+      account, 
+      targetWallet, 
+      historyLoading,
+      isConnected 
+    });
+    
+    if (!targetWallet || historyLoading) {
+      console.log("Skipping loadTransactionHistory: missing wallet address or already loading", { walletAddress, account, historyLoading });
       return;
     }
 
     setHistoryLoading(true);
     try {
       const weekParam = week !== null ? `&week=${week}` : '';
-      console.log(`🔍 Loading transaction history for account: ${account}, week: ${week || 'current'}`);
+      console.log(`🔍 Loading transaction history for wallet: ${targetWallet}, week: ${week || 'current'}`);
       
-      const res = await fetch(`/api/transaction-history?wallet=${account}${weekParam}`);
+      const res = await fetch(`/api/transaction-history?wallet=${targetWallet}${weekParam}`);
+      console.log(`🔍 Transaction history request: /api/transaction-history?wallet=${targetWallet}${weekParam}`);
+      console.log(`🔍 Response status: ${res.status} ${res.statusText}`);
+      
       if (!res.ok) {
         console.error("Transaction history API error:", res.status, res.statusText);
-        addToast("Failed to load transaction history.", "error");
+        const errorText = await res.text();
+        console.error("Error response body:", errorText);
+        addToast(`Failed to load transaction history: ${res.status} ${res.statusText}`, "error");
         setHistory([]);
         setHistoryWeekInfo(null);
         return;
@@ -704,9 +718,16 @@ export default function App() {
       console.log("🔍 Transaction history API response:", data);
       
       if (!data.result) {
-        console.log("🔍 No transaction results found");
+        console.log("🔍 No transaction results found - setting empty state");
         setHistory([]);
-        setHistoryWeekInfo(null);
+        setHistoryWeekInfo({
+          weekIndex: data.weekIndex || 0,
+          isCurrentWeek: data.isCurrentWeek || false,
+          weekStart: data.weekStart || 0,
+          weekEnd: data.weekEnd || 0,
+          totalTransactions: 0
+        });
+        setHistoryLoaded(true);
         return;
       }
       
@@ -746,9 +767,16 @@ export default function App() {
       
     } catch (error) {
       console.error("Error loading transaction history:", error);
-      addToast("Error loading transaction history.", "error");
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        targetWallet,
+        week
+      });
+      addToast(`Error loading transaction history: ${error.message}`, "error");
       setHistory([]);
       setHistoryWeekInfo(null);
+      setHistoryLoaded(true); // Set as loaded even on error to prevent infinite loading state
     } finally {
       setHistoryLoading(false);
     }
@@ -2149,7 +2177,7 @@ export default function App() {
                 <p className="empty-submessage">View your deposits and withdrawals</p>
                 <button
                   className="vault-button premium-button"
-                  onClick={loadTransactionHistory}
+                  onClick={() => loadTransactionHistory()}
                   disabled={historyLoading}
                   style={{ marginTop: "12px" }}
                 >

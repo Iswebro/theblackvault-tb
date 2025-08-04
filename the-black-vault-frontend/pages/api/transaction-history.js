@@ -99,9 +99,25 @@ export default async function handler(req, res) {
 
   try {
     console.log(`🔍 DEBUG: Starting transaction history for wallet: ${wallet}`);
+    console.log(`🔍 DEBUG: Raw week parameter: ${week} (type: ${typeof week})`);
     
     const currentWeekIndex = getCurrentWeekIndex();
-    const requestedWeek = week ? parseInt(week) : currentWeekIndex;
+    
+    // Parse week parameter more carefully
+    let requestedWeek;
+    if (week === undefined || week === null || week === '') {
+      requestedWeek = currentWeekIndex;
+    } else if (typeof week === 'string' && week.toLowerCase() === 'null') {
+      requestedWeek = currentWeekIndex;
+    } else {
+      const parsedWeek = parseInt(week);
+      if (isNaN(parsedWeek)) {
+        console.log(`🔍 DEBUG: Invalid week parameter: ${week}, using current week: ${currentWeekIndex}`);
+        requestedWeek = currentWeekIndex;
+      } else {
+        requestedWeek = parsedWeek;
+      }
+    }
     
     console.log(`🔍 DEBUG: Current week: ${currentWeekIndex}, Requested week: ${requestedWeek}`);
     
