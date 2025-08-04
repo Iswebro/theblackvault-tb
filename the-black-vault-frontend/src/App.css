@@ -2064,10 +2064,30 @@ div[data-rk] button[type="button"]:focus-visible {
 [data-rk] [data-testid*="wallet-option"] img,
 [data-rk] [data-testid*="rk-wallet-option"] img,
 [data-rk] [role="dialog"] img[alt*="wallet"],
-[data-rk] [role="dialog"] img[src*="wallet"] {
-  width: 32px !important;
-  height: 32px !important;
-  border-radius: 8px !important;
+[data-rk] [role="dialog"] img[src*="wallet"],
+[data-rk] [role="dialog"] img[alt*="Wallet"],
+[data-rk] [role="dialog"] img[alt*="Connect"],
+[data-rk] img[width="28"],
+[data-rk] img[width="32"],
+[data-rk] img[width="48"] {
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 6px !important;
+  object-fit: contain !important;
+}
+
+/* Wallet option container sizing */
+[data-rk] [data-testid*="wallet-option"],
+[data-rk] [data-testid*="rk-wallet-option"] {
+  background: #2a2a2a !important;
+  border: 1px solid #404040 !important;
+  color: #ffffff !important;
+  padding: 12px !important;
+  min-height: 60px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 12px !important;
 }
 
 /* Recent button and action buttons in RainbowKit modal */
@@ -2268,9 +2288,23 @@ div[data-rk] button[type="button"]:focus-visible {
   [data-rk] [data-testid*="wallet-option"] img,
   [data-rk] [data-testid*="rk-wallet-option"] img,
   [data-rk] [role="dialog"] img[alt*="wallet"],
-  [data-rk] [role="dialog"] img[src*="wallet"] {
-    width: 24px !important;
-    height: 24px !important;
+  [data-rk] [role="dialog"] img[src*="wallet"],
+  [data-rk] [role="dialog"] img[alt*="Wallet"],
+  [data-rk] [role="dialog"] img[alt*="Connect"],
+  [data-rk] img[width="28"],
+  [data-rk] img[width="32"],
+  [data-rk] img[width="48"] {
+    width: 20px !important;
+    height: 20px !important;
+    border-radius: 4px !important;
+  }
+
+  /* Mobile wallet option containers */
+  [data-rk] [data-testid*="wallet-option"],
+  [data-rk] [data-testid*="rk-wallet-option"] {
+    padding: 10px !important;
+    min-height: 50px !important;
+    gap: 8px !important;
   }
 
   /* Header account section - Ultra compact */
@@ -2353,9 +2387,24 @@ div[data-rk] button[type="button"]:focus-visible {
   [data-rk] [data-testid*="wallet-option"] img,
   [data-rk] [data-testid*="rk-wallet-option"] img,
   [data-rk] [role="dialog"] img[alt*="wallet"],
-  [data-rk] [role="dialog"] img[src*="wallet"] {
-    width: 20px !important;
-    height: 20px !important;
+  [data-rk] [role="dialog"] img[src*="wallet"],
+  [data-rk] [role="dialog"] img[alt*="Wallet"],
+  [data-rk] [role="dialog"] img[alt*="Connect"],
+  [data-rk] img[width="28"],
+  [data-rk] img[width="32"],
+  [data-rk] img[width="48"] {
+    width: 18px !important;
+    height: 18px !important;
+    border-radius: 3px !important;
+  }
+
+  /* Very small screen wallet containers */
+  [data-rk] [data-testid*="wallet-option"],
+  [data-rk] [data-testid*="rk-wallet-option"] {
+    padding: 8px !important;
+    min-height: 45px !important;
+    gap: 6px !important;
+    font-size: 0.85rem !important;
   }
 
   /* Network warning banner for very small screens */
