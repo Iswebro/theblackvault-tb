@@ -379,26 +379,28 @@ body {
 
 .header-account [data-rk] button {
   background: #2a2a2a !important;
-  border: 1px solid #606060 !important;
-  border-radius: 5px !important;
-  padding: 0.25rem 0.5rem !important;
+  border: 1px solid #505050 !important; /* Thinner, more subtle border */
+  border-radius: 6px !important; /* Slightly more rounded */
+  padding: 0.3rem 0.65rem !important; /* Better padding balance */
   color: #e0e0e0 !important;
-  font-weight: 400 !important;
-  font-size: 0.7rem !important;
+  font-weight: 500 !important; /* Slightly bolder text */
+  font-size: 0.75rem !important; /* Slightly larger for better readability */
   min-height: auto !important;
   height: auto !important;
-  max-width: 100px !important;
-  box-shadow: none !important;
+  max-width: 110px !important; /* Slightly wider for better fit */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important; /* Subtle shadow */
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  line-height: 1.1 !important;
+  line-height: 1.2 !important;
+  transition: all 0.2s ease !important; /* Smooth transitions */
 }
 
 .header-account [data-rk] button:hover {
   background: #3a3a3a !important;
-  border-color: #c0c0c0 !important;
-  transform: none !important;
+  border-color: #707070 !important; /* Subtle hover border */
+  transform: translateY(-1px) !important; /* Slight lift effect */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important; /* Enhanced shadow on hover */
 }
 
 /* Make RainbowKit button content even more compact */
@@ -2058,6 +2060,16 @@ div[data-rk] button[type="button"]:focus-visible {
   border-color: #606060 !important;
 }
 
+/* Wallet icons sizing in modal */
+[data-rk] [data-testid*="wallet-option"] img,
+[data-rk] [data-testid*="rk-wallet-option"] img,
+[data-rk] [role="dialog"] img[alt*="wallet"],
+[data-rk] [role="dialog"] img[src*="wallet"] {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 8px !important;
+}
+
 /* Recent button and action buttons in RainbowKit modal */
 [data-rk] button[color="accentColor"],
 [data-rk] button[data-testid*="recent"] {
@@ -2138,6 +2150,23 @@ div[data-rk] button[type="button"]:focus-visible {
 /* Custom injection point for BSC button */
 .rainbowkit-modal-bsc-injection {
   padding: 0 1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Add BSC network information to RainbowKit modal */
+[data-rk] [role="dialog"] {
+  position: relative;
+}
+
+/* Add a subtle BSC-only indicator */
+[data-rk] [role="dialog"]::before {
+  content: "🔗 BSC Network Only";
+  display: block;
+  text-align: center;
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  padding: 0.5rem;
+  border-bottom: 1px solid #404040;
   margin-bottom: 0.5rem;
 }
 
@@ -2247,12 +2276,21 @@ div[data-rk] button[type="button"]:focus-visible {
     padding: 0.6rem 1rem !important;
   }
 
+  /* Mobile wallet icon sizing - smaller for better fit */
+  [data-rk] [data-testid*="wallet-option"] img,
+  [data-rk] [data-testid*="rk-wallet-option"] img,
+  [data-rk] [role="dialog"] img[alt*="wallet"],
+  [data-rk] [role="dialog"] img[src*="wallet"] {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
   /* Header account section - Ultra compact */
   .header-account [data-rk] button {
     font-size: 0.65rem !important;
-    padding: 0.2rem 0.4rem !important;
-    max-width: 85px !important;
-    border-radius: 3px !important;
+    padding: 0.25rem 0.5rem !important;
+    max-width: 95px !important;
+    border-radius: 4px !important;
   }
 
   /* Chain icon even smaller on mobile */
@@ -2313,14 +2351,23 @@ div[data-rk] button[type="button"]:focus-visible {
   /* Ultra compact header button for very small screens */
   .header-account [data-rk] button {
     font-size: 0.6rem !important;
-    padding: 0.15rem 0.3rem !important;
-    max-width: 70px !important;
-    border-radius: 2px !important;
+    padding: 0.2rem 0.4rem !important;
+    max-width: 75px !important;
+    border-radius: 3px !important;
   }
 
   .header-account [data-rk] button img[alt*="Chain"] {
     width: 8px !important;
     height: 8px !important;
+  }
+
+  /* Extra small wallet icons for very small screens */
+  [data-rk] [data-testid*="wallet-option"] img,
+  [data-rk] [data-testid*="rk-wallet-option"] img,
+  [data-rk] [role="dialog"] img[alt*="wallet"],
+  [data-rk] [role="dialog"] img[src*="wallet"] {
+    width: 20px !important;
+    height: 20px !important;
   }
 
   /* Network warning banner for very small screens */
