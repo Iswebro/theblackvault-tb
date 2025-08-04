@@ -153,9 +153,9 @@ export default async function handler(req, res) {
     // First, let's try a simpler approach - get ALL events for this contract in the time range
     console.log(`🔍 DEBUG: Fetching ALL events for contract ${CONTRACT_ADDRESS}...`);
     
-    // Calculate appropriate buffer - use 6 hours buffer (about 6000 blocks) for safety
-    const bufferBlocks = Math.round((6 * 3600) / 3.5); // 6 hours in blocks (~6171 blocks)
-    console.log(`🔍 DEBUG: Using buffer of ${bufferBlocks} blocks (~6 hours) for week scanning`);
+    // Calculate appropriate buffer - use 2 days buffer to account for block estimation variance
+    const bufferBlocks = Math.round((2 * 24 * 3600) / 3.5); // 2 days in blocks (~49371 blocks)
+    console.log(`🔍 DEBUG: Using buffer of ${bufferBlocks} blocks (~2 days) for week scanning`);
     
     const allEventsResponse = await fetch(BSC_RPC_URL, {
       method: 'POST',
@@ -164,8 +164,8 @@ export default async function handler(req, res) {
         jsonrpc: '2.0',
         method: 'eth_getLogs',
         params: [{
-          fromBlock: `0x${Math.max(0, fromBlock - bufferBlocks).toString(16)}`, // 6 hour buffer before week start
-          toBlock: `0x${(toBlock + bufferBlocks).toString(16)}`,                // 6 hour buffer after week end
+          fromBlock: `0x${Math.max(0, fromBlock - bufferBlocks).toString(16)}`, // 2 day buffer before week start
+          toBlock: `0x${(toBlock + bufferBlocks).toString(16)}`,                // 2 day buffer after week end
           address: CONTRACT_ADDRESS
         }],
         id: 1
@@ -236,8 +236,9 @@ export default async function handler(req, res) {
               const blockData = await blockResponse.json();
               const timestamp = parseInt(blockData.result.timestamp, 16);
 
-              // Only include transactions that actually fall within the target week
-              if (timestamp >= weekStart && timestamp < weekEnd) {
+              // Only include transactions that actually fall within the target week (with buffer for edge cases)
+              const weekBuffer = 3600; // 1 hour buffer for timestamp edge cases
+              if (timestamp >= (weekStart - weekBuffer) && timestamp < (weekEnd + weekBuffer)) {
                 allTransactions.push({
                   txHash: log.transactionHash,
                   type: eventName === 'Deposited' ? 'Deposit' : 
@@ -246,9 +247,11 @@ export default async function handler(req, res) {
                   time: new Date(timestamp * 1000).toISOString(),
                   blockNumber: parseInt(log.blockNumber, 16)
                 });
-                console.log(`🔍 DEBUG: ✅ Transaction included (within week ${requestedWeek})`);
+                console.log(`🔍 DEBUG: ✅ Transaction included (within week ${requestedWeek} + buffer)`);
               } else {
                 console.log(`🔍 DEBUG: ⏭️ Transaction skipped (outside week ${requestedWeek}): ${new Date(timestamp * 1000).toISOString()}`);
+                console.log(`🔍 DEBUG: Week range: ${new Date(weekStart * 1000).toISOString()} to ${new Date(weekEnd * 1000).toISOString()}`);
+                console.log(`🔍 DEBUG: Timestamp: ${timestamp}, Week start: ${weekStart}, Week end: ${weekEnd}`);
               }
             }
           } catch (eventError) {
