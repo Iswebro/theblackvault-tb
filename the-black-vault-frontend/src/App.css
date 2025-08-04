@@ -2320,24 +2320,6 @@ div[data-rk] button[type="button"]:focus-visible {
     overflow-y: auto !important;
   }
 
-  /* AGGRESSIVE GRID ELIMINATION - Force all children to use flexbox */
-  [data-rk] [role="dialog"] * {
-    grid-template-columns: unset !important;
-    grid-template-rows: unset !important;
-    grid-gap: unset !important;
-    grid: none !important;
-    display: flex !important;
-    flex-direction: column !important;
-  }
-
-  /* Re-enable inline display for text elements */
-  [data-rk] [role="dialog"] span,
-  [data-rk] [role="dialog"] p,
-  [data-rk] [role="dialog"] h1,
-  [data-rk] [role="dialog"] h2 {
-    display: block !important;
-  }
-
   /* Modal content container */
   [data-rk] [role="dialog"] > div {
     background: transparent !important;
@@ -2350,10 +2332,14 @@ div[data-rk] button[type="button"]:focus-visible {
   [data-rk] [role="dialog"] > div > div > div:has([data-testid*="wallet-option"]),
   [data-rk] [role="dialog"] div:has([data-testid*="wallet-option"]),
   [data-rk] [role="dialog"] > div > div,
-  [data-rk] [role="dialog"] > div > div > div {
+  [data-rk] [role="dialog"] > div > div > div,
+  /* Target common RainbowKit container classes */
+  [data-rk] div[class*="iekbcc0"],
+  [data-rk] div[class*="ju367v0"],
+  [data-rk] div[class*="g5kl0l0"] {
     display: flex !important;
     flex-direction: column !important;
-    gap: 1px !important;
+    gap: 4px !important;
     grid-template-columns: unset !important;
     grid-template-rows: unset !important;
     grid-gap: unset !important;
@@ -2362,40 +2348,56 @@ div[data-rk] button[type="button"]:focus-visible {
     margin: 0 !important;
     padding: 0 !important;
     box-sizing: border-box !important;
+    /* Override any inline styles */
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Force override inline grid styles */
+  [data-rk] [role="dialog"] div[style*="grid-template-columns: repeat(2"] {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: 1fr !important;
+  }
+  
+  [data-rk] [role="dialog"] div[style*="grid-template-columns: repeat(3"] {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: 1fr !important;
   }
 
   /* Mobile wallet options - force exact desktop rectangular layout */
   [data-rk] [data-testid*="wallet-option"],
-  [data-rk] [data-testid*="rk-wallet-option"] {
+  [data-rk] [data-testid*="rk-wallet-option"],
+  [data-rk] button[data-testid*="wallet-option"],
+  [data-rk] button[data-testid*="rk-wallet-option"] {
     background: #2a2a2a !important;
     border: 1px solid #404040 !important;
     color: #ffffff !important;
-    padding: 6px 8px !important;
-    min-height: 36px !important;
-    max-height: 36px !important;
-    height: 36px !important;
+    padding: 8px 12px !important;
+    min-height: 48px !important;
+    max-height: 48px !important;
+    height: 48px !important;
     width: 100% !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
     justify-content: flex-start !important;
-    gap: 8px !important;
-    border-radius: 6px !important;
-    margin: 0 0 2px 0 !important;
+    gap: 12px !important;
+    border-radius: 8px !important;
+    margin: 0 0 4px 0 !important;
     transition: all 0.2s ease !important;
     cursor: pointer !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
     position: relative !important;
     z-index: 1 !important;
-  }
-
-  /* Force wallet options to NOT use grid positioning */
-  [data-rk] [data-testid*="wallet-option"],
-  [data-rk] [data-testid*="rk-wallet-option"] {
+    /* Force override any grid positioning */
     grid-column: unset !important;
     grid-row: unset !important;
     grid-area: unset !important;
+    /* Force normal flow layout */
+    float: none !important;
+    clear: both !important;
   }
 
   /* Mobile wallet option hover states - match desktop */
