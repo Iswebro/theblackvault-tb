@@ -1203,7 +1203,16 @@ export default function App() {
       // Load default referrer statistics
       await loadDefaultReferrerData(vault);
       
-      // Note: Transaction history is loaded on-demand, not during initial load
+      // ─────────── TRANSACTION HISTORY ───────────
+      // Auto-load transaction history for the current week
+      console.log("🔄 Auto-loading transaction history for current week...");
+      try {
+        await loadTransactionHistory(null); // Load current week
+        console.log("✅ Transaction history auto-loaded successfully");
+      } catch (historyError) {
+        console.warn("⚠️ Failed to auto-load transaction history:", historyError.message);
+        // Don't throw error, just log warning since this is not critical
+      }
     } catch (error) {
       console.error("Error loading contract data:", error);
       addToast("Error loading contract data", "error");
@@ -2171,7 +2180,12 @@ export default function App() {
               <span className="card-icon">📊</span>
               Transaction History
             </h3>
-            {!historyLoaded && history.length === 0 ? (
+            {historyLoading ? (
+              <div className="loading-state" style={{ textAlign: "center", padding: "20px 0", color: "#888" }}>
+                <div className="loading-spinner"></div>
+                Loading transaction history...
+              </div>
+            ) : !historyLoaded && history.length === 0 ? (
               <div className="empty-state">
                 <p className="empty-message">Transaction history</p>
                 <p className="empty-submessage">View your deposits and withdrawals</p>
@@ -2181,20 +2195,13 @@ export default function App() {
                   disabled={historyLoading}
                   style={{ marginTop: "12px" }}
                 >
-                  {historyLoading ? (
-                    <>
-                      <div className="loading-spinner"></div>
-                      Loading transactions...
-                    </>
-                  ) : (
-                    "Load Transaction History"
-                  )}
+                  Load Transaction History
                 </button>
               </div>
             ) : historyLoaded && history.length === 0 ? (
               <div className="empty-state">
-                <p className="empty-message">No transactions yet</p>
-                <p className="empty-submessage">Your deposits and withdrawals will appear here</p>
+                <p className="empty-message">No transactions this week</p>
+                <p className="empty-submessage">Your deposits and withdrawals for this week will appear here</p>
               </div>
             ) : (
               <>
@@ -2224,7 +2231,7 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-                {history.length > 3 && (
+                {history.length > 0 && (
                   <button
                     className="see-all-button premium-button"
                     style={{ marginTop: "12px", width: "100%" }}
@@ -2236,7 +2243,7 @@ export default function App() {
                       }
                     }}
                   >
-                    See All
+                    {history.length > 3 ? "See All" : "View by Week"}
                   </button>
                 )}
               </>

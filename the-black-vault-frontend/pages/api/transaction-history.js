@@ -69,15 +69,20 @@ async function estimateBlockFromTimestamp(timestamp) {
     const currentTimestamp = parseInt(blockData.result.timestamp, 16);
     console.log('⏰ Current block timestamp:', new Date(currentTimestamp * 1000).toISOString());
     
-    // Estimate blocks (BSC ~3 second block time)
-    const blockDiff = Math.floor((currentTimestamp - timestamp) / 3);
+    // More conservative estimate for BSC (3-4 second block time, use 3.5)
+    const timeDiff = currentTimestamp - timestamp;
+    const blockDiff = Math.floor(timeDiff / 3.5);
     const estimatedBlock = Math.max(0, currentBlock - blockDiff);
     
-    console.log('🎯 Estimated block for timestamp:', estimatedBlock);
+    console.log(`🎯 Time diff: ${timeDiff}s, Block diff: ${blockDiff}, Estimated block: ${estimatedBlock}`);
     return estimatedBlock;
   } catch (error) {
     console.error('❌ Error estimating block:', error.message);
-    return 0;
+    // Return a more conservative fallback - look back more blocks
+    const currentTime = Math.floor(Date.now() / 1000);
+    const timeDiff = currentTime - timestamp;
+    const conservativeBlockDiff = Math.floor(timeDiff / 3); // Use 3 second blocks as fallback
+    return Math.max(0, 56000000 - conservativeBlockDiff); // Rough current BSC block
   }
 }
 
@@ -105,8 +110,13 @@ export default async function handler(req, res) {
     
     // Parse week parameter more carefully
     let requestedWeek;
+    let useAllTime = false;
+    
     if (week === undefined || week === null || week === '') {
       requestedWeek = currentWeekIndex;
+    } else if (week === 'all' || week === 'all-time') {
+      useAllTime = true;
+      console.log(`🔍 DEBUG: Using all-time mode for transaction history`);
     } else if (typeof week === 'string' && week.toLowerCase() === 'null') {
       requestedWeek = currentWeekIndex;
     } else {
@@ -119,14 +129,16 @@ export default async function handler(req, res) {
       }
     }
     
-    console.log(`🔍 DEBUG: Current week: ${currentWeekIndex}, Requested week: ${requestedWeek}`);
+    console.log(`🔍 DEBUG: Current week: ${currentWeekIndex}, Requested week: ${requestedWeek}, All-time: ${useAllTime}`);
     
     // Validate week range (can't request future weeks, limit to reasonable past)
-    if (requestedWeek > currentWeekIndex || requestedWeek < 0) {
+    if (!useAllTime && (requestedWeek > currentWeekIndex || requestedWeek < 0)) {
       return res.status(400).json({ error: 'Invalid week index' });
     }
 
-    const cacheKey = `transactions:${wallet.toLowerCase()}:week:${requestedWeek}`;
+    const cacheKey = useAllTime ? 
+      `transactions:${wallet.toLowerCase()}:all-time` : 
+      `transactions:${wallet.toLowerCase()}:week:${requestedWeek}`;
     
     // Skip cache for debugging - always fetch fresh
     console.log(`� DEBUG: Forcing fresh lookup for ${wallet} week ${requestedWeek}`);
@@ -141,6 +153,10 @@ export default async function handler(req, res) {
     // First, let's try a simpler approach - get ALL events for this contract in the time range
     console.log(`🔍 DEBUG: Fetching ALL events for contract ${CONTRACT_ADDRESS}...`);
     
+    // Calculate appropriate buffer - use 6 hours buffer (about 6000 blocks) for safety
+    const bufferBlocks = Math.round((6 * 3600) / 3.5); // 6 hours in blocks (~6171 blocks)
+    console.log(`🔍 DEBUG: Using buffer of ${bufferBlocks} blocks (~6 hours) for week scanning`);
+    
     const allEventsResponse = await fetch(BSC_RPC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -148,8 +164,8 @@ export default async function handler(req, res) {
         jsonrpc: '2.0',
         method: 'eth_getLogs',
         params: [{
-          fromBlock: `0x${Math.max(0, fromBlock - 1000).toString(16)}`, // Wider range for debugging
-          toBlock: `0x${(toBlock + 1000).toString(16)}`,
+          fromBlock: `0x${Math.max(0, fromBlock - bufferBlocks).toString(16)}`, // 6 hour buffer before week start
+          toBlock: `0x${(toBlock + bufferBlocks).toString(16)}`,                // 6 hour buffer after week end
           address: CONTRACT_ADDRESS
         }],
         id: 1
@@ -165,6 +181,10 @@ export default async function handler(req, res) {
         data: log.data,
         blockNumber: parseInt(log.blockNumber, 16)
       })));
+      
+      // Log all unique event signatures found
+      const uniqueSignatures = [...new Set(allEventsData.result.map(log => log.topics[0]))];
+      console.log(`🔍 DEBUG: All unique event signatures found:`, uniqueSignatures);
     }
 
     const allTransactions = [];
@@ -172,9 +192,11 @@ export default async function handler(req, res) {
     // Let's manually check for our known event signatures
     const eventSignatures = {
       'Deposited': '0xc490a74c1058132dffb93944d555ddd1817ae53b7367ea1126ff123b1b134a58',
-      'RewardsWithdrawn': '0xfa73d3ab3a92ed3f2b6947757d8e4b2f3c293654b11b9c79111f8971f861b22b2',
+      'RewardsWithdrawn': '0x7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65',
       'ReferralRewardsWithdrawn': '0x996ae228123457779bb0d7cd6daa18e54006fe2f6dc172f12197d826b08dabcd'
     };
+
+    console.log(`🔍 DEBUG: Looking for event signatures:`, eventSignatures);
 
     if (allEventsData.result) {
       for (const log of allEventsData.result) {
@@ -214,14 +236,20 @@ export default async function handler(req, res) {
               const blockData = await blockResponse.json();
               const timestamp = parseInt(blockData.result.timestamp, 16);
 
-              allTransactions.push({
-                txHash: log.transactionHash,
-                type: eventName === 'Deposited' ? 'Deposit' : 
-                      eventName === 'RewardsWithdrawn' ? 'Rewards Withdrawal' : 'Referral Withdrawal',
-                amount: (Number(amount) / 1000000000000000000).toFixed(6), // Convert from wei units (18 decimals)
-                time: new Date(timestamp * 1000).toISOString(),
-                blockNumber: parseInt(log.blockNumber, 16)
-              });
+              // Only include transactions that actually fall within the target week
+              if (timestamp >= weekStart && timestamp < weekEnd) {
+                allTransactions.push({
+                  txHash: log.transactionHash,
+                  type: eventName === 'Deposited' ? 'Deposit' : 
+                        eventName === 'RewardsWithdrawn' ? 'Rewards Withdrawal' : 'Referral Withdrawal',
+                  amount: (Number(amount) / 1000000000000000000).toFixed(6), // Convert from wei units (18 decimals)
+                  time: new Date(timestamp * 1000).toISOString(),
+                  blockNumber: parseInt(log.blockNumber, 16)
+                });
+                console.log(`🔍 DEBUG: ✅ Transaction included (within week ${requestedWeek})`);
+              } else {
+                console.log(`🔍 DEBUG: ⏭️ Transaction skipped (outside week ${requestedWeek}): ${new Date(timestamp * 1000).toISOString()}`);
+              }
             }
           } catch (eventError) {
             console.error(`🔍 DEBUG: Error processing ${eventName} event:`, eventError);
