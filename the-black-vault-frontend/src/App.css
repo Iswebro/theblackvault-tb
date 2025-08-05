@@ -2494,6 +2494,22 @@ div[data-rk] button[type="button"]:focus-visible {
     [data-rk][data-rk] [role="dialog"][role="dialog"]::-webkit-scrollbar-thumb:hover {
       background: #888888 !important;
     }
+
+    /* FIX "GET A WALLET" MODAL SIZING - targeting only the modal container, not buttons */
+    /* This targets the "Get a Wallet" modal that appears when clicking GET buttons */
+    /* We identify it by checking if it contains wallet download links/buttons without wallet-option testids */
+    [data-rk][data-rk] [role="dialog"][role="dialog"]:not(:has([data-testid*="wallet-option"])) {
+      /* Only apply if this modal doesn't have wallet-option buttons (Connect modal has those) */
+      /* Responsive sizing for Get Wallet modal - larger than Connect modal */
+      max-width: min(400px, 95vw) !important;
+      width: min(400px, 95vw) !important;
+      min-width: min(320px, 90vw) !important;
+      max-height: min(90vh, 700px) !important;
+      height: auto !important;
+      
+      /* Better padding for Get Wallet modal content */
+      padding: 20px !important;
+    }
   }
 
   /* OLD RULES REMOVED - replaced with high-specificity rules below */
