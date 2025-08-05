@@ -233,18 +233,67 @@ export default function App() {
         } catch (error) {
           console.error("❌ Failed to initialize provider via Wagmi:", error);
           
+          // Handle specific network change errors
+          if (error.message && error.message.includes("network changed")) {
+            console.log("🔄 Network change detected, retrying connection...");
+            // Wait a bit for network to stabilize
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            try {
+              const retryWalletClient = await getWalletClient({ config });
+              if (retryWalletClient) {
+                const retryEthersProvider = new ethers.BrowserProvider(retryWalletClient);
+                const retryEthersSigner = await walletClientToSigner(retryWalletClient);
+                
+                setProvider(retryEthersProvider);
+                setSigner(retryEthersSigner);
+                console.log("✅ Network change handled successfully");
+                addToast("Wallet reconnected after network change", "success");
+                return;
+              }
+            } catch (retryError) {
+              console.error("❌ Retry after network change failed:", retryError);
+            }
+          }
+          
           // Fallback to window.ethereum for backwards compatibility
           console.log("🔄 Falling back to window.ethereum provider...");
           try {
             if (window.ethereum) {
               const browserProvider = new ethers.BrowserProvider(window.ethereum);
-              const ethersSigner = await browserProvider.getSigner();
               
-              setProvider(browserProvider);
-              setSigner(ethersSigner);
-              
-              console.log("✅ Fallback provider initialized successfully");
-              addToast("Wallet connected successfully!", "success");
+              // Add network verification before getting signer
+              try {
+                const network = await browserProvider.getNetwork();
+                console.log("🌐 Current network:", network.chainId);
+                
+                // Ensure we're on BSC network (chainId 56)
+                if (network.chainId !== 56n) {
+                  console.log("⚠️ Not on BSC network, requesting switch...");
+                  try {
+                    await window.ethereum.request({
+                      method: 'wallet_switchEthereumChain',
+                      params: [{ chainId: '0x38' }], // BSC chainId in hex
+                    });
+                  } catch (switchError) {
+                    console.error("Failed to switch network:", switchError);
+                  }
+                }
+                
+                const ethersSigner = await browserProvider.getSigner();
+                
+                setProvider(browserProvider);
+                setSigner(ethersSigner);
+                
+                console.log("✅ Fallback provider initialized successfully");
+                addToast("Wallet connected successfully!", "success");
+              } catch (networkError) {
+                console.error("❌ Network verification failed:", networkError);
+                // Still try to set provider even if network check fails
+                const ethersSigner = await browserProvider.getSigner();
+                setProvider(browserProvider);
+                setSigner(ethersSigner);
+                addToast("Wallet connected (network may need verification)", "warning");
+              }
             } else {
               throw new Error("No ethereum provider available");
             }
@@ -296,79 +345,43 @@ export default function App() {
   // Note: RainbowKit handles all wallet events, no manual listeners needed
   // This prevents double connections and event conflicts
 
-  // Aggressive BSC network switching - triggers immediately when wallet connects
+  // BSC network switching - only when user is on wrong network after connection
   useEffect(() => {
-    const aggressiveBSCSwitch = async () => {
+    const smartBSCSwitch = async () => {
       // Only proceed if wallet is connected and switchChain is available
       if (!isConnected || !walletAddress || !switchChain) return;
       
       // Get current chain ID - if undefined, wait a bit more
       if (!chainId) {
-        console.log('Chain ID not yet available, retrying...');
-        setTimeout(aggressiveBSCSwitch, 500);
+        console.log('Chain ID not yet available, waiting...');
         return;
       }
 
       // If already on BSC mainnet, no action needed
       if (chainId === bsc.id) {
-        console.log(`✅ Already on BSC mainnet (Chain ID: ${chainId})`);
+        console.log(`✅ Connected to BSC mainnet (Chain ID: ${chainId})`);
         return;
       }
 
-      // Log current network and initiate switch
-      console.log(`🔄 Wrong network detected! Current: ${chainId}, Required: ${bsc.id} (BSC Mainnet)`);
-      console.log('🚀 Immediately switching to BSC mainnet...');
+      // Only switch if user ended up on wrong network (gentle approach)
+      console.log(`ℹ️ Connected to network ${chainId}, BSC mainnet available if needed`);
       
-      try {
-        await switchChain({ chainId: bsc.id });
-        console.log('✅ Successfully switched to BSC mainnet!');
-        
-        // Show success notification
-        if (typeof addToast === 'function') {
-          addToast('Successfully connected to BSC mainnet for USDT BEP-20!', 'success');
-        }
-        
-      } catch (error) {
-        console.error('❌ Failed to switch to BSC mainnet:', error);
-        
-        // Immediate retry (don't wait)
-        console.log('🔄 Immediate retry of network switch...');
-        try {
-          await switchChain({ chainId: bsc.id });
-          console.log('✅ Successfully switched to BSC mainnet on immediate retry!');
-          if (typeof addToast === 'function') {
-            addToast('Connected to BSC mainnet for USDT BEP-20!', 'success');
-          }
-        } catch (immediateRetryError) {
-          console.error('❌ Immediate retry failed:', immediateRetryError);
-          
-          // Final retry after 1 second
-          setTimeout(async () => {
-            try {
-              await switchChain({ chainId: bsc.id });
-              console.log('✅ Successfully switched to BSC mainnet on final retry!');
-            } catch (finalRetryError) {
-              console.error('❌ All retries failed:', finalRetryError);
-              // Show strong warning to user
-              if (typeof addToast === 'function') {
-                addToast('⚠️ CRITICAL: Must connect to BSC (Binance Smart Chain) for USDT BEP-20 operations', 'error');
-              }
-            }
-          }, 1000);
-        }
+      // Show info toast instead of forcing switch
+      if (typeof addToast === 'function') {
+        addToast('💡 For full functionality, please switch to BSC (Binance Smart Chain) network', 'info');
       }
     };
 
-    // Trigger immediately when wallet connects or chain changes
-    if (isConnected && walletAddress) {
-      aggressiveBSCSwitch();
+    // Check network after wallet connects
+    if (isConnected && walletAddress && chainId) {
+      smartBSCSwitch();
     }
   }, [isConnected, walletAddress, chainId, switchChain]);
 
-  // Additional safety check - prevent app usage if not on BSC
+  // Display network warning if not on BSC (but don't force)
   useEffect(() => {
     if (isConnected && walletAddress && chainId && chainId !== bsc.id) {
-      console.warn(`⚠️ App functionality disabled - not on BSC mainnet. Current chain: ${chainId}`);
+      console.log(`ℹ️ App optimized for BSC mainnet. Current chain: ${chainId}`);
     }
   }, [isConnected, walletAddress, chainId]);
 

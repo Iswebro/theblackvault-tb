@@ -20,7 +20,7 @@ import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 // Black Vault WalletConnect Project ID
 const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'ec1a030594f38292648794d4587912f4';
 
-// Custom connector configuration to prevent double connections and ensure BSC-first
+// Custom connector configuration with explicit BSC defaults
 const connectors = connectorsForWallets(
   [
     {
@@ -36,7 +36,7 @@ const connectors = connectorsForWallets(
   {
     appName: 'Black Vault',
     projectId: WALLETCONNECT_PROJECT_ID,
-    // Force all wallets to connect to BSC only
+    // Ensure BSC is the only available chain
     chains: [bsc],
   }
 );
@@ -48,6 +48,7 @@ const config = getDefaultConfig({
   initialChain: bsc, // Force BSC as default and only chain
   ssr: true,
   connectors,
+  // Remove WalletConnect parameters that might be causing conflicts
 });
 
 const queryClient = new QueryClient();
