@@ -2046,62 +2046,24 @@ div[data-rk] button[type="button"]:focus-visible {
   border-color: #606060 !important;
 }
 
-/* Wallet option styling in modal */
-[data-rk] [data-testid*="wallet-option"],
-[data-rk] [data-testid*="rk-wallet-option"] {
-  background: #2a2a2a !important;
-  border: 1px solid #404040 !important;
-  color: #ffffff !important;
-}
+/* Global wallet option styling - REMOVED TO AVOID MOBILE CONFLICTS */
+/* These were causing conflicts with mobile-specific styling */
 
-[data-rk] [data-testid*="wallet-option"]:hover,
-[data-rk] [data-testid*="rk-wallet-option"]:hover {
-  background: #3a3a3a !important;
-  border-color: #606060 !important;
-}
-
-/* Wallet icons sizing in modal */
-[data-rk] [data-testid*="wallet-option"] img,
-[data-rk] [data-testid*="rk-wallet-option"] img,
-[data-rk] [role="dialog"] img[alt*="wallet"],
-[data-rk] [role="dialog"] img[src*="wallet"],
-[data-rk] [role="dialog"] img[alt*="Wallet"],
-[data-rk] [role="dialog"] img[alt*="Connect"],
-[data-rk] img[width="28"],
-[data-rk] img[width="32"],
-[data-rk] img[width="48"] {
-  width: 24px !important;
-  height: 24px !important;
-  border-radius: 6px !important;
-  object-fit: contain !important;
-}
-
-/* Wallet option container sizing */
-[data-rk] [data-testid*="wallet-option"],
-[data-rk] [data-testid*="rk-wallet-option"] {
-  background: #2a2a2a !important;
-  border: 1px solid #404040 !important;
-  color: #ffffff !important;
-  padding: 12px !important;
-  min-height: 60px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
-  gap: 12px !important;
-}
+/* Wallet icons sizing in modal - REMOVED TO AVOID MOBILE CONFLICTS */
+/* These were overriding mobile-specific icon sizes */
 
 /* Recent button and action buttons in RainbowKit modal */
 [data-rk] button[color="accentColor"],
 [data-rk] button[data-testid*="recent"] {
-  background: #c0c0c0 !important; /* Platinum color */
-  color: #1a1a1a !important;
-  border: 1px solid #c0c0c0 !important;
+  background: #2a2a2a !important; /* Dark theme to match normal buttons */
+  color: #ffffff !important;
+  border: 1px solid #404040 !important;
 }
 
 [data-rk] button[color="accentColor"]:hover,
 [data-rk] button[data-testid*="recent"]:hover {
-  background: #d4d4d4 !important; /* Lighter platinum on hover */
-  border-color: #d4d4d4 !important;
+  background: #3a3a3a !important; /* Darker on hover */
+  border-color: #606060 !important;
 }
 
 /* Fix close button visibility in RainbowKit modal */
@@ -2301,143 +2263,303 @@ div[data-rk] button[type="button"]:focus-visible {
     flex-shrink: 0 !important;
   }
 
-  /* Force RainbowKit mobile modal to look identical to desktop but mobile-optimized */
+  /* ULTRA HIGH SPECIFICITY - FORCE DARK STYLING */
   
-  /* Override modal container to match desktop layout */
-  [data-rk] [role="dialog"] {
-    max-width: 85vw !important;
-    width: 320px !important;
-    border-radius: 12px !important;
-    background: #1a1a1a !important;
-    border: 1px solid #404040 !important;
-    padding: 16px !important;
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    z-index: 9999 !important;
-    max-height: 75vh !important;
-    overflow-y: auto !important;
+  /* Target RainbowKit modal with maximum specificity - MOBILE OPTIMIZED */
+  @media (max-width: 768px) {
+    [data-rk][data-rk] [role="dialog"][role="dialog"] {
+      background: #1a1a1a !important;
+      background-color: #1a1a1a !important;
+      border: 1px solid #333333 !important;
+      
+      /* RESPONSIVE SIZING - adapts to all screen sizes and zoom levels */
+      max-width: min(340px, 90vw) !important;
+      width: min(340px, 90vw) !important;
+      min-width: min(280px, 85vw) !important;
+      max-height: min(85vh, 600px) !important;
+      height: auto !important;
+      
+      /* PERFECT CENTERING - works at any zoom level */
+      position: fixed !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      
+      /* RESPONSIVE STYLING */
+      border-radius: 12px !important;
+      padding: 16px !important;
+      z-index: 9999 !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+      
+      /* Ensure proper scrolling on high zoom */
+      scrollbar-width: thin !important;
+      scrollbar-color: #666666 #2a2a2a !important;
+    }
+
+    /* FORCE every div in modal to be transparent */
+    [data-rk][data-rk] [role="dialog"][role="dialog"] div {
+      background: transparent !important;
+      background-color: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+
+    /* EXCEPT wallet options - make them dark and properly sized for mobile */
+    [data-rk][data-rk] [role="dialog"][role="dialog"] [data-testid*="wallet-option"],
+    [data-rk][data-rk] [role="dialog"][role="dialog"] [data-testid*="rk-wallet-option"],
+    [data-rk][data-rk] [role="dialog"][role="dialog"] button[data-testid*="wallet-option"],
+    [data-rk][data-rk] [role="dialog"][role="dialog"] button[data-testid*="rk-wallet-option"] {
+      background: #2a2a2a !important;
+      background-color: #2a2a2a !important;
+      border: 1px solid #444444 !important;
+      color: #ffffff !important;
+      
+      /* MOBILE OPTIMIZED SIZING */
+      padding: 12px 14px !important;
+      height: 48px !important;
+      min-height: 48px !important;
+      max-height: 48px !important;
+      width: 100% !important;
+      
+      /* LAYOUT - HORIZONTAL SIDE BY SIDE LAYOUT WITH PERFECT CENTERING */
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      gap: 20px !important;
+      border-radius: 8px !important;
+      margin: 0 0 6px 0 !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+      transition: all 0.2s ease !important;
+      cursor: pointer !important;
+      
+      /* REMOVE STRICT CONTAINER - ALLOW FULL TEXT */
+      overflow: visible !important;
+      text-overflow: unset !important;
+      white-space: normal !important;
+      position: relative !important;
+      box-sizing: border-box !important;
+    }
+
+    /* Hover states for wallet options */
+    [data-rk][data-rk] [role="dialog"][role="dialog"] [data-testid*="wallet-option"]:hover,
+    [data-rk][data-rk] [role="dialog"][role="dialog"] [data-testid*="rk-wallet-option"]:hover {
+      background: #3a3a3a !important;
+      background-color: #3a3a3a !important;
+      border-color: #555555 !important;
+      transform: translateY(-1px) !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    /* Wallet option icons - FORCE VISIBILITY WITH MAXIMUM SPECIFICITY AND PERFECT CENTERING */
+    [data-rk][data-rk] [role="dialog"][role="dialog"] [data-testid*="wallet-option"] img,
+    [data-rk][data-rk] [role="dialog"][role="dialog"] [data-testid*="rk-wallet-option"] img {
+      width: 24px !important;
+      height: 24px !important;
+      min-width: 24px !important;
+      min-height: 24px !important;
+      max-width: 24px !important;
+      max-height: 24px !important;
+      border-radius: 4px !important;
+      flex-shrink: 0 !important;
+      object-fit: contain !important;
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      position: relative !important;
+      z-index: 999 !important;
+      background: transparent !important;
+      border: none !important;
+      /* PERFECT VERTICAL CENTERING - using top positioning */
+      position: relative !important;
+      top: 50% !important;
+      transform: translateY(-50%) !important;
+      margin: 0 !important;
+      flex-basis: 24px !important;
+    }
+
+    /* Text in wallet options - FORCE VISIBILITY AND FULL TEXT DISPLAY */
+    [data-rk][data-rk] [role="dialog"][role="dialog"] [data-testid*="wallet-option"] div,
+    [data-rk][data-rk] [role="dialog"][role="dialog"] [data-testid*="rk-wallet-option"] div,
+    [data-rk][data-rk] [role="dialog"][role="dialog"] [data-testid*="wallet-option"] span,
+    [data-rk][data-rk] [role="dialog"][role="dialog"] [data-testid*="rk-wallet-option"] span,
+    [data-rk][data-rk] [role="dialog"][role="dialog"] [data-testid*="wallet-option"] p,
+    [data-rk][data-rk] [role="dialog"][role="dialog"] [data-testid*="rk-wallet-option"] p {
+      font-size: 10px !important;
+      font-weight: 500 !important;
+      color: #ffffff !important;
+      background: transparent !important;
+      display: inline-block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      text-align: left !important;
+      white-space: normal !important;
+      overflow: visible !important;
+      text-overflow: unset !important;
+      max-width: none !important;
+      width: auto !important;
+      flex: 1 !important;
+      margin: 0 !important;
+      padding: 0 0 0 12px !important;
+      line-height: 1.3 !important;
+      vertical-align: middle !important;
+    }
+
+    /* FIX OTHER WALLETS MODAL - the broken grey button modal */
+    [data-rk][data-rk] [role="dialog"][role="dialog"] h3,
+    [data-rk][data-rk] [role="dialog"][role="dialog"] h4 {
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      color: #ffffff !important;
+      text-align: center !important;
+      margin: 0 0 12px 0 !important;
+      background: transparent !important;
+    }
+
+    /* Fix broken wallet list in other wallets modal */
+    [data-rk][data-rk] [role="dialog"][role="dialog"] div[style*="gap"] {
+      gap: 8px !important;
+    }
+
+    /* Fix "GET" buttons in other wallets modal */
+    [data-rk][data-rk] [role="dialog"][role="dialog"] button:not([data-testid]):not([aria-label]) {
+      background: #2a2a2a !important;
+      color: #ffffff !important;
+      border: 1px solid #404040 !important;
+      border-radius: 6px !important;
+      padding: 6px 12px !important;
+      font-size: 10px !important;
+      font-weight: 600 !important;
+      min-width: 40px !important;
+      height: auto !important;
+      flex-shrink: 0 !important;
+    }
+
+    /* Fix other wallets modal text content */
+    [data-rk][data-rk] [role="dialog"][role="dialog"] p:not([data-testid]) {
+      font-size: 12px !important;
+      color: #a0a0a0 !important;
+      text-align: center !important;
+      line-height: 1.4 !important;
+      margin: 12px 0 !important;
+      background: transparent !important;
+    }
+
+    /* FORCE CLOSE BUTTON TO BE VISIBLE AND PROPERLY POSITIONED */
+    [data-rk][data-rk] [role="dialog"][role="dialog"] button[aria-label*="Close"],
+    [data-rk][data-rk] [role="dialog"][role="dialog"] button[aria-label*="close"] {
+      background: #2a2a2a !important;
+      color: #ffffff !important;
+      border: 1px solid #606060 !important;
+      border-radius: 6px !important;
+      padding: 6px !important;
+      min-width: 28px !important;
+      min-height: 28px !important;
+      position: absolute !important;
+      top: 8px !important;
+      right: 8px !important;
+      z-index: 10001 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-size: 16px !important;
+      margin: 0 !important;
+    }
+
+    /* Add header spacing for modal content */
+    [data-rk][data-rk] [role="dialog"][role="dialog"] > div:first-child,
+    [data-rk][data-rk] [role="dialog"][role="dialog"] > h1,
+    [data-rk][data-rk] [role="dialog"][role="dialog"] > h2 {
+      margin-top: 28px !important;
+      padding-top: 8px !important;
+    }
+
+    /* Custom scrollbar styling for better visibility */
+    [data-rk][data-rk] [role="dialog"][role="dialog"]::-webkit-scrollbar {
+      width: 6px !important;
+    }
+
+    [data-rk][data-rk] [role="dialog"][role="dialog"]::-webkit-scrollbar-track {
+      background: #1a1a1a !important;
+      border-radius: 3px !important;
+    }
+
+    [data-rk][data-rk] [role="dialog"][role="dialog"]::-webkit-scrollbar-thumb {
+      background: #666666 !important;
+      border-radius: 3px !important;
+    }
+
+    [data-rk][data-rk] [role="dialog"][role="dialog"]::-webkit-scrollbar-thumb:hover {
+      background: #888888 !important;
+    }
   }
 
-  /* Modal content container */
-  [data-rk] [role="dialog"] > div {
-    background: transparent !important;
-  }
+  /* OLD RULES REMOVED - replaced with high-specificity rules below */
 
-  /* Force ALL container elements to use vertical layout - eliminate grid squares */
-  [data-rk] [role="dialog"] div[style*="display: grid"],
-  [data-rk] [role="dialog"] div[style*="grid-template-columns"],
-  [data-rk] [role="dialog"] div[style*="grid"],
-  [data-rk] [role="dialog"] > div > div > div:has([data-testid*="wallet-option"]),
-  [data-rk] [role="dialog"] div:has([data-testid*="wallet-option"]),
-  [data-rk] [role="dialog"] > div > div,
-  [data-rk] [role="dialog"] > div > div > div,
-  /* Target common RainbowKit container classes */
-  [data-rk] div[class*="iekbcc0"],
-  [data-rk] div[class*="ju367v0"],
-  [data-rk] div[class*="g5kl0l0"] {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 4px !important;
-    grid-template-columns: unset !important;
-    grid-template-rows: unset !important;
-    grid-gap: unset !important;
-    grid: none !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    box-sizing: border-box !important;
-    /* Override any inline styles */
-    grid-template-columns: 1fr !important;
-    /* Remove any background that creates gray boxes */
-    background: transparent !important;
-    border: none !important;
-    border-radius: 0 !important;
-  }
-
-  /* Force override inline grid styles */
-  [data-rk] [role="dialog"] div[style*="grid-template-columns: repeat(2"] {
-    display: flex !important;
-    flex-direction: column !important;
-    grid-template-columns: 1fr !important;
-    background: transparent !important;
-  }
-  
-  [data-rk] [role="dialog"] div[style*="grid-template-columns: repeat(3"] {
-    display: flex !important;
-    flex-direction: column !important;
-    grid-template-columns: 1fr !important;
-    background: transparent !important;
-  }
-
-  /* Target any div that wraps wallet options and remove their styling */
-  [data-rk] [role="dialog"] div:has([data-testid*="wallet-option"]) {
-    background: transparent !important;
-    border: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    min-height: auto !important;
-    height: auto !important;
-  }
-
-  /* ULTRA AGGRESSIVE: Target any large containers in the modal */
-  [data-rk] [role="dialog"] div[style*="height"],
-  [data-rk] [role="dialog"] div[style*="min-height"] {
-    min-height: auto !important;
-    height: auto !important;
-    max-height: 50px !important;
-  }
-
-  /* Make sure only actual wallet option buttons have proper height */
-  [data-rk] [data-testid*="wallet-option"],
-  [data-rk] [data-testid*="rk-wallet-option"] {
-    min-height: 48px !important;
-    max-height: 48px !important;
-    height: 48px !important;
-  }
-
-  /* Mobile wallet options - force exact desktop rectangular layout */
+  /* WALLET OPTIONS - EXACT DESKTOP STYLING */
   [data-rk] [data-testid*="wallet-option"],
   [data-rk] [data-testid*="rk-wallet-option"],
   [data-rk] button[data-testid*="wallet-option"],
   [data-rk] button[data-testid*="rk-wallet-option"] {
+    /* EXACT desktop colors - dark with subtle border */
     background: #2a2a2a !important;
-    border: 1px solid #404040 !important;
+    background-color: #2a2a2a !important;
+    border: 1px solid #444444 !important;
     color: #ffffff !important;
-    padding: 8px 12px !important;
-    min-height: 48px !important;
-    max-height: 48px !important;
-    height: 48px !important;
+    
+    /* EXACT desktop dimensions */
+    padding: 14px 16px !important;
+    min-height: 56px !important;
+    max-height: 56px !important;
+    height: 56px !important;
     width: 100% !important;
+    
+    /* EXACT desktop layout */
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
     justify-content: flex-start !important;
-    gap: 12px !important;
-    border-radius: 8px !important;
-    margin: 0 0 4px 0 !important;
+    gap: 20px !important;
+    
+    /* EXACT desktop styling */
+    border-radius: 12px !important;
+    margin: 0 0 8px 0 !important;
     transition: all 0.2s ease !important;
     cursor: pointer !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
     position: relative !important;
     z-index: 1 !important;
-    /* Force override any grid positioning */
+    
+    /* Desktop shadow */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+    
+    /* Force override any inline styles */
     grid-column: unset !important;
     grid-row: unset !important;
     grid-area: unset !important;
-    /* Force normal flow layout */
     float: none !important;
     clear: both !important;
   }
 
-  /* AGGRESSIVE: Force all child elements of wallet options to be inline */
-  [data-rk] [data-testid*="wallet-option"] *,
+  /* HOVER STATES - EXACT desktop match */
+  [data-rk] [data-testid*="wallet-option"]:hover,
+  [data-rk] [data-testid*="rk-wallet-option"]:hover {
+    background: #3a3a3a !important;
+    background-color: #3a3a3a !important;
+    border-color: #555555 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+  }
+
+  /* AGGRESSIVE: Force all child elements of wallet options to be inline - REMOVE */
+  /* [data-rk] [data-testid*="wallet-option"] *,
   [data-rk] [data-testid*="rk-wallet-option"] * {
     display: inline-flex !important;
     align-items: center !important;
-  }
+  } */
 
   /* But keep the main container as flex */
   [data-rk] [data-testid*="wallet-option"],
@@ -2445,16 +2567,7 @@ div[data-rk] button[type="button"]:focus-visible {
     display: flex !important;
   }
 
-  /* Mobile wallet option hover states - match desktop */
-  [data-rk] [data-testid*="wallet-option"]:hover,
-  [data-rk] [data-testid*="rk-wallet-option"]:hover {
-    background: #3a3a3a !important;
-    border-color: #606060 !important;
-    transform: translateY(-1px) !important;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15) !important;
-  }
-
-  /* Mobile wallet icons - match desktop size exactly */
+  /* WALLET ICONS - EXACT desktop size and styling */
   [data-rk] [data-testid*="wallet-option"] img,
   [data-rk] [data-testid*="rk-wallet-option"] img,
   [data-rk] [role="dialog"] img[alt*="wallet"],
@@ -2464,64 +2577,99 @@ div[data-rk] button[type="button"]:focus-visible {
   [data-rk] img[width="28"],
   [data-rk] img[width="32"],
   [data-rk] img[width="48"] {
-    width: 24px !important;
-    height: 24px !important;
-    border-radius: 6px !important;
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 8px !important;
     object-fit: contain !important;
     flex-shrink: 0 !important;
   }
 
-  /* Wallet text styling to match desktop exactly */
+  /* WALLET TEXT - EXACT desktop typography */
   [data-rk] [data-testid*="wallet-option"] div,
   [data-rk] [data-testid*="rk-wallet-option"] div {
-    font-size: 14px !important;
-    font-weight: 600 !important;
+    font-size: 16px !important;
+    font-weight: 500 !important;
     color: #ffffff !important;
-    line-height: 1.2 !important;
+    line-height: 1.3 !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
   }
 
-  /* Recent label styling - match desktop */
+  /* SECTION HEADERS - EXACT desktop styling */
+  [data-rk] [role="dialog"] p,
+  [data-rk] [role="dialog"] span:not([data-testid]) {
+    font-size: 12px !important;
+    color: #999999 !important;
+    font-weight: 500 !important;
+    margin: 16px 0 8px 0 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.8px !important;
+    background: transparent !important;
+  }
+
+  /* MODAL TITLE - EXACT desktop styling */
+  [data-rk] [role="dialog"] h1,
+  [data-rk] [role="dialog"] h2 {
+    font-size: 20px !important;
+    font-weight: 600 !important;
+    color: #ffffff !important;
+    margin-bottom: 20px !important;
+    text-align: center !important;
+    background: transparent !important;
+  }
+
+  /* Wallet text styling - EXACT desktop match */
+  [data-rk] [data-testid*="wallet-option"] div,
+  [data-rk] [data-testid*="rk-wallet-option"] div {
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    color: #ffffff !important;
+    line-height: 1.3 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  /* Recent label styling - EXACT desktop match */
   [data-rk] [data-testid*="wallet-option"] span,
   [data-rk] [data-testid*="rk-wallet-option"] span {
-    font-size: 11px !important;
-    color: #888888 !important;
+    font-size: 12px !important;
+    color: #999999 !important;
     font-weight: 400 !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
   }
 
-  /* Modal header and title */
+  /* Modal header - EXACT desktop match */
   [data-rk] [role="dialog"] h1,
   [data-rk] [role="dialog"] h2 {
-    font-size: 16px !important;
-    font-weight: 700 !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
     color: #ffffff !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 16px !important;
     text-align: center !important;
   }
 
-  /* Section headers (Installed, BSC Wallets) */
+  /* Section headers - EXACT desktop match */
   [data-rk] [role="dialog"] p,
   [data-rk] [role="dialog"] span {
-    font-size: 11px !important;
-    color: #888888 !important;
+    font-size: 12px !important;
+    color: #999999 !important;
     font-weight: 500 !important;
-    margin: 8px 0 4px 0 !important;
+    margin: 16px 0 8px 0 !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.5px !important;
+    letter-spacing: 0.8px !important;
   }
 
   /* Bottom action buttons to match desktop */
   [data-rk] [role="dialog"] button[color="accentColor"],
   [data-rk] [role="dialog"] button:not([aria-label]),
   [data-rk] [role="dialog"] div:last-child button {
-    background: #c0c0c0 !important;
-    color: #1a1a1a !important;
-    border: 1px solid #c0c0c0 !important;
+    background: #2a2a2a !important;
+    color: #ffffff !important;
+    border: 1px solid #404040 !important;
     border-radius: 6px !important;
     padding: 8px 16px !important;
     font-size: 12px !important;
@@ -2532,8 +2680,8 @@ div[data-rk] button[type="button"]:focus-visible {
 
   [data-rk] [role="dialog"] button[color="accentColor"]:hover,
   [data-rk] [role="dialog"] button:not([aria-label]):hover {
-    background: #d4d4d4 !important;
-    border-color: #d4d4d4 !important;
+    background: #3a3a3a !important;
+    border-color: #606060 !important;
     transform: translateY(-1px) !important;
   }
 
@@ -2548,8 +2696,12 @@ div[data-rk] button[type="button"]:focus-visible {
     min-width: 28px !important;
     min-height: 28px !important;
     position: absolute !important;
-    top: 12px !important;
-    right: 12px !important;
+    top: 8px !important;
+    right: 8px !important;
+    z-index: 10000 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
   [data-rk] button[aria-label*="Close"]:hover,
@@ -2776,3 +2928,6 @@ div[data-rk] button[type="button"]:focus-visible {
     font-size: 0.85rem !important;
   }
 }
+
+/* ULTRA HIGH SPECIFICITY RULES REMOVED - They were causing modal layout conflicts */
+/* The grey button styling is now handled by the regular accentColor rules above */
