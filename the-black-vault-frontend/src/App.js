@@ -12,7 +12,6 @@ import { bsc } from 'wagmi/chains';
 import { BrowserProvider } from 'ethers';
 import BlackVaultArtifact from "./contract/BlackVaultABI.json";
 import ERC20Artifact from "./contract/ERC20Abi.json";
-import BlackVaultV1Abi from "./contract/BlackVaultV1ABI.json";
 import HowItWorks from "./components/HowItWorks";
 import Leaderboard from "./components/Leaderboard";
 import ReferralsModal from "./components/ReferralsModal";
@@ -32,7 +31,6 @@ const ERC20Abi = ERC20Artifact.abi || ERC20Artifact;
 
 
 const CONTRACT_ADDRESS = config.contractAddress;
-const OLD_CONTRACT_ADDRESS = config.oldContractAddress;
 const USDT_ADDRESS = config.usdtAddress;
 const DEFAULT_REFERRER = config.defaultReferrer;
 
@@ -73,7 +71,6 @@ export default function App() {
   const [account, setAccount] = useState("");
   const [contract, setContract] = useState(null);
   const [usdtContract, setUsdtContract] = useState(null);
-  const [oldVaultContract, setOldVaultContract] = useState(null);
   const [balance, setBalance] = useState("0");
   const [usdtBalance, setUsdtBalance] = useState("0");
   // Removed: queuedBalance (no longer used in V2)
@@ -520,7 +517,6 @@ export default function App() {
       console.log("🔧 Initializing contracts...");
       console.log("CONTRACT_ADDRESS:", CONTRACT_ADDRESS);
       console.log("USDT_ADDRESS:", USDT_ADDRESS);
-      console.log("OLD_CONTRACT_ADDRESS:", OLD_CONTRACT_ADDRESS);
       
       // Always initialize contracts, but they'll only work properly on BSC mainnet
       const vault = new Contract(CONTRACT_ADDRESS, BlackVaultAbi, signer)
@@ -530,19 +526,6 @@ export default function App() {
       const usdt = new Contract(USDT_ADDRESS, ERC20Abi, signer)
       setUsdtContract(usdt)
       console.log("✅ USDT Contract initialized:", USDT_ADDRESS)
-
-      if (OLD_CONTRACT_ADDRESS && OLD_CONTRACT_ADDRESS !== "undefined") {
-        try {
-          const oldVault = new Contract(OLD_CONTRACT_ADDRESS, BlackVaultV1Abi, signer);
-          setOldVaultContract(oldVault);
-          console.log("✅ BlackVault V1 Contract initialized:", OLD_CONTRACT_ADDRESS);
-        } catch (error) {
-          console.error("❌ Failed to initialize V1 contract:", error);
-          console.log("V1 contract address value:", OLD_CONTRACT_ADDRESS);
-        }
-      } else {
-        console.warn("OLD_CONTRACT_ADDRESS is undefined. Skipping old vault contract initialization.");
-      }
 
       // Test if the main contract has the expected functions
       console.log("=== TESTING CONTRACT FUNCTIONS ===")
@@ -1516,41 +1499,6 @@ export default function App() {
      }
    }
  
-   const withdrawOldVaultRewards = async () => {
-     if (!oldVaultContract || txLoading) return
-     
-     // CRITICAL: Only allow V1 withdrawals on BSC mainnet (USDT BEP-20)
-     if (!chainId || chainId !== bsc.id) {
-       console.error(`🚫 V1 withdrawal blocked: not on BSC mainnet. Current chain: ${chainId}, required: ${bsc.id}`);
-       addToast("Please switch to BSC (Binance Smart Chain) network for V1 USDT BEP-20 withdrawals", "error");
-       
-       // Try to switch to BSC
-       if (switchChain) {
-         try {
-           await switchChain({ chainId: bsc.id });
-           addToast("Switched to BSC mainnet! Please try your V1 withdrawal again.", "success");
-         } catch (error) {
-           console.error('Failed to switch to BSC:', error);
-         }
-       }
-       return;
-     }
-     
-     setTxLoading(true)
-     try {
-       addToast("Withdrawing V1 vault rewards…", "info")
-       await oldVaultContract.withdrawRewards()
-       addToast("V1 vault rewards withdrawn!", "success")
-       await loadContractData(contract, usdtContract)
-     } catch (error) {
-       console.error("V1 vault withdraw error:", error)
-       const msg = error.message.includes("CALL_EXCEPTION") ? "No V1 rewards" : error.reason || "V1 withdrawal failed"
-       addToast(msg, error.code === 4001 ? "warning" : "error")
-     } finally {
-       setTxLoading(false)
-     }
-   }
- 
    const withdrawReferral = async () => {
      if (!contract || txLoading || Number.parseFloat(referralRewards) === 0) {
        if (!contract) addToast("Contract not initialized", "error")
@@ -1628,41 +1576,6 @@ export default function App() {
      } catch (error) {
        console.error("Referral withdraw error:", error)
        addToast(error.message || "Referral withdrawal failed", "error")
-     } finally {
-       setTxLoading(false)
-     }
-   }
- 
-   const withdrawOldReferralRewards = async () => {
-     if (!oldVaultContract || txLoading) return
-     
-     // CRITICAL: Only allow V1 referral withdrawals on BSC mainnet (USDT BEP-20)
-     if (!chainId || chainId !== bsc.id) {
-       console.error(`🚫 V1 referral withdrawal blocked: not on BSC mainnet. Current chain: ${chainId}, required: ${bsc.id}`);
-       addToast("Please switch to BSC (Binance Smart Chain) network for V1 USDT BEP-20 referral withdrawals", "error");
-       
-       // Try to switch to BSC
-       if (switchChain) {
-         try {
-           await switchChain({ chainId: bsc.id });
-           addToast("Switched to BSC mainnet! Please try your V1 referral withdrawal again.", "success");
-         } catch (error) {
-           console.error('Failed to switch to BSC:', error);
-         }
-       }
-       return;
-     }
-     
-     setTxLoading(true)
-     try {
-       addToast("Withdrawing V1 referral rewards…", "info")
-       await oldVaultContract.withdrawReferralRewards()
-       addToast("V1 referral rewards withdrawn!", "success")
-       await loadContractData(contract, usdtContract)
-     } catch (error) {
-       console.error("V1 referral withdraw error:", error)
-       const msg = error.message.includes("CALL_EXCEPTION") ? "No V1 referral rewards" : error.reason || "V1 referral withdrawal failed"
-       addToast(msg, error.code === 4001 ? "warning" : "error")
      } finally {
        setTxLoading(false)
      }
@@ -1977,13 +1890,6 @@ export default function App() {
                 {txLoading ? "Processing..." : "Withdraw Rewards"}
               </button>
             </div>
-            <button
-              className="vault-button premium-button warning"
-              onClick={withdrawOldVaultRewards}
-              disabled={!oldVaultContract || txLoading}
-            >
-              {txLoading ? "Processing..." : "Withdraw V1 Vault Rewards"}
-            </button>
           </div>
 
           <div className="vault-card premium-card">
@@ -2037,13 +1943,6 @@ export default function App() {
 
             <button className="vault-button premium-button purple" onClick={withdrawReferral} disabled={txLoading}>
               {txLoading ? "Processing..." : "Withdraw Referral"}
-            </button>
-            <button
-              className="vault-button premium-button warning"
-              onClick={withdrawOldReferralRewards}
-              disabled={!oldVaultContract || txLoading}
-            >
-              {txLoading ? "Processing..." : "Withdraw V1 Referral Rewards"}
             </button>
           </div>
 
