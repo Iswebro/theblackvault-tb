@@ -294,7 +294,7 @@ const WeeklyChallenge = ({ walletAddress, vaultContract, isConnected }) => {
         {/* User Progress - Now First */}
         <div style={{ minWidth: 0 }}>
           <h3 style={{ color: '#ffd700', marginBottom: '1rem', fontSize: '1.25rem' }}>
-            {currentWeek.isPreLaunch ? '� Get Ready!' : '�📊 Your Progress'}
+            {currentWeek.isPreLaunch ? '🏁 Get Ready!' : '📊 Your Progress'}
           </h3>
           <div style={{
             background: 'rgba(255, 255, 255, 0.05)',
