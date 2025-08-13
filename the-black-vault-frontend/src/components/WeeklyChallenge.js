@@ -251,25 +251,36 @@ const WeeklyChallenge = ({ walletAddress, vaultContract, isConnected }) => {
           </div>
         )}
 
-        {/* Debug button - remove this later */}
+        {/* View Announcement button */}
         {isConnected && (
           <div style={{ marginTop: '1rem' }}>
             <button 
               onClick={() => {
-                console.log('Test modal button clicked');
+                console.log('View announcement button clicked');
                 setShowWelcomeModal(true);
               }}
               style={{
                 padding: '0.5rem 1rem',
-                background: '#ff6b6b',
+                background: 'linear-gradient(45deg, #4a90e2, #357abd)',
                 color: 'white',
                 border: 'none',
-                borderRadius: '4px',
+                borderRadius: '8px',
                 cursor: 'pointer',
-                fontSize: '0.8rem'
+                fontSize: '0.8rem',
+                fontWeight: '500',
+                transition: 'all 0.2s',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.transform = 'translateY(-1px)';
+                e.target.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
               }}
             >
-              Test Modal (Debug)
+              📢 View Announcement
             </button>
           </div>
         )}
