@@ -21,6 +21,7 @@ import ProjectIntroduction from "./components/ProjectIntroduction";
 import SmartDeFiInsights from "./components/SmartDeFiInsights";
 import Footer from "./components/Footer";
 import TrustWalletHelper from "./components/TrustWalletHelper";
+import WeeklyChallenge from "./components/WeeklyChallenge";
 import { config } from "./lib/config.js";
 import securityUtils from "./utils/security.js";
 import { walletClientToSigner, publicClientToProvider } from "./utils/ethersAdapter.js";
@@ -1901,14 +1902,6 @@ export default function App() {
               <span className="reward-amount purple">{formatAmount(referralRewards)} USDT</span>
               <span className="reward-label">From referrals</span>
             </div>
-            <div className="referral-stats">
-              <span className="referral-label">Your Referrals:</span>
-              <span className="referral-value">
-                {account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase() 
-                  ? defaultReferrerStats.uniqueReferrals 
-                  : uniqueReferralCount}
-              </span>
-            </div>
             
             {account?.toLowerCase() === DEFAULT_REFERRER?.toLowerCase() && (
               <div style={{ marginTop: '12px', padding: '8px', background: '#1a2332', borderRadius: '6px', border: '1px solid #4a9eff' }}>
@@ -1946,11 +1939,12 @@ export default function App() {
             </button>
           </div>
 
-          <div className="vault-card premium-card">
-            <div className="text-center p-4 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black rounded-lg mb-4">
-              🎉 Weekly USDT Giveaway for Top 3 referrers is coming soon! Stay Tuned.
-            </div>
-          </div>
+          {/* Weekly Referral Challenge */}
+          <WeeklyChallenge 
+            walletAddress={walletAddress}
+            vaultContract={contract}
+            isConnected={isConnected}
+          />
 
           <Leaderboard />
 
