@@ -125,7 +125,7 @@ export default function App() {
       const contractStats = await readOnlyContract.getContractStats();
       
       const stats = {
-        totalDeposited: Math.floor(parseFloat(formatEther(contractStats[0]))).toString(), // Better integer formatting
+        totalDeposited: Math.floor(parseFloat(formatEther(contractStats[5]))).toString(), // Use actual contract balance (index 5) instead of cumulative deposits (index 0)
         totalUsers: contractStats[4].toString(),
         totalRewardsWithdrawn: formatEther(contractStats[1]),
         totalActiveAmount: formatEther(contractStats[3])
@@ -134,7 +134,8 @@ export default function App() {
       setGlobalStats(stats);
       console.log("🌍 Global stats fetched:", stats);
       console.log("🌍 Raw contract data:", {
-        totalDeposited: formatEther(contractStats[0]) + " USDT",
+        cumulativeTotalDeposited: formatEther(contractStats[0]) + " USDT", // Historical total
+        currentContractBalance: formatEther(contractStats[5]) + " USDT", // Actual TVL
         totalUsers: contractStats[4].toString() + " users",
         totalRewardsWithdrawn: formatEther(contractStats[1]) + " USDT",
         totalActiveAmount: formatEther(contractStats[3]) + " USDT"
@@ -143,10 +144,10 @@ export default function App() {
       console.log("Could not fetch global stats:", error.message);
       // Set fallback stats (should be updated based on actual contract state)
       setGlobalStats({
-        totalDeposited: "2000+", // Updated to reflect current project value
+        totalDeposited: "6500+", // Updated to reflect current contract balance (~6.5k USDT)
         totalUsers: "10+",
         totalRewardsWithdrawn: "50+",
-        totalActiveAmount: "1900+"
+        totalActiveAmount: "6000+"
       });
     }
   };
