@@ -132,8 +132,54 @@ const WeeklyChallenge = ({ walletAddress, vaultContract, isConnected }) => {
           return;
         }
         
-        // In real implementation, this would fetch actual user data from your backend/contract
-        // For now, showing empty state until real data is available
+        // Fetch actual leaderboard data from Redis via API
+        const response = await fetch(`/api/leaderboard/weekly?week=${currentWeek.index}`);
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          const { leaderboard, weekIndex, totalEntries } = data.data;
+          
+          // Set leaderboard data
+          setLeaderboardData(leaderboard || []);
+          
+          // Find user's stats if wallet is connected
+          let userPosition = 0;
+          let userReferrals = 0;
+          let userEarnings = 0;
+          let isParticipating = false;
+          
+          if (isConnected && walletAddress && leaderboard) {
+            const userEntry = leaderboard.find(entry => 
+              entry.address && entry.address.toLowerCase() === walletAddress.toLowerCase()
+            );
+            
+            if (userEntry) {
+              userPosition = userEntry.rank || 0;
+              userReferrals = userEntry.referralCount || 0;
+              userEarnings = userEntry.totalRewards || 0;
+              isParticipating = true;
+            }
+          }
+          
+          setUserStats({
+            position: userPosition,
+            weeklyEarnings: userEarnings,
+            totalReferrals: userReferrals,
+            isParticipating: isParticipating
+          });
+        } else {
+          // API failed or no data, show empty state
+          setLeaderboardData([]);
+          setUserStats({
+            position: 0,
+            weeklyEarnings: 0,
+            totalReferrals: 0,
+            isParticipating: false
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching challenge data:', error);
+        // Show empty state on error
         setLeaderboardData([]);
         setUserStats({
           position: 0,
@@ -141,8 +187,6 @@ const WeeklyChallenge = ({ walletAddress, vaultContract, isConnected }) => {
           totalReferrals: 0,
           isParticipating: false
         });
-      } catch (error) {
-        console.error('Error fetching challenge data:', error);
       } finally {
         setIsLoading(false);
       }
