@@ -67,7 +67,7 @@ const BlackVaultABI = [
 // Configuration
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://bsc-dataseed.binance.org/"
-const LAUNCH_TIMESTAMP = 1751500800 // 7am Brisbane time 3 July 2025
+const PROJECT_LAUNCH_TIMESTAMP = 1751490000 // July 3, 2025 07:00 AEST - Original Project Launch (for general leaderboards)
 const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
 
 // Adjusted constants for chunking and delay
@@ -83,14 +83,14 @@ const blackVaultContract = new ethers.Contract(CONTRACT_ADDRESS, BlackVaultABI, 
  */
 function getCurrentWeekIndex() {
   const nowTs = Math.floor(Date.now() / 1000)
-  return Math.floor((nowTs - LAUNCH_TIMESTAMP) / WEEK_DURATION)
+  return Math.floor((nowTs - PROJECT_LAUNCH_TIMESTAMP) / WEEK_DURATION)
 }
 
 /**
  * Get week start and end timestamps
  */
 function getWeekBounds(weekIndex) {
-  const weekStart = LAUNCH_TIMESTAMP + weekIndex * WEEK_DURATION
+  const weekStart = PROJECT_LAUNCH_TIMESTAMP + weekIndex * WEEK_DURATION
   const weekEnd = weekStart + WEEK_DURATION
   return { weekStart, weekEnd }
 }

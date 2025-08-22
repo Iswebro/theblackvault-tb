@@ -7,10 +7,10 @@ const redis = new Redis({
 
 // Helper to get current week index
 function getCurrentWeekIndex() {
-  const LAUNCH_TIMESTAMP = 1751490000; // 3 July 2025 07:00 AEST (UTC+10)
+  const PROJECT_LAUNCH_TIMESTAMP = 1751490000; // July 3, 2025 07:00 AEST - Original Project Launch (for general leaderboards)
   const WEEK_DURATION = 7 * 24 * 60 * 60;
   const nowTs = Math.floor(Date.now() / 1000);
-  return Math.floor((nowTs - LAUNCH_TIMESTAMP) / WEEK_DURATION);
+  return Math.floor((nowTs - PROJECT_LAUNCH_TIMESTAMP) / WEEK_DURATION);
 }
 
 export default async function handler(req, res) {

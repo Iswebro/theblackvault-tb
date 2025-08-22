@@ -1,6 +1,10 @@
 // src/components/WeeklyChallenge.js
 import React, { useState, useEffect } from 'react';
 
+// Competition specific launch timestamp (separate from project launch)
+const COMPETITION_LAUNCH_TIMESTAMP = 1755118800; // August 14, 2025 07:00 AEST - Weekly Challenge Competition Launch
+const WEEK_DURATION = 7 * 24 * 60 * 60; // 7 days in seconds
+
 const WeeklyChallenge = ({ walletAddress, vaultContract, isConnected }) => {
   const [currentWeek, setCurrentWeek] = useState(null);
   const [userStats, setUserStats] = useState({
@@ -17,6 +21,12 @@ const WeeklyChallenge = ({ walletAddress, vaultContract, isConnected }) => {
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(false);
+  
+  // New states for previous weeks functionality
+  const [showPreviousWeeks, setShowPreviousWeeks] = useState(false);
+  const [previousWeeksData, setPreviousWeeksData] = useState([]);
+  const [loadingPreviousWeeks, setLoadingPreviousWeeks] = useState(false);
+  const [viewingWeek, setViewingWeek] = useState(null); // null means current week
 
   // Check if mobile on mount and resize
   useEffect(() => {
@@ -57,24 +67,22 @@ const WeeklyChallenge = ({ walletAddress, vaultContract, isConnected }) => {
   // Calculate current week period and countdown using the same logic as the weekly leaderboard
   useEffect(() => {
     const calculateCurrentWeek = () => {
-      const LAUNCH_TIMESTAMP = 1755118800; // August 14, 2025 07:00 AEST Brisbane time - Official Competition Launch
-      const WEEK_DURATION = 7 * 24 * 60 * 60; // 7 days in seconds
       const nowTs = Math.floor(Date.now() / 1000);
       
-      // Check if we're before the launch
-      if (nowTs < LAUNCH_TIMESTAMP) {
+      // Check if we're before the competition launch
+      if (nowTs < COMPETITION_LAUNCH_TIMESTAMP) {
         return {
-          start: new Date(LAUNCH_TIMESTAMP * 1000),
-          end: new Date((LAUNCH_TIMESTAMP + WEEK_DURATION) * 1000),
+          start: new Date(COMPETITION_LAUNCH_TIMESTAMP * 1000),
+          end: new Date((COMPETITION_LAUNCH_TIMESTAMP + WEEK_DURATION) * 1000),
           index: -1, // Pre-launch
           isPreLaunch: true
         };
       }
       
-      const weekIndex = Math.floor((nowTs - LAUNCH_TIMESTAMP) / WEEK_DURATION);
+      const weekIndex = Math.floor((nowTs - COMPETITION_LAUNCH_TIMESTAMP) / WEEK_DURATION);
       
       // Calculate start and end of current week
-      const weekStart = LAUNCH_TIMESTAMP + weekIndex * WEEK_DURATION;
+      const weekStart = COMPETITION_LAUNCH_TIMESTAMP + weekIndex * WEEK_DURATION;
       const weekEnd = weekStart + WEEK_DURATION;
       
       return {
@@ -195,6 +203,135 @@ const WeeklyChallenge = ({ walletAddress, vaultContract, isConnected }) => {
     fetchChallengeData();
   }, [currentWeek, isConnected, walletAddress]);
 
+  // Function to fetch previous weeks data
+  const fetchPreviousWeeks = async () => {
+    try {
+      setLoadingPreviousWeeks(true);
+      const response = await fetch('/api/leaderboard/weekly-winners');
+      const data = await response.json();
+      
+      if (data.success) {
+        setPreviousWeeksData(data.data.weeks || []);
+      } else {
+        console.error('Failed to fetch previous weeks:', data.error);
+        setPreviousWeeksData([]);
+      }
+    } catch (error) {
+      console.error('Error fetching previous weeks:', error);
+      setPreviousWeeksData([]);
+    } finally {
+      setLoadingPreviousWeeks(false);
+    }
+  };
+
+  // Function to view specific week
+  const viewSpecificWeek = async (weekIndex) => {
+    try {
+      setIsLoading(true);
+      setViewingWeek(weekIndex);
+      
+      const response = await fetch(`/api/leaderboard/weekly?week=${weekIndex}`);
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        setLeaderboardData(data.data.leaderboard || []);
+      } else {
+        setLeaderboardData([]);
+      }
+    } catch (error) {
+      console.error('Error fetching specific week:', error);
+      setLeaderboardData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Function to return to current week
+  const returnToCurrentWeek = () => {
+    setViewingWeek(null);
+    // Trigger refetch of current week data
+    if (currentWeek) {
+      const fetchCurrentWeekData = async () => {
+        try {
+          setIsLoading(true);
+          
+          // If we're in pre-launch mode, don't fetch data yet
+          if (currentWeek.isPreLaunch) {
+            setLeaderboardData([]);
+            setUserStats({
+              position: 0,
+              weeklyEarnings: 0,
+              totalReferrals: 0,
+              isParticipating: false
+            });
+            setIsLoading(false);
+            return;
+          }
+          
+          // Fetch actual leaderboard data from Redis via API
+          const response = await fetch(`/api/leaderboard/weekly?week=${currentWeek.index}`);
+          const data = await response.json();
+          
+          if (data.success && data.data) {
+            const { leaderboard, weekIndex, totalEntries } = data.data;
+            
+            // Set leaderboard data
+            setLeaderboardData(leaderboard || []);
+            
+            // Find user's stats if wallet is connected
+            let userPosition = 0;
+            let userReferrals = 0;
+            let userEarnings = 0;
+            let isParticipating = false;
+            
+            if (isConnected && walletAddress && leaderboard) {
+              const userEntry = leaderboard.find(entry => 
+                entry.address && entry.address.toLowerCase() === walletAddress.toLowerCase()
+              );
+              
+              if (userEntry) {
+                userPosition = userEntry.rank || 0;
+                userReferrals = userEntry.referralCount || 0;
+                userEarnings = userEntry.totalRewards || 0;
+                isParticipating = true;
+              }
+            }
+            
+            setUserStats({
+              position: userPosition,
+              weeklyEarnings: userEarnings,
+              totalReferrals: userReferrals,
+              isParticipating: isParticipating
+            });
+          } else {
+            // API failed or no data, show empty state
+            setLeaderboardData([]);
+            setUserStats({
+              position: 0,
+              weeklyEarnings: 0,
+              totalReferrals: 0,
+              isParticipating: false
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching challenge data:', error);
+          // Show empty state on error
+          setLeaderboardData([]);
+          setUserStats({
+            position: 0,
+            weeklyEarnings: 0,
+            totalReferrals: 0,
+            isParticipating: false
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      
+      fetchCurrentWeekData();
+    }
+  };
+
   if (!currentWeek) {
     return (
       <div style={{ 
@@ -226,9 +363,71 @@ const WeeklyChallenge = ({ walletAddress, vaultContract, isConnected }) => {
     }}>
       {/* Hero Section */}
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <h2 style={{ color: '#ffd700', fontSize: 'clamp(1.5rem, 4vw, 2rem)', marginBottom: '1rem' }}>
-          🎯 Weekly Referral Challenge
-        </h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <h2 style={{ color: '#ffd700', fontSize: 'clamp(1.5rem, 4vw, 2rem)', margin: 0 }}>
+            🎯 Weekly Referral Challenge
+          </h2>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {viewingWeek !== null && (
+              <button
+                onClick={returnToCurrentWeek}
+                style={{
+                  background: 'linear-gradient(45deg, #28a745, #20c997)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  fontWeight: 'bold',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
+                onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+              >
+                📊 Current Week
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setShowPreviousWeeks(!showPreviousWeeks);
+                if (!showPreviousWeeks && previousWeeksData.length === 0) {
+                  fetchPreviousWeeks();
+                }
+              }}
+              style={{
+                background: 'linear-gradient(45deg, #6f42c1, #8b5cf6)',
+                color: 'white',
+                border: 'none',
+                padding: '0.5rem 1rem',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: 'bold',
+                transition: 'all 0.3s ease'
+              }}
+              onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
+              onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+            >
+              {showPreviousWeeks ? '📊 Hide History' : '🏆 Previous Winners'}
+            </button>
+          </div>
+        </div>
+        
+        {viewingWeek !== null && (
+          <div style={{
+            background: 'rgba(106, 66, 193, 0.2)',
+            padding: '0.5rem 1rem',
+            borderRadius: '8px',
+            marginBottom: '1rem',
+            border: '1px solid #6f42c1'
+          }}>
+            <p style={{ margin: 0, color: '#8b5cf6', fontWeight: 'bold' }}>
+              📅 Viewing Week {viewingWeek + 1} Results
+            </p>
+          </div>
+        )}
+        
         <div style={{ 
           background: 'rgba(255, 215, 0, 0.1)', 
           padding: '1rem', 
@@ -711,6 +910,186 @@ const WeeklyChallenge = ({ walletAddress, vaultContract, isConnected }) => {
                 onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
               >
                 🚀 Take Me There!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Previous Weeks Viewer */}
+      {showPreviousWeeks && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+            borderRadius: '16px',
+            padding: '2rem',
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            border: '3px solid #6f42c1',
+            color: 'white',
+            minWidth: isMobile ? '90vw' : '600px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+              <h3 style={{ color: '#8b5cf6', margin: 0 }}>🏆 Previous Winners & Results</h3>
+              <button
+                onClick={() => setShowPreviousWeeks(false)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: 'white',
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
+                  borderRadius: '50%',
+                  width: '40px',
+                  height: '40px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.2rem'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {loadingPreviousWeeks ? (
+              <div style={{ textAlign: 'center', padding: '2rem' }}>
+                <p>🔄 Loading previous weeks...</p>
+              </div>
+            ) : previousWeeksData.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem' }}>
+                <p>📊 No previous weeks data available yet.</p>
+                <p style={{ fontSize: '0.9rem', opacity: 0.8 }}>Check back after the first week completes!</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(250px, 1fr))' }}>
+                {previousWeeksData.map((week) => (
+                  <div
+                    key={week.weekIndex}
+                    style={{
+                      background: week.isCompleted ? 'rgba(40, 167, 69, 0.1)' : 'rgba(255, 215, 0, 0.1)',
+                      border: `2px solid ${week.isCompleted ? '#28a745' : '#ffd700'}`,
+                      borderRadius: '12px',
+                      padding: '1.5rem',
+                      cursor: week.hasData ? 'pointer' : 'default',
+                      transition: 'all 0.3s ease',
+                      opacity: week.hasData ? 1 : 0.6
+                    }}
+                    onClick={() => {
+                      if (week.hasData) {
+                        viewSpecificWeek(week.weekIndex);
+                        setShowPreviousWeeks(false);
+                      }
+                    }}
+                    onMouseOver={(e) => {
+                      if (week.hasData) {
+                        e.target.style.transform = 'scale(1.02)';
+                        e.target.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+                      }
+                    }}
+                    onMouseOut={(e) => {
+                      if (week.hasData) {
+                        e.target.style.transform = 'scale(1)';
+                        e.target.style.boxShadow = 'none';
+                      }
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <h4 style={{ margin: 0, color: week.isCompleted ? '#28a745' : '#ffd700' }}>
+                        Week {week.weekIndex + 1}
+                      </h4>
+                      <span style={{
+                        background: week.isCompleted ? '#28a745' : '#ffd700',
+                        color: week.isCompleted ? 'white' : '#1a1a2e',
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: '6px',
+                        fontSize: '0.8rem',
+                        fontWeight: 'bold'
+                      }}>
+                        {week.isCurrent ? 'ACTIVE' : week.isCompleted ? 'COMPLETED' : 'UPCOMING'}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>
+                      <p style={{ margin: '0.25rem 0' }}>
+                        📅 {new Date(week.weekPeriod.start).toLocaleDateString()} - {new Date(week.weekPeriod.end).toLocaleDateString()}
+                      </p>
+                      <p style={{ margin: '0.25rem 0' }}>
+                        👥 {week.totalEntries} participants
+                      </p>
+                    </div>
+
+                    {week.winner ? (
+                      <div style={{
+                        background: 'rgba(255, 215, 0, 0.1)',
+                        padding: '1rem',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255, 215, 0, 0.3)'
+                      }}>
+                        <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', color: '#ffd700' }}>🏆 Winner:</p>
+                        <p style={{ margin: '0', fontSize: '0.85rem', wordBreak: 'break-all' }}>
+                          {week.winner.address?.slice(0, 6)}...{week.winner.address?.slice(-4)}
+                        </p>
+                        <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
+                          🎯 {week.winner.referralCount || 0} referrals
+                        </p>
+                      </div>
+                    ) : (
+                      <div style={{
+                        background: 'rgba(108, 117, 125, 0.1)',
+                        padding: '1rem',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(108, 117, 125, 0.3)',
+                        textAlign: 'center'
+                      }}>
+                        <p style={{ margin: 0, opacity: 0.7 }}>
+                          {week.hasData ? '🔄 Processing...' : '📊 No data yet'}
+                        </p>
+                      </div>
+                    )}
+
+                    {week.hasData && (
+                      <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+                        <span style={{
+                          color: '#8b5cf6',
+                          fontSize: '0.8rem',
+                          fontWeight: 'bold'
+                        }}>
+                          Click to view full leaderboard →
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+              <button
+                onClick={() => setShowPreviousWeeks(false)}
+                style={{
+                  background: 'linear-gradient(45deg, #6f42c1, #8b5cf6)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.75rem 2rem',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Close
               </button>
             </div>
           </div>
