@@ -1870,7 +1870,7 @@ export default function App() {
               <input
                 type="number"
                 className="vault-input premium-input"
-                placeholder="Amount to withdraw (250 Max Daily)"
+                placeholder="Max. withdrawal: 250 USDT daily"
                 value={withdrawAmount}
                 min="0"
                 max={rewards}
