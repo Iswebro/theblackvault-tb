@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Competition System Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; margin: 10px; background: #007cba; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #005a87; }
+        .result { margin: 20px 0; padding: 15px; background: #f5f5f5; border-left: 4px solid #007cba; }
+        .error { border-left-color: #dc3545; background: #f8d7da; }
+        .success { border-left-color: #28a745; background: #d4edda; }
+    </style>
+</head>
+<body>
+    <h1>🏆 Competition System Test</h1>
+    
+    <div>
+        <button onclick="triggerCompetitionUpdate()">Trigger Competition Update</button>
+        <button onclick="getCompetitionData()">Get Competition Data</button>
+        <button onclick="checkSpecificWeek()">Check Week 0</button>
+    </div>
+    
+    <div id="result"></div>
+    
+    <script>
+        async function triggerCompetitionUpdate() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<div class="result">⏳ Triggering competition update...</div>';
+            
+            try {
+                const response = await fetch('/api/trigger-competition-update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            <h3>✅ Competition Update Success!</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            <h3>❌ Competition Update Failed</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <h3>❌ Error</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function getCompetitionData() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<div class="result">⏳ Getting competition data...</div>';
+            
+            try {
+                const response = await fetch('/api/competition-leaderboard');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            <h3>📊 Competition Data</h3>
+                            <p><strong>Current Week:</strong> ${data.currentWeek}</p>
+                            <p><strong>Total Participants:</strong> ${data.data?.totalParticipants || 0}</p>
+                            <h4>Top 3 Leaderboard:</h4>
+                            <pre>${JSON.stringify(data.data?.leaderboard?.slice(0, 3) || [], null, 2)}</pre>
+                            <h4>All Weeks Summary:</h4>
+                            <pre>${JSON.stringify(data.allWeeks || [], null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            <h3>❌ Failed to get competition data</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <h3>❌ Error</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function checkSpecificWeek() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<div class="result">⏳ Checking week 0...</div>';
+            
+            try {
+                const response = await fetch('/api/competition-leaderboard?week=0');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            <h3>📊 Week 0 Data</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            <h3>❌ Week 0 data not found</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <h3>❌ Error</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

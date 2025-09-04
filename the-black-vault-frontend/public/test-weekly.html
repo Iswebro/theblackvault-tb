@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Weekly Leaderboard Test</title>
+</head>
+<body>
+    <h1>Test Weekly Leaderboard Update</h1>
+    <button onclick="triggerUpdate()">Trigger Weekly Update (POST)</button>
+    <div id="result"></div>
+
+    <script>
+        async function triggerUpdate() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Triggering update...';
+            
+            try {
+                const response = await fetch('/api/trigger-weekly-update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                resultDiv.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                resultDiv.innerHTML = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
