@@ -23,8 +23,8 @@ const BLACK_VAULT_ABI = [
   "function getReferralBonusInfo(address referrer, address referee) view returns (uint256 used, uint256 remaining)"
 ];
 
-// Helper function to query events with aggressive rate limiting - focusing on recent blocks
-const queryEventsWithRetry = async (contract, filter, blockRanges = [-5000, -10000, -25000]) => {
+// Helper function to query events with ultra-aggressive rate limiting - extremely small blocks
+const queryEventsWithRetry = async (contract, filter, blockRanges = [-50, -100, -500, -1000]) => {
   console.log(`🔍 CRON: Starting queryEventsWithRetry with filter:`, filter);
   console.log(`🔍 CRON: Block ranges to try:`, blockRanges);
   
@@ -118,7 +118,7 @@ const getRecentDepositsAndUpdate = async (contract) => {
     // If incremental sync failed or no recent events, fall back to recent blocks
     if (recentEvents.length === 0 && !lastProcessedBlock) {
       console.log("🔍 CRON: Falling back to recent blocks approach...");
-      recentEvents = await queryEventsWithRetry(contract, depositFilter, [-5000, -10000]);
+      recentEvents = await queryEventsWithRetry(contract, depositFilter, [-50, -100, -500]);
     }
     
     // Update last processed block
@@ -305,7 +305,7 @@ const updateDefaultReferrerStats = async (contract) => {
     
     if (depositedFilter) {
       try {
-        depositedEvents = await queryEventsWithRetry(contract, depositedFilter, [-5000, -10000]);
+        depositedEvents = await queryEventsWithRetry(contract, depositedFilter, [-50, -100, -500]);
         console.log(`🔍 CRON: Deposited events query completed: ${depositedEvents.length} events`);
       } catch (error) {
         console.warn("⚠️ CRON: Deposited events query failed:", error.message);
@@ -316,7 +316,7 @@ const updateDefaultReferrerStats = async (contract) => {
     
     if (depositWithRefFilter) {
       try {
-        depositWithRefEvents = await queryEventsWithRetry(contract, depositWithRefFilter, [-5000, -10000]);
+        depositWithRefEvents = await queryEventsWithRetry(contract, depositWithRefFilter, [-50, -100, -500]);
         console.log(`🔍 CRON: DepositWithReferrer events query completed: ${depositWithRefEvents.length} events`);
       } catch (error) {
         console.warn("⚠️ CRON: DepositWithReferrer events query failed:", error.message);
@@ -579,11 +579,11 @@ const updateUserStats = async (contract, users) => {
                 console.log(`🔍 CRON: Found ${depositEvents.length} historical events for ${user}`);
               } catch (histError) {
                 console.warn(`⚠️ CRON: Historical query failed for ${user}, trying recent blocks:`, histError.message);
-                depositEvents = await queryEventsWithRetry(contract, depositFilter, [-100000, -50000, -25000]);
+                depositEvents = await queryEventsWithRetry(contract, depositFilter, [-100, -500, -1000]);
               }
             } else {
               // For other users, use recent blocks
-              depositEvents = await queryEventsWithRetry(contract, depositFilter, [-50000, -25000, -10000]);
+              depositEvents = await queryEventsWithRetry(contract, depositFilter, [-50, -100, -500]);
             }
             
             uniqueReferees = [...new Set(depositEvents.map(event => event.args.user.toLowerCase()))];

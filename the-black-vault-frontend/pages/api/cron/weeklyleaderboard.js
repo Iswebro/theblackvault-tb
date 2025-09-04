@@ -101,10 +101,11 @@ const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://bsc-dataseed.binance
 const COMPETITION_LAUNCH_TIMESTAMP = 1755118800 // August 14, 2025 07:00 AEST - Weekly Challenge Competition Launch
 const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
 
-// Adjusted constants for chunking and delay - ultra-conservative due to RPC limits
-const BLOCK_CHUNK_SIZE = 500 // Process 500 blocks at a time (ultra-conservative for RPC limits)
-const FALLBACK_CHUNK_SIZE = 100 // Even smaller fallback for problematic ranges
-const REQUEST_DELAY_MS = 2000 // Delay 2 seconds between requests (increased for stability)
+// Adjusted constants for chunking and delay - EXTREMELY conservative due to severe RPC limits
+const BLOCK_CHUNK_SIZE = 50 // Process only 50 blocks at a time (ultra-ultra conservative)
+const FALLBACK_CHUNK_SIZE = 10 // Minimal fallback for problematic ranges
+const EMERGENCY_CHUNK_SIZE = 1 // Single block fallback for extreme cases
+const REQUEST_DELAY_MS = 3000 // Delay 3 seconds between requests (increased for stability)
 
 // Ethers.js setup
 const provider = new ethers.JsonRpcProvider(RPC_URL)
@@ -179,19 +180,25 @@ async function fetchEventsInChunks(contract, filter, fromBlock, toBlock, chunkSi
     } catch (error) {
       console.error(`Error fetching events for chunk ${currentFromBlock}-${currentToBlock}:`, error)
       
-      // If chunk size is already small, give up on this range
-      if (chunkSize <= FALLBACK_CHUNK_SIZE) {
-        console.error(`Failed even with minimal chunk size ${chunkSize}, skipping range ${currentFromBlock}-${currentToBlock}`)
+      // If chunk size is already at emergency level, give up on this range
+      if (chunkSize <= EMERGENCY_CHUNK_SIZE) {
+        console.error(`Failed even with emergency chunk size ${chunkSize}, skipping range ${currentFromBlock}-${currentToBlock}`)
         currentFromBlock = currentToBlock + 1
         continue
       }
       
-      // Try with smaller chunk size
-      const smallerChunkSize = Math.max(FALLBACK_CHUNK_SIZE, Math.floor(chunkSize / 5))
-      console.log(`Retrying with smaller chunk size: ${smallerChunkSize}`)
+      // Try with progressively smaller chunk sizes
+      let nextChunkSize = chunkSize
+      if (chunkSize > FALLBACK_CHUNK_SIZE) {
+        nextChunkSize = FALLBACK_CHUNK_SIZE
+      } else if (chunkSize > EMERGENCY_CHUNK_SIZE) {
+        nextChunkSize = EMERGENCY_CHUNK_SIZE
+      }
+      
+      console.log(`Retrying with smaller chunk size: ${nextChunkSize}`)
       
       try {
-        const smallerChunkEvents = await fetchEventsInChunks(contract, filter, currentFromBlock, currentToBlock, smallerChunkSize)
+        const smallerChunkEvents = await fetchEventsInChunks(contract, filter, currentFromBlock, currentToBlock, nextChunkSize)
         allEvents = allEvents.concat(smallerChunkEvents)
         currentFromBlock = currentToBlock + 1
       } catch (retryError) {
