@@ -440,5 +440,5 @@ export default async function handler(req, res) {
   }
 }
 
-// Export the aggregation function for manual triggers
-export { aggregateWeeklyLeaderboard, aggregateLifetimeLeaderboard }
+// Export the aggregation functions for manual triggers
+export { aggregateWeeklyLeaderboard, aggregateLifetimeLeaderboard };

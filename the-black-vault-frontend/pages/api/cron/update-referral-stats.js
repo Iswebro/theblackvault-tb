@@ -678,7 +678,7 @@ const updateUserStats = async (contract, users) => {
 export default async function handler(req, res) {
   const { method } = req;
   
-  if (method !== 'POST') {
+  if (method !== 'POST' && method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 

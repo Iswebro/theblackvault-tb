@@ -12,25 +12,35 @@ export default async function handler(req, res) {
   try {
     console.log('🔄 Manual trigger: Starting weekly leaderboard update...');
     
-    // Import the weekly leaderboard aggregation function
-    const { aggregateWeeklyLeaderboard } = await import('./cron/weeklyleaderboard.js');
+    // Instead of importing functions, call the cron job directly
+    const cronModule = await import('./cron/weeklyleaderboard.js');
+    const cronHandler = cronModule.default;
     
-    // Calculate current week index
-    const COMPETITION_LAUNCH_TIMESTAMP = 1755118800; // August 14, 2025 07:00 AEST - Weekly Challenge Competition Launch
-    const WEEK_DURATION = 7 * 24 * 60 * 60; // 1 week in seconds
-    const nowTs = Math.floor(Date.now() / 1000);
-    const weekIndex = Math.floor((nowTs - COMPETITION_LAUNCH_TIMESTAMP) / WEEK_DURATION);
+    // Create mock req/res for the cron job but bypass auth
+    const mockReq = {
+      headers: {
+        authorization: `Bearer ${process.env.CRON_SECRET}` // Use the proper cron secret
+      }
+    };
     
-    console.log(`🔄 Aggregating data for week ${weekIndex}...`);
+    // Create a response wrapper to capture the cron job output
+    let cronResult = null;
+    const mockRes = {
+      status: (code) => ({
+        json: (data) => {
+          cronResult = { statusCode: code, data };
+          return mockRes;
+        }
+      })
+    };
     
-    // Run the aggregation
-    const result = await aggregateWeeklyLeaderboard(weekIndex);
+    // Call the cron job handler
+    await cronHandler(mockReq, mockRes);
     
     return res.status(200).json({
       success: true,
-      message: 'Weekly leaderboard update triggered successfully',
-      currentWeek: weekIndex,
-      result: result,
+      message: 'Weekly leaderboard update triggered successfully via cron handler',
+      cronResult: cronResult,
       timestamp: new Date().toISOString()
     });
     

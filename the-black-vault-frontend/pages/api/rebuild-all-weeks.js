@@ -10,8 +10,9 @@ export default async function handler(req, res) {
   try {
     console.log('🔄 COMPREHENSIVE FIX: Rebuilding ALL weekly leaderboards...');
     
-    // Import the weekly leaderboard aggregation function
-    const { aggregateWeeklyLeaderboard, aggregateLifetimeLeaderboard } = await import('./cron/weeklyleaderboard.js');
+    // Instead of importing functions, call the cron job handler multiple times
+    const cronModule = await import('./cron/weeklyleaderboard.js');
+    const cronHandler = cronModule.default;
     
     // Calculate current week and all previous weeks
     const COMPETITION_LAUNCH_TIMESTAMP = 1755118800;
@@ -25,73 +26,37 @@ export default async function handler(req, res) {
     const results = {};
     const errors = [];
     
-    // Rebuild ALL weeks from 0 to current
-    for (let weekIndex = 0; weekIndex <= currentWeekIndex; weekIndex++) {
-      try {
-        console.log(`\n🔄 Rebuilding week ${weekIndex}...`);
-        
-        const weeklyData = await aggregateWeeklyLeaderboard(weekIndex);
-        
-        // Store the rebuilt data
-        await redis.set(`leaderboard:weekly:${weekIndex}`, weeklyData);
-        
-        results[weekIndex] = {
-          success: true,
-          entries: weeklyData.leaderboard.length,
-          topReferrers: weeklyData.leaderboard.slice(0, 3).map(r => ({
-            referrer: r.referrer,
-            referrals: r.totalReferrals
-          }))
-        };
-        
-        // Check if our target referrer is in this week
-        const targetReferrer = '0xB98e82C611BFc1b852412268fd300E28fAEE4D48';
-        const foundTarget = weeklyData.leaderboard.find(entry => 
-          entry.referrer?.toLowerCase() === targetReferrer.toLowerCase()
-        );
-        
-        if (foundTarget) {
-          console.log(`✅ TARGET FOUND in week ${weekIndex}:`, foundTarget.totalReferrals, 'referrals');
-          results[weekIndex].targetFound = true;
-          results[weekIndex].targetData = foundTarget;
-        }
-        
-        console.log(`✅ Week ${weekIndex} rebuilt: ${weeklyData.leaderboard.length} entries`);
-        
-      } catch (error) {
-        console.error(`❌ Error rebuilding week ${weekIndex}:`, error.message);
-        errors.push({
-          week: weekIndex,
-          error: error.message
-        });
-        results[weekIndex] = {
-          success: false,
-          error: error.message
-        };
+    // For each week, trigger the cron job (it will aggregate all weeks including current)
+    // We only need to run it once as the cron job handles both weekly and lifetime data
+    const mockReq = {
+      headers: {
+        authorization: `Bearer ${process.env.CRON_SECRET}`
       }
-    }
+    };
     
-    // Rebuild lifetime leaderboard with all the new data
-    console.log('\n🔄 Rebuilding lifetime leaderboard...');
+    let cronResult = null;
+    const mockRes = {
+      status: (code) => ({
+        json: (data) => {
+          cronResult = { statusCode: code, data };
+          return mockRes;
+        }
+      })
+    };
+    
     try {
-      const lifetimeData = await aggregateLifetimeLeaderboard();
-      await redis.set('leaderboard:lifetime', lifetimeData);
+      console.log('🔄 Running comprehensive cron job rebuild...');
+      await cronHandler(mockReq, mockRes);
       
-      // Check for target in lifetime
-      const targetReferrer = '0xB98e82C611BFc1b852412268fd300E28fAEE4D48';
-      const foundInLifetime = lifetimeData.leaderboard.find(entry => 
-        entry.referrer?.toLowerCase() === targetReferrer.toLowerCase()
-      );
-      
-      console.log(`✅ Lifetime leaderboard rebuilt: ${lifetimeData.leaderboard.length} entries`);
-      if (foundInLifetime) {
-        console.log(`✅ TARGET FOUND in lifetime:`, foundInLifetime.totalReferrals, 'total referrals');
-      }
-      
+      results.cronExecution = {
+        success: cronResult?.statusCode === 200,
+        statusCode: cronResult?.statusCode,
+        data: cronResult?.data
+      };
     } catch (error) {
-      console.error('❌ Error rebuilding lifetime:', error.message);
+      console.error('❌ Error running cron job:', error.message);
       errors.push({
-        scope: 'lifetime',
+        scope: 'cron_execution',
         error: error.message
       });
     }
