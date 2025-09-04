@@ -34,6 +34,37 @@ const BlackVaultABI = [
     type: "event",
   },
   {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "referrer",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "timestamp",
+        type: "uint256",
+      },
+    ],
+    name: "Deposit",
+    type: "event",
+  },
+  {
     inputs: [
       {
         internalType: "address",
@@ -168,8 +199,55 @@ async function aggregateWeeklyLeaderboard(weekIndex) {
 
   try {
     // Get all deposit events for this week using chunking
-    const depositFilter = blackVaultContract.filters.Deposited()
-    const depositEvents = await fetchEventsInChunks(blackVaultContract, depositFilter, fromBlock, toBlock)
+    // Try both event types to ensure compatibility
+    let depositEvents = [];
+    
+    try {
+      // First try 'Deposited' events
+      const depositedFilter = blackVaultContract.filters.Deposited();
+      const depositedEvents = await fetchEventsInChunks(blackVaultContract, depositedFilter, fromBlock, toBlock);
+      depositEvents = depositEvents.concat(depositedEvents);
+      console.log(`Found ${depositedEvents.length} 'Deposited' events`);
+    } catch (error) {
+      console.log(`Error fetching 'Deposited' events:`, error.message);
+    }
+
+    // Also try 'Deposit' events as fallback
+    try {
+      // Create a filter for 'Deposit' events manually
+      const depositFilter = {
+        address: CONTRACT_ADDRESS,
+        topics: [
+          ethers.id("Deposit(address,address,uint256,uint256)") // keccak256 hash of the event signature
+        ]
+      };
+      
+      const logs = await provider.getLogs({
+        ...depositFilter,
+        fromBlock: fromBlock,
+        toBlock: toBlock
+      });
+      
+      // Parse the logs manually
+      const depositEventLogs = logs.map(log => {
+        try {
+          const parsed = blackVaultContract.interface.parseLog(log);
+          return {
+            args: parsed.args,
+            blockNumber: log.blockNumber,
+            transactionHash: log.transactionHash,
+            eventType: 'Deposit'
+          };
+        } catch (e) {
+          return null;
+        }
+      }).filter(Boolean);
+      
+      depositEvents = depositEvents.concat(depositEventLogs);
+      console.log(`Found ${depositEventLogs.length} 'Deposit' events`);
+    } catch (error) {
+      console.log(`Error fetching 'Deposit' events:`, error.message);
+    }
 
     console.log(`Found ${depositEvents.length} total deposit events in week ${weekIndex}`)
 
@@ -361,3 +439,6 @@ export default async function handler(req, res) {
     })
   }
 }
+
+// Export the aggregation function for manual triggers
+export { aggregateWeeklyLeaderboard, aggregateLifetimeLeaderboard }
