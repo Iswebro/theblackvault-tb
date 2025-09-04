@@ -101,9 +101,10 @@ const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://bsc-dataseed.binance
 const COMPETITION_LAUNCH_TIMESTAMP = 1755118800 // August 14, 2025 07:00 AEST - Weekly Challenge Competition Launch
 const WEEK_DURATION = 7 * 24 * 60 * 60 // 7 days in seconds
 
-// Adjusted constants for chunking and delay
-const BLOCK_CHUNK_SIZE = 10000 // Process 10,000 blocks at a time (reduced from 50k)
-const REQUEST_DELAY_MS = 500 // Delay 500ms between requests (increased from 100ms)
+// Adjusted constants for chunking and delay - ultra-conservative due to RPC limits
+const BLOCK_CHUNK_SIZE = 500 // Process 500 blocks at a time (ultra-conservative for RPC limits)
+const FALLBACK_CHUNK_SIZE = 100 // Even smaller fallback for problematic ranges
+const REQUEST_DELAY_MS = 2000 // Delay 2 seconds between requests (increased for stability)
 
 // Ethers.js setup
 const provider = new ethers.JsonRpcProvider(RPC_URL)
@@ -158,27 +159,48 @@ function calculateReferralReward(depositAmount) {
 /**
  * Helper function to fetch events in chunks
  */
-async function fetchEventsInChunks(contract, filter, fromBlock, toBlock) {
+async function fetchEventsInChunks(contract, filter, fromBlock, toBlock, chunkSize = BLOCK_CHUNK_SIZE) {
   let allEvents = []
   let currentFromBlock = fromBlock
 
   while (currentFromBlock <= toBlock) {
-    const currentToBlock = Math.min(currentFromBlock + BLOCK_CHUNK_SIZE - 1, toBlock)
-    console.log(`Fetching events from block ${currentFromBlock} to ${currentToBlock}`)
+    const currentToBlock = Math.min(currentFromBlock + chunkSize - 1, toBlock)
+    console.log(`Fetching events from block ${currentFromBlock} to ${currentToBlock} (chunk size: ${chunkSize})`)
+    
     try {
       const chunkEvents = await contract.queryFilter(filter, currentFromBlock, currentToBlock)
       allEvents = allEvents.concat(chunkEvents)
       console.log(`Fetched ${chunkEvents.length} events in this chunk. Total: ${allEvents.length}`)
+      
+      currentFromBlock = currentToBlock + 1
+      if (currentFromBlock <= toBlock) {
+        await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY_MS)) // Delay between chunks
+      }
     } catch (error) {
       console.error(`Error fetching events for chunk ${currentFromBlock}-${currentToBlock}:`, error)
-      throw error // Re-throw to stop aggregation if a chunk fails
-    }
-
-    currentFromBlock = currentToBlock + 1
-    if (currentFromBlock <= toBlock) {
-      await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY_MS)) // Delay between chunks
+      
+      // If chunk size is already small, give up on this range
+      if (chunkSize <= FALLBACK_CHUNK_SIZE) {
+        console.error(`Failed even with minimal chunk size ${chunkSize}, skipping range ${currentFromBlock}-${currentToBlock}`)
+        currentFromBlock = currentToBlock + 1
+        continue
+      }
+      
+      // Try with smaller chunk size
+      const smallerChunkSize = Math.max(FALLBACK_CHUNK_SIZE, Math.floor(chunkSize / 5))
+      console.log(`Retrying with smaller chunk size: ${smallerChunkSize}`)
+      
+      try {
+        const smallerChunkEvents = await fetchEventsInChunks(contract, filter, currentFromBlock, currentToBlock, smallerChunkSize)
+        allEvents = allEvents.concat(smallerChunkEvents)
+        currentFromBlock = currentToBlock + 1
+      } catch (retryError) {
+        console.error(`Failed even with smaller chunks for range ${currentFromBlock}-${currentToBlock}:`, retryError.message)
+        currentFromBlock = currentToBlock + 1 // Skip this problematic range
+      }
     }
   }
+
   return allEvents
 }
 
