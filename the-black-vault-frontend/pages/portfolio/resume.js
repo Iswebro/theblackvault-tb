@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 
 export async function getServerSideProps({ res }) {
-  const sourcePath = path.join(process.cwd(), '..', '..', 'portfolio', 'resume', 'index.html')
+  const sourcePath = path.join(process.cwd(), '..', 'portfolio', 'resume', 'index.html')
   let html = fs.readFileSync(sourcePath, 'utf8')
   html = html.replace('<head>', '<head><base href="/portfolio/resume/">')
 
