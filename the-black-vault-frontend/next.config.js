@@ -1,6 +1,13 @@
+const path = require('path')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  outputFileTracingRoot: path.join(__dirname, '../'),
+  outputFileTracingIncludes: {
+    '/portfolio': ['../portfolio/**/*'],
+    '/portfolio/resume': ['../portfolio/**/*'],
+  },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -19,10 +26,10 @@ const nextConfig = {
         path: require.resolve('path-browserify'),
         buffer: require.resolve('buffer'),
         process: require.resolve('process/browser'),
-      };
+      }
     }
-    return config;
-  }
-};
+    return config
+  },
+}
 
-module.exports = nextConfig;
+module.exports = nextConfig
