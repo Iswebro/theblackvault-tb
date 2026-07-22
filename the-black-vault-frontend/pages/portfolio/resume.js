@@ -1,4 +1,4 @@
-const SOURCE_URL = 'https://raw.githubusercontent.com/Iswebro/theblackvault-tb/portfolio-ai-copywriter/portfolio/resume/index.html'
+const SOURCE_URL = 'https://raw.githubusercontent.com/Iswebro/theblackvault-tb/portfolio-ai-copywriter/public/portfolio/resume/index.html'
 
 export async function getServerSideProps({ res }) {
   const response = await fetch(SOURCE_URL, {
