@@ -1,9 +1,15 @@
-import fs from 'fs'
-import path from 'path'
+const SOURCE_URL = 'https://raw.githubusercontent.com/Iswebro/theblackvault-tb/portfolio-ai-copywriter/portfolio/resume/index.html'
 
 export async function getServerSideProps({ res }) {
-  const sourcePath = path.join(process.cwd(), '..', 'portfolio', 'resume', 'index.html')
-  let html = fs.readFileSync(sourcePath, 'utf8')
+  const response = await fetch(SOURCE_URL, {
+    headers: { 'User-Agent': 'Matheus-Neto-Leite-Portfolio' },
+  })
+
+  if (!response.ok) {
+    throw new Error(`Resume source returned ${response.status}`)
+  }
+
+  let html = await response.text()
   html = html.replace('<head>', '<head><base href="/portfolio/resume/">')
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8')
