@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Case study: an AI-operations control plane and Git evidence-ledger architecture for Black Vault Nexus — dual-surface design, append-only report and pack ledgers, a fail-closed activation lifecycle, an independent reviewer gate and human operator approval. Documentation and governance implementation, independently audited, merged to develop on 2026-07-23." />
+  <meta name="author" content="Matheus Neto Leite" />
+  <meta name="theme-color" content="#071018" />
+  <meta property="og:title" content="Control Plane and Git Pack Ledger | Matheus Neto Leite" />
+  <meta property="og:description" content="A dual-surface control plane designed to remove a single-connector point of failure from AI operations: append-only Git evidence ledgers, fail-closed gates, an independent reviewer and a human operator with final authority. Docs and governance layer, independently audited, not yet operational." />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://iswebro.github.io/theblackvault-tb/case-studies/control-plane-pack-ledger/" />
+  <meta name="twitter:card" content="summary" />
+  <link rel="canonical" href="https://iswebro.github.io/theblackvault-tb/case-studies/control-plane-pack-ledger/" />
+  <title>Control Plane and Git Pack Ledger | Matheus Neto Leite</title>
+  <style>
+    :root{
+      --bg:#071018;--bg2:#0b1420;--card:#111c29;--text:#f4f8fc;--muted:#a9b6c6;
+      --line:rgba(255,255,255,.12);--cyan:#67e8f9;--blue:#60a5fa;--violet:#a78bfa;--green:#6ee7b7;
+      --orange:#fbbf24;--red:#fda4af;--ink:#071018;--max:1060px;--radius:24px;--shadow:0 28px 70px rgba(0,0,0,.34)
+    }
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.6;background:
+      radial-gradient(circle at 10% 0%,rgba(37,99,235,.24),transparent 36rem),
+      radial-gradient(circle at 95% 12%,rgba(124,58,237,.20),transparent 31rem),
+      linear-gradient(180deg,var(--bg),var(--bg2));-webkit-font-smoothing:antialiased}
+    a{color:inherit}.wrap{width:min(calc(100% - 42px),var(--max));margin:auto}.skip{position:absolute;left:-9999px}.skip:focus{left:14px;top:14px;z-index:99;background:#fff;color:#111;padding:10px 14px;border-radius:10px}
+    nav{position:sticky;top:0;z-index:20;border-bottom:1px solid var(--line);background:rgba(7,16,24,.82);backdrop-filter:blur(18px)}
+    .nav-inner{min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:24px}.brand{display:flex;gap:11px;align-items:center;font-weight:850;text-decoration:none;letter-spacing:-.02em}.mark{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;color:var(--ink);background:linear-gradient(145deg,var(--cyan),var(--violet));box-shadow:0 10px 30px rgba(96,165,250,.28);font-size:13px}.nav-links{display:flex;align-items:center;gap:22px;font-size:14px;color:var(--muted)}.nav-links a{text-decoration:none}.nav-links a:hover{color:#fff}.nav-cta{border:1px solid var(--line);border-radius:999px;padding:8px 13px;color:#fff!important;background:rgba(255,255,255,.05)}
+    header.hero{padding:84px 0 30px}.eyebrow{display:inline-flex;align-items:center;gap:9px;color:var(--cyan);font-size:12px;font-weight:850;letter-spacing:.15em;text-transform:uppercase}.eyebrow:before{content:"";width:28px;height:1px;background:currentColor}
+    h1{font-size:clamp(42px,6.4vw,84px);letter-spacing:-.055em;line-height:.95;margin:16px 0 22px;max-width:940px}h1 span{display:block;color:transparent;background:linear-gradient(90deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text}
+    .lead{color:var(--muted);font-size:clamp(17px,2vw,21px);line-height:1.6;max-width:840px}
+    .badges{display:flex;flex-wrap:wrap;gap:9px;margin:26px 0 4px}.badge{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:999px;font-size:12.5px;font-weight:750;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text)}.badge.ok{border-color:rgba(110,231,183,.3);background:rgba(110,231,183,.08);color:var(--green)}.badge.warn{border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.07);color:var(--orange)}.badge.info{border-color:rgba(103,232,249,.28);background:rgba(103,232,249,.07);color:var(--cyan)}
+    section{padding:56px 0}.section-head{margin-bottom:26px}.section-head h2{font-size:clamp(30px,4.2vw,50px);line-height:1.02;letter-spacing:-.04em;margin:8px 0 10px}.section-head p{max-width:760px;color:var(--muted);margin:0}
+    p{margin:12px 0}.muted{color:var(--muted)}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.86em;background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:7px;padding:2px 6px;word-break:break-all}
+    .truth{border:1px solid rgba(251,191,36,.3);border-radius:var(--radius);background:rgba(251,191,36,.05);padding:26px}.truth h2{margin:0 0 6px;font-size:clamp(24px,3vw,34px);letter-spacing:-.03em}.truth>p{color:var(--muted);max-width:820px}.truth ul{margin:16px 0 0;padding:0;list-style:none;display:grid;gap:9px}.truth li{padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:rgba(7,16,24,.55);font-size:14px;line-height:1.55}.truth li b{color:var(--orange)}
+    .cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}.mini{padding:22px;border:1px solid var(--line);border-radius:20px;background:var(--card)}.mini h3{margin:8px 0 8px;font-size:21px;letter-spacing:-.02em}.mini p{color:var(--muted);font-size:14.5px;margin:8px 0 0}.mini .k{color:var(--cyan);font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
+    .diagram{border:1px solid var(--line);border-radius:var(--radius);background:var(--card);padding:26px;overflow-x:auto}.dg{min-width:640px;display:grid;gap:14px}.lane{display:grid;grid-template-columns:180px 1fr;gap:14px;align-items:stretch}.lane-label{display:flex;align-items:center;font-size:12px;font-weight:850;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}.nodes{display:flex;flex-wrap:wrap;gap:12px}.node{flex:1 1 170px;padding:14px 15px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.045);font-size:13.5px;line-height:1.45}.node b{display:block;margin-bottom:3px;font-size:14px}.node.primary{border-color:rgba(103,232,249,.42);background:rgba(103,232,249,.08)}.node.evidence{border-color:rgba(167,139,250,.4);background:rgba(167,139,250,.08)}.node.future{border-style:dashed;color:var(--muted)}.node .st{display:inline-block;margin-top:7px;font-size:10.5px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--line)}.st.live{color:var(--green);border-color:rgba(110,231,183,.35)}.st.prop{color:var(--orange);border-color:rgba(251,191,36,.35)}.dg-note{color:var(--muted);font-size:13px;margin:14px 0 0}
+    .gates{display:grid;gap:10px;counter-reset:gate}.gate{display:grid;grid-template-columns:44px 1fr;gap:14px;padding:15px 16px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.035);counter-increment:gate}.gate:before{content:counter(gate);display:grid;place-items:center;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);color:var(--cyan);font-weight:900;font-size:14px}.gate>div{min-width:0}.gate b{display:block;font-size:14px;overflow-wrap:anywhere}.gate span{color:var(--muted);font-size:13.5px}
+    .timeline{display:grid;gap:0;border-left:2px solid rgba(103,232,249,.3);margin-left:8px;padding-left:26px}.t-item{position:relative;padding:0 0 26px}.t-item:last-child{padding-bottom:0}.t-item:before{content:"";position:absolute;left:-33px;top:6px;width:12px;height:12px;border-radius:50%;background:var(--cyan);box-shadow:0 0 14px rgba(103,232,249,.6)}.t-item time{color:var(--cyan);font-size:12px;font-weight:850;letter-spacing:.1em;text-transform:uppercase}.t-item b{display:block;margin:4px 0 3px;font-size:16px}.t-item p{color:var(--muted);font-size:14px;margin:0}
+    .facts{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.fact{padding:18px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.035)}.fact b{display:block;color:var(--cyan);font-size:22px;letter-spacing:-.02em}.fact span{color:var(--muted);font-size:13px}
+    .split{display:grid;grid-template-columns:1fr 1fr;gap:16px}.panel{padding:24px;border:1px solid var(--line);border-radius:20px;background:var(--card)}.panel h3{margin:0 0 10px;font-size:20px}.panel ul{margin:0;padding-left:20px;color:var(--muted);font-size:14.5px}.panel li{margin:7px 0}.panel.good h3{color:var(--green)}.panel.limit h3{color:var(--orange)}
+    .bullets{display:grid;gap:12px}.bullet{padding:18px 20px;border:1px solid rgba(167,139,250,.3);border-radius:16px;background:rgba(167,139,250,.06);font-size:15px;line-height:1.6}.bullet b{color:var(--violet)}
+    .evidence-links{display:flex;flex-wrap:wrap;gap:12px;margin-top:20px}.button{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:50px;padding:0 19px;border-radius:14px;text-decoration:none;font-weight:820;border:1px solid transparent;transition:.2s ease}.button:hover{transform:translateY(-2px)}.primary{color:var(--ink);background:linear-gradient(90deg,var(--cyan),var(--violet));box-shadow:0 16px 40px rgba(96,165,250,.22)}.secondary{border-color:var(--line);background:rgba(255,255,255,.04)}
+    .independence{margin-top:26px;padding:20px;border-left:3px solid var(--cyan);border-radius:0 18px 18px 0;background:rgba(103,232,249,.07);color:var(--muted);font-size:14px}
+    footer{border-top:1px solid var(--line);color:var(--muted);font-size:13px}.footer-inner{padding:28px 0;display:flex;justify-content:space-between;gap:20px}
+    @media(max-width:900px){.nav-links a:not(.nav-cta){display:none}.cards,.split{grid-template-columns:1fr}.facts{grid-template-columns:1fr 1fr}}
+    @media(max-width:620px){.wrap{width:min(calc(100% - 28px),var(--max))}nav .brand span:last-child{display:none}section{padding:44px 0}.facts{grid-template-columns:1fr}.lane{grid-template-columns:1fr}.dg{min-width:0}.node{flex-basis:100%}.footer-inner{display:block}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{transition:none!important;animation:none!important}}
+    @media print{body{background:#fff;color:#111}nav,.skip{display:none}h1{color:#111}h1 span{color:#111;background:none;-webkit-background-clip:initial;background-clip:initial;-webkit-text-fill-color:#111}.badge,.node,.gate,.mini,.panel,.fact,.truth,.bullet,.diagram,.timeline{border-color:#bbb;background:#fff;color:#111}.truth li{background:#fff;color:#111}.mini p,.gate span,.panel ul,.fact span,.lead,.muted,.dg-note,.truth>p,.t-item p,.independence,footer,.section-head p{color:#333}.eyebrow,.t-item time,.t-item b,.mini .k,.mini h3,.fact b,.badge.ok,.badge.warn,.badge.info,.st,.panel.good h3,.panel.limit h3,.truth li b,.node b,.gate b,.bullet b,.code,code{color:#111;border-color:#bbb}.gate:before{color:#111;border-color:#bbb}code{background:#fff}.bullet{background:#fff;border-color:#bbb}.independence{background:#fff;border-color:#bbb}.button{color:#111;background:#fff;border:1px solid #bbb;box-shadow:none}a{color:#333}}
+  </style>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Control Plane and Git Pack Ledger","description":"An AI-operations control plane and Git evidence-ledger architecture for Black Vault Nexus: dual-surface design, append-only report and pack ledgers, a fail-closed activation lifecycle, an independent reviewer gate and human operator approval. Documentation and governance implementation, independently audited.","author":{"@type":"Person","name":"Matheus Neto Leite","alternateName":"Iswebro","url":"https://iswebro.github.io/theblackvault-tb/"},"url":"https://iswebro.github.io/theblackvault-tb/case-studies/control-plane-pack-ledger/","datePublished":"2026-07-24","about":["AI operations governance","Git evidence ledgers","fail-closed systems"]}</script>
+</head>
+<body>
+  <a class="skip" href="#status">Skip to case study</a>
+  <nav><div class="wrap nav-inner"><a class="brand" href="../../"><span class="mark">MN</span><span>Matheus Neto Leite</span></a><div class="nav-links"><a href="../../">Creative portfolio</a><a href="../../engineering/">Engineering</a><a href="#evidence">Evidence</a><a class="nav-cta" href="../../engineering-resume/">Engineering résumé</a></div></div></nav>
+  <main id="top">
+    <header class="hero"><div class="wrap">
+      <div class="eyebrow">Engineering &amp; governance case study</div>
+      <h1>Control Plane and<span>Git Pack Ledger.</span></h1>
+      <p class="lead">How Black Vault Nexus designed the removal of a single point of failure from its multi-model AI operations: a dual-surface control-plane contract, append-only Git evidence ledgers, a fail-closed activation lifecycle, an independent reviewer gate and a human operator holding final authority — landed as a documentation and governance implementation, independently audited, and deliberately <em>not</em> switched on until each future gate is separately approved.</p>
+      <div class="badges">
+        <span class="badge ok">Merged to develop · 2026-07-23</span>
+        <span class="badge info">Documentation &amp; governance only</span>
+        <span class="badge warn">Not operational</span>
+        <span class="badge info">Independently audited</span>
+      </div>
+    </div></header>
+
+    <section id="status"><div class="wrap"><div class="truth">
+      <h2>Truth status, up front</h2>
+      <p>This case study is evidence-bounded. Every claim below is limited to what the committed repository and the independent audit actually show.</p>
+      <ul>
+        <li><b>What landed:</b> PR #669 merged into Black Vault Nexus <code>develop</code> by true merge commit <code>981ce13d0139e5dfcae399aa72c25e379b5e42c0</code> on 2026-07-23. Reviewed head: <code>8af9e96d1bbe6498b7da52c0115748815b800569</code>. Pre-merge develop: <code>51e87db002d2fcdcc94edf1b371c8696896e2f4f</code>.</li>
+        <li><b>Where it did not land:</b> <code>main</code> remained <code>214a795243027115d4c342a9f7d7051561b7bffd</code> at the audited closeout. This work landed on <code>develop</code>, not on <code>main</code>, and is not operational.</li>
+        <li><b>What kind of implementation:</b> documentation and governance implementation only — nine files changed, every one a Markdown document. No runtime code, no schema, no configuration, no CI change.</li>
+        <li><b>What is switched off:</b> the Git recovery projection is PROPOSED and inactive. Communication Integrity V2 is landed and inactive. <code>DISTRIBUTED_READY_FENCE=UNSATISFIED</code>, so every publication and activation path fails closed by design.</li>
+        <li><b>What never happened:</b> no runtime, database, provider, scheduler, wallet, purchase, account or deployment activation of any kind.</li>
+      </ul>
+    </div></div></section>
+
+    <section id="problem"><div class="wrap">
+      <div class="section-head"><div class="eyebrow">The problem</div><h2>One connector held the keys.</h2><p>Black Vault Nexus is built with a multi-model AI workflow: several AI executors do scoped work, and a human operator holds every meaningful decision. The instructions those executors must read first — the canonical “control plane” — lived in exactly one place: Microsoft OneDrive, reached through one cloud connector.</p></div>
+      <p class="muted" style="max-width:820px">That made the connector a single point of failure, and the failure mode is real, not hypothetical: the repository’s own workflow records note repeated Microsoft 365 connector attach failures forcing blocked or degraded runs. When the connector was down, an executor could not even read its own instructions — and in a workflow where safety comes from executors refusing to act without verified instructions, “can’t read the controls” means “can’t work at all.” The engineering question was how to add a second, Git-based way to recover continuity <em>without</em> weakening a single authorization gate, leaking a single sensitive byte into Git, or letting any automated system promote itself.</p>
+    </div></section>
+
+    <section id="built"><div class="wrap">
+      <div class="section-head"><div class="eyebrow">What was designed and landed</div><h2>Six pieces, one discipline: fail closed.</h2><p>PR #669 landed the governing contracts as documentation. Each piece is fully specified; none of the future-facing machinery is switched on.</p></div>
+      <div class="cards">
+        <div class="mini"><span class="k">Contract</span><h3>Dual-surface control plane</h3><p>OneDrive stays the primary — and today the sole operational — canonical surface. A new 2,148-line contract specifies a future read-only Git “recovery projection” on a dedicated ref, so a lane whose connector dies can regain bounded, read-only continuity instead of being fully blocked.</p></div>
+        <div class="mini"><span class="k">Evidence</span><h3>Git report ledger</h3><p>A dedicated, never-merged Git ref (<code>nexus/report-ledger</code>) stores executor final reports as append-only, collision-checked files. Reports become durable, independently fetchable audit artifacts instead of chat messages that disappear — corrections supersede rather than rewrite, and a report is always a claim, never an approval.</p></div>
+        <div class="mini"><span class="k">Evidence</span><h3>Side Quest pack ledger</h3><p>Parallel sandbox work produces “completion packs”: proposed changes plus declared base commit, changed files, validation results and risk notes. A second append-only, never-merged ref (<code>nexus/sidequest-pack-ledger</code>) stores those packs immutably. A pack changes nothing by existing — importing it still requires the normal human-gated PR path.</p></div>
+        <div class="mini"><span class="k">Future</span><h3>Recovery projection (PROPOSED)</h3><p>The projection never stores instruction bytes or prompt bodies. It stores a sanitized, non-executable continuity receipt whose manifest binds each canonical file by SHA-256 hash, byte size and URL. Consumers re-fetch twice, require byte-identical results and a <code>READY</code> status, and fail closed on any mismatch.</p></div>
+        <div class="mini"><span class="k">Safety</span><h3>Fail-closed state machine</h3><p>A seven-state activation lifecycle separates “the document exists” from “the system is live.” Every arrow is a separate human decision. The first gate, <code>DISTRIBUTED_READY_FENCE</code>, is honestly recorded as <code>UNSATISFIED</code> — so the live path is provably unreachable until a real distributed-fencing primitive is built and validated.</p></div>
+        <div class="mini"><span class="k">Human authority</span><h3>Reviewer gate</h3><p>An independent reviewer role re-derives commit SHAs, PR state, changed files and risky wording from live repository evidence before anything is accepted. Executor reports are treated as claims to verify — no model’s output is ever a source of truth, and the human operator holds final authority.</p></div>
+      </div>
+    </div></section>
+
+    <section id="architecture"><div class="wrap">
+      <div class="section-head"><div class="eyebrow">Architecture</div><h2>Three refs, three jobs — never conflated.</h2><p>The design’s core insight is separation: instructions, audit reports and proposed work each get their own surface with their own rules, and none can impersonate another.</p></div>
+      <div class="diagram"><div class="dg">
+        <div class="lane"><div class="lane-label">Control</div><div class="nodes">
+          <div class="node primary"><b>OneDrive control plane</b>Canonical workflow instructions and active handoff. Primary — and today the sole operational — canonical surface.<span class="st live">Operational</span></div>
+          <div class="node future"><b>Git recovery projection</b>Dedicated read-only recovery ref carrying a sanitized continuity receipt (hashes, sizes, URLs — never instruction bytes).<span class="st prop">Proposed · inactive</span></div>
+        </div></div>
+        <div class="lane"><div class="lane-label">Execution</div><div class="nodes">
+          <div class="node"><b>Executor lanes</b>Scoped AI executors (single active repo-writing lane). Read controls first; stop when instructions cannot be verified.<span class="st">Single active writing lane</span></div>
+          <div class="node"><b>Sandbox side quests</b>Isolated parallel work that can only produce reviewable packs — never direct repository authority.<span class="st">No repository authority</span></div>
+        </div></div>
+        <div class="lane"><div class="lane-label">Evidence</div><div class="nodes">
+          <div class="node evidence"><b><code>nexus/report-ledger</code></b>Executor reports. Report-only, never merged into product branches.<span class="st">Append-only · never merged</span></div>
+          <div class="node evidence"><b><code>nexus/sidequest-pack-ledger</code></b>Completion packs at immutable, collision-checked paths.<span class="st">Append-only · never merged · noncanonical</span></div>
+        </div></div>
+        <div class="lane"><div class="lane-label">Authority</div><div class="nodes">
+          <div class="node primary"><b>Reviewer gate + human operator</b>An independent reviewer re-derives SHAs, PR state and changed files from committed evidence; the human operator approves every activation arrow and holds final authority.<span class="st">Operator holds final authority</span></div>
+        </div></div>
+      </div>
+      <p class="dg-note">The recovery projection ref is deliberately not named yet — naming happens only at its own future bootstrap gate. Neither evidence ledger is ever merged into <code>develop</code> or <code>main</code>.</p></div>
+    </div></section>
+
+    <section id="lifecycle"><div class="wrap">
+      <div class="section-head"><div class="eyebrow">The fail-closed lifecycle</div><h2>Merged is not live. By design.</h2><p>The recovery projection can only become usable by walking this chain. Every arrow is a separate operator gate; none implies another — and none has been walked as an approval. Merging the contract put its text in the repository, while the projection itself remains PROPOSED and inactive.</p></div>
+      <div class="gates">
+        <div class="gate"><div><b>PROPOSED_PR_OPEN</b><span>The contract exists as a reviewable pull request. Authorizes nothing.</span></div></div>
+        <div class="gate"><div><b>LANDED_UNVERIFIED</b><span>The contract text lands in the repository (PR #669 merged to develop, 2026-07-23) — and that is all. Nothing activates by landing.</span></div></div>
+        <div class="gate"><div><b>VALIDATOR_LANDED_INACTIVE</b><span>A future validator implementation lands — still inactive.</span></div></div>
+        <div class="gate"><div><b>READERSHIP_APPROVED</b><span>The operator approves who may read the projection.</span></div></div>
+        <div class="gate"><div><b>DEDICATED_REF_BOOTSTRAPPED_INACTIVE</b><span>The dedicated recovery ref is created — and is still inactive.</span></div></div>
+        <div class="gate"><div><b>ACTIVE_CANONICAL</b><span>The contract itself is promoted to active policy.</span></div></div>
+        <div class="gate"><div><b>FIRST_GENERATION_ACTIVE</b><span>Only here does a consumable recovery snapshot exist at all.</span></div></div>
+      </div>
+      <p class="muted" style="max-width:820px;margin-top:18px">Beneath the lifecycle sits a hard runtime fence: <code>DISTRIBUTED_READY_FENCE</code> must be <code>SATISFIED_VERIFIED</code> before any publication or activation path can execute, and its recorded value is <code>UNSATISFIED</code> — because the Git ref, the canonical assignment and the SharePoint file are three systems with no joint compare-and-swap, and no amount of prose can honestly claim cross-surface freshness. Until a real, separately authorized distributed-fencing primitive exists and is independently validated, every run that reaches this gate terminates <code>BLOCKED</code> with no mutation. The document specifies the machinery and simultaneously proves it is switched off.</p>
+    </div></section>
+
+    <section id="timeline"><div class="wrap">
+      <div class="section-head"><div class="eyebrow">Timeline</div><h2>Four days of adversarial hardening.</h2></div>
+      <div class="timeline">
+        <div class="t-item"><time>2026-07-20</time><b>Contract proposed</b><p>The dual-surface control-plane contract opens as a docs-only pull request (PR #669), explicitly marked PROPOSED.</p></div>
+        <div class="t-item"><time>2026-07-21 → 2026-07-23</time><b>Iterative corrective rounds</b><p>Repeated adversarial review cycles harden the contract: receipt causality, cross-run serialization, ownership-safe restoration, quarantine evidence, observation-bounded freshness and lifecycle truthfulness — each round landed as its own reviewable commit.</p></div>
+        <div class="t-item"><time>2026-07-23</time><b>Pack-ledger contract completes the head</b><p>The Git-primary Side Quest pack-ledger contract lands as the reviewed head <code>8af9e96d</code>, alongside pre-write-blocked closure rules.</p></div>
+        <div class="t-item"><time>2026-07-23</time><b>Merged to develop after independent review</b><p>True merge commit <code>981ce13d</code> lands PR #669 into <code>develop</code>. <code>main</code> is untouched; nothing activates. The closeout is independently audited.</p></div>
+      </div>
+    </div></section>
+
+    <section id="facts"><div class="wrap">
+      <div class="section-head"><div class="eyebrow">Implementation facts</div><h2>What the merge actually contains.</h2></div>
+      <div class="facts">
+        <div class="fact"><b>9 files</b><span>changed in PR #669 — every one a Markdown governance document</span></div>
+        <div class="fact"><b>+2,483 / −57</b><span>lines across the reviewed range</span></div>
+        <div class="fact"><b>2,148 lines</b><span>in the new dual-surface control-plane contract alone</span></div>
+        <div class="fact"><b>7 states</b><span>in the activation lifecycle — every arrow a separate operator gate</span></div>
+        <div class="fact"><b>3 dedicated refs</b><span>reports, packs and (future, unnamed) recovery — never conflated, never merged</span></div>
+        <div class="fact"><b>0 activations</b><span>no runtime, DB, provider, scheduler, wallet, purchase, account or deployment action</span></div>
+      </div>
+    </div></section>
+
+    <section id="value"><div class="wrap">
+      <div class="section-head"><div class="eyebrow">Why it matters</div><h2>Benefits, and honest limits.</h2></div>
+      <div class="split">
+        <div class="panel good"><h3>What the Vault and its users gain</h3><ul>
+          <li><b>Continuity under failure:</b> once the gated path is walked, a lane that loses its cloud connector can recover bounded read-only continuity instead of stalling the whole operation.</li>
+          <li><b>A permanent audit trail:</b> every executor report and every sandbox pack becomes a durable, hash-verifiable Git artifact on an append-only ledger that anyone with access can independently re-fetch.</li>
+          <li><b>Safer parallelism:</b> side-quest work can proceed in sandboxes without ever holding repository authority, so more work happens without weakening the single-writer rule.</li>
+          <li><b>Trust users can inherit:</b> the same evidence-first discipline that governs AI operations backs the product’s user-facing promises — points ledgers, fairness rules and reward boundaries are governed by the same culture of append-only proof.</li>
+          <li><b>No silent power creep:</b> nothing in the system can promote itself. Every capability increase is a named, logged human decision.</li>
+        </ul></div>
+        <div class="panel limit"><h3>Limitations, stated plainly</h3><ul>
+          <li>This is a documentation and governance implementation only — contracts and state machines, not running code.</li>
+          <li>It landed on <code>develop</code>, not <code>main</code>, and is not operational anywhere.</li>
+          <li>The Git recovery projection is PROPOSED and inactive; OneDrive remains the sole operational canonical surface today.</li>
+          <li>Communication Integrity V2 is landed but inactive; legacy report rules remain operative.</li>
+          <li><code>DISTRIBUTED_READY_FENCE=UNSATISFIED</code>: the live publication path is deliberately unreachable until a real fencing primitive is separately built, authorized and validated.</li>
+          <li>Every future gate — validator, readership, ref bootstrap, activation, first generation — remains a separate, unpromised operator decision.</li>
+        </ul></div>
+      </div>
+    </div></section>
+
+    <section id="gates"><div class="wrap">
+      <div class="section-head"><div class="eyebrow">Next gates</div><h2>What would have to happen next.</h2><p>None of these steps is scheduled or implied by the merge. Each would be its own explicitly authorized task with its own review, and each can independently fail closed.</p></div>
+      <div class="cards">
+        <div class="mini"><span class="k">Gate</span><h3>Build the validator</h3><p>Implement and land the projection validator — still inactive — so manifests can be mechanically verified rather than trusted.</p></div>
+        <div class="mini"><span class="k">Gate</span><h3>Approve readership &amp; bootstrap the ref</h3><p>The operator decides who may consume a recovery projection, then the dedicated recovery ref is created, named and verified — still inactive.</p></div>
+        <div class="mini"><span class="k">Gate</span><h3>Satisfy the fence, for real</h3><p>Design, authorize and independently validate an actual distributed-fencing primitive. Only evidence — never prose — can move <code>DISTRIBUTED_READY_FENCE</code> to <code>SATISFIED_VERIFIED</code>.</p></div>
+        <div class="mini"><span class="k">Gate</span><h3>Activate and publish generation one</h3><p>Promote the contract to active policy, then publish the first consumable recovery generation — the earliest moment any lane could actually use it.</p></div>
+      </div>
+    </div></section>
+
+    <section id="bullets"><div class="wrap">
+      <div class="section-head"><div class="eyebrow">Résumé-ready</div><h2>Four bullets that survive scrutiny.</h2></div>
+      <div class="bullets">
+        <div class="bullet"><b>Designed a dual-surface AI-operations control plane</b> to remove a single-connector point of failure (OneDrive primary + proposed read-only Git recovery projection) without weakening any authorization gate — landed as governance documentation on Black Vault Nexus <code>develop</code> via PR #669 (2026-07-23), independently audited.</div>
+        <div class="bullet"><b>Specified append-only Git evidence ledgers</b> — a report ledger and a Side Quest pack ledger on dedicated never-merged refs — turning AI executor reports into append-only, hash-verifiable audit artifacts and sandbox work products into immutable, collision-checked packs.</div>
+        <div class="bullet"><b>Specified a seven-state fail-closed activation lifecycle</b> in which every promotion is a separate human operator gate and the first runtime fence (<code>DISTRIBUTED_READY_FENCE</code>) is honestly recorded as <code>UNSATISFIED</code>, keeping the live path provably unreachable until a real distributed-fencing primitive exists.</div>
+        <div class="bullet"><b>Ran the work through an independent reviewer gate, multi-round adversarial audit and human operator approval</b>, with every public claim bounded to committed evidence: nine Markdown files, +2,483/−57 lines, true merge commit <code>981ce13d</code>, <code>main</code> untouched, nothing operational.</div>
+      </div>
+    </div></section>
+
+    <section id="evidence"><div class="wrap">
+      <div class="section-head"><div class="eyebrow">Evidence</div><h2>Check the claims yourself.</h2><p>This case study describes independently audited engineering and governance evidence. The audited closeout report (PDF) is publicly accessible. The Black Vault Nexus repository is private, so the pull-request and commit links may require repository access — they are included as exact locators for reviewers who are granted it.</p></div>
+      <div class="evidence-links">
+        <a class="button primary" href="https://theblackvaultnexus-my.sharepoint.com/:b:/g/personal/iswebro_theblackvaultnexus_onmicrosoft_com/IQDysdk2QtGQTYzszOVGuxlmAbgPOpSvBhT7B6N3j5jT8oo" target="_blank" rel="noreferrer">Audited closeout report (PDF)</a>
+        <a class="button secondary" href="https://github.com/Iswebro/black-vault-nexus/pull/669" target="_blank" rel="noreferrer">PR #669 on GitHub</a>
+        <a class="button secondary" href="https://github.com/Iswebro/black-vault-nexus/commit/981ce13d0139e5dfcae399aa72c25e379b5e42c0" target="_blank" rel="noreferrer">Merge commit 981ce13d</a>
+      </div>
+      <div class="independence">Black Vault Nexus is an independent product. Nothing on this page implies GoMining sponsorship, affiliation or official endorsement, and nothing here is financial advice or a performance claim. All statements are bounded to the committed repository evidence and the audited closeout linked above.</div>
+      <div class="evidence-links" style="margin-top:30px">
+        <a class="button secondary" href="../../"><span aria-hidden="true">←</span> Creative portfolio</a>
+        <a class="button secondary" href="../../engineering/">Engineering portfolio</a>
+        <a class="button secondary" href="../../resume/">Résumé</a>
+        <a class="button secondary" href="../../engineering-resume/">Engineering résumé</a>
+      </div>
+    </div></section>
+  </main>
+  <footer><div class="wrap footer-inner"><span>© 2026 Matheus Neto Leite</span><span>Evidence-bounded · fail-closed · human-approved</span></div></footer>
+</body>
+</html>
